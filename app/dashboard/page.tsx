@@ -47,7 +47,7 @@ export default function DashboardPage() {
       <AmbientGlow />
 
       <header className="glass-blur-nav relative z-10 flex h-[52px] items-center justify-between border-b border-[var(--border)] bg-black/80 px-3 sm:px-5">
-        <div className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5">
           <div className="relative flex h-7 w-7 items-center justify-center">
             <div className="absolute h-6 w-6 rotate-45 rounded-md border border-white/20 bg-purple/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_3px_12px_rgba(124,58,237,0.3)]" />
             <div className="absolute h-3 w-3 rotate-45 rounded-[3px] border border-white/20 bg-purple/60" />
@@ -59,7 +59,7 @@ export default function DashboardPage() {
           <span className="hidden rounded border border-purple-bright/30 bg-purple/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-purple-bright sm:inline-flex">
             Beta
           </span>
-        </div>
+        </Link>
 
         <nav className="hidden h-full md:flex">
           {["Agent", "Skills", "Memory", "Fine-tune", "Deploy"].map((item, i) => (
@@ -376,7 +376,7 @@ function RightInfoPanel() {
       <div className="border-b border-[var(--border)] p-4">
         <div className="mb-3 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.12em] text-text-3">
           <span>Agent Identity</span>
-          <Link href="#" className="rounded border border-purple-bright/30 bg-purple/10 px-1.5 py-0.5 text-purple-bright">
+          <Link href="/agent-id" className="rounded border border-purple-bright/30 bg-purple/10 px-1.5 py-0.5 text-purple-bright">
             View INFT
           </Link>
         </div>

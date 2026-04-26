@@ -132,7 +132,7 @@ export default function Home() {
             TEE Active
           </div>
           <Link
-            href="#cta"
+            href="/dashboard"
             className="glass-blur-sm rounded-full border border-purple-bright/40 bg-purple/40 px-5 py-2 font-mono text-[12px] uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] transition-all hover:bg-purple/60 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_0_30px_rgba(124,58,237,0.4)]"
           >
             Launch Agent
@@ -189,7 +189,7 @@ export default function Home() {
           Docs
         </a>
         <Link
-          href="#cta"
+          href="/dashboard"
           onClick={closeMobile}
           className="mt-4 block rounded-full border border-purple-bright/40 bg-purple/40 py-3 text-center font-mono text-[12px] uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)]"
         >
@@ -227,7 +227,7 @@ export default function Home() {
 
         <div className="animate-fade-up-d3 mb-20 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
-            href="#cta"
+            href="/dashboard"
             className="glass-blur-md flex w-full max-w-[280px] items-center justify-center gap-2 rounded-full border border-purple-bright/45 bg-purple/45 px-8 py-3.5 font-mono text-[13px] uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_0_30px_rgba(124,58,237,0.3)] transition-all hover:-translate-y-0.5 hover:bg-purple/65 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_0_40px_rgba(124,58,237,0.45)] sm:w-auto sm:max-w-none"
           >
             <Zap className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
@@ -297,7 +297,7 @@ export default function Home() {
         id="how-it-works"
         className="relative z-[1] mx-auto max-w-[1200px] px-6 py-[60px] md:px-12 md:py-[100px]"
       >
-        <div className="mb-4 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright before:h-px before:w-5 before:bg-purple-bright">
+        <div className="mb-4 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright before:h-px before:w-3 before:bg-purple-bright">
           How it works
         </div>
         <h2 className="mb-14 max-w-[560px] text-[clamp(28px,4vw,48px)] font-extrabold leading-[1.05] tracking-[-0.03em] md:mb-[60px]">
@@ -360,7 +360,7 @@ export default function Home() {
             Built on 0G Infrastructure - Agentic Infrastructure
           </p>
           <Link
-            href="#cta"
+            href="/dashboard"
             className="glass-blur-md relative inline-flex items-center gap-2 rounded-full border border-purple-bright/45 bg-purple/45 px-9 py-3.5 font-mono text-sm uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_0_30px_rgba(124,58,237,0.3)] transition-all hover:-translate-y-0.5 hover:bg-purple/65"
           >
             <Zap className="h-3.5 w-3.5" strokeWidth={2.5} />
