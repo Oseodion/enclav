@@ -201,7 +201,7 @@ export default function Home() {
       <section className="relative z-[1] flex min-h-screen flex-col items-center justify-center px-6 pb-20 pt-[120px] text-center md:px-12">
         <div className="glass-blur-sm mb-9 inline-flex animate-fade-up items-center gap-2 rounded-full border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.1)] px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-purple-bright">
           <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-purple-bright" />
-          Built on 0G · Powered by OpenClaw
+          Built on 0G - Powered by OpenClaw
         </div>
 
         <h1 className="animate-fade-up-d1 mb-7 max-w-[min(100%,920px)] text-[clamp(36px,12vw,96px)] font-extrabold leading-[0.93] tracking-[-0.04em] md:text-[clamp(40px,10vw,72px)] lg:text-[clamp(48px,8vw,96px)]">
@@ -222,7 +222,7 @@ export default function Home() {
         </h1>
 
         <p className="animate-fade-up-d2 mb-12 font-mono text-[13px] uppercase tracking-[0.1em] text-text-3">
-          Zero exposure · Sealed inference · On-chain ownership
+          Zero exposure - Sealed inference - On-chain ownership
         </p>
 
         <div className="animate-fade-up-d3 mb-20 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -315,12 +315,12 @@ export default function Home() {
             icon={<Sun className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
             tag="0G Compute"
             title="Fine-tuned on your codebase"
-            description="Train on your private repos using 0G's decentralized GPU network. Your conventions, your patterns — learned and remembered."
+            description="Train on your private repos using 0G's decentralized GPU network. Your conventions, your patterns - learned and remembered."
           />
           <FeatureCard
             id="agent-id"
             icon={<Briefcase className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
-            tag="Agent ID · ERC-7857"
+            tag="Agent ID - ERC-7857"
             title="Intelligence you own"
             description="Your agent's learned capabilities minted as an on-chain NFT. Transfer it, sell it, keep it forever. No platform can take it away."
           />
@@ -335,13 +335,13 @@ export default function Home() {
             icon={<Activity className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
             tag="OpenClaw Runtime"
             title="Skills that ship"
-            description="Built on OpenClaw. Includes the open-source 0g-deploy Skill — deploy, verify, and interact with 0G Chain directly from chat."
+            description="Built on OpenClaw. Includes the open-source 0g-deploy Skill - deploy, verify, and interact with 0G Chain directly from chat."
           />
           <FeatureCard
             icon={<AlertTriangle className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
             tag="0G Chain"
             title="On-chain everything"
-            description="Agent registry, ownership, attestation logs — all settled on 0G's EVM-compatible L1. Fully verifiable, permanently yours."
+            description="Agent registry, ownership, attestation logs - all settled on 0G's EVM-compatible L1. Fully verifiable, permanently yours."
           />
         </div>
       </div>
@@ -357,7 +357,7 @@ export default function Home() {
             Own your intelligence.
           </h2>
           <p className="relative mb-9 font-mono text-[12px] uppercase tracking-[0.08em] text-text-3">
-            Built on 0G Infrastructure · Agentic Infrastructure
+            Built on 0G Infrastructure - Agentic Infrastructure
           </p>
           <Link
             href="#cta"
@@ -371,7 +371,7 @@ export default function Home() {
 
       <footer className="relative z-[1] flex flex-wrap items-center justify-between gap-4 border-t border-[var(--border)] px-6 py-7 md:px-12">
         <div className="font-mono text-[11px] tracking-[0.06em] text-text-3">
-          © 2026 Enclav · Built on 0G Infrastructure
+          © 2026 Enclav - Built on 0G Infrastructure
         </div>
         <div className="flex flex-wrap gap-1.5">
           {[
