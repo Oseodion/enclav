@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enclav — Agent ID</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #000; --bg1: #08060F; --bg2: #0F0C1A;
+  --border: rgba(255,255,255,0.06); --border-p: rgba(167,139,250,0.22);
+  --purple: #7C3AED; --pb: #A78BFA; --pink: #EC4899;
+  --green: #10B981; --gt: #6EE7B7;
+  --text1: #F0EEF8; --text2: #9B99B0; --text3: #2E2C3E;
+  --glass: rgba(255,255,255,0.05); --glass-b: rgba(255,255,255,0.09);
+  --mono: 'DM Mono', monospace; --sans: 'Syne', sans-serif;
+}
+body { font-family: var(--sans); background: var(--bg); color: var(--text1); min-height: 100vh; overflow-x: hidden; }
+
+.bg-wrap { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.bg-orb { position: absolute; border-radius: 50%; }
+.bo1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(124,58,237,0.18), transparent 65%); top: -150px; left: 50%; transform: translateX(-50%); animation: od 16s ease-in-out infinite; }
+.bo2 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(236,72,153,0.1), transparent 65%); bottom: -80px; right: -80px; animation: od 20s ease-in-out infinite reverse; }
+@keyframes od { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-20px)} }
+
+nav {
+  position: sticky; top: 0; z-index: 50;
+  height: 52px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 40px;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.logo-mark { width: 30px; height: 30px; position: relative; display: flex; align-items: center; justify-content: center; }
+.ld-o { width: 26px; height: 26px; background: rgba(139,92,246,0.2); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; transform: rotate(45deg); position: absolute; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 3px 12px rgba(124,58,237,0.3); }
+.ld-i { width: 13px; height: 13px; background: rgba(139,92,246,0.65); border-radius: 3px; transform: rotate(45deg); position: absolute; border: 1px solid rgba(255,255,255,0.2); }
+.ld-c { width: 4px; height: 4px; background: white; border-radius: 50%; position: absolute; z-index: 1; box-shadow: 0 0 6px white; }
+.logo-name { font-size: 16px; font-weight: 700; letter-spacing: -0.025em; color: var(--text1); }
+.logo-name span { color: var(--pb); }
+.nav-back { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.06em; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: color 0.2s; text-decoration: none; }
+.nav-back:hover { color: var(--text2); }
+.nav-back svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.page { max-width: 1100px; margin: 0 auto; padding: 56px 40px 80px; position: relative; z-index: 1; }
+.page-eyebrow { font-family: var(--mono); font-size: 11px; color: var(--pb); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.page-eyebrow::before { content: ''; width: 18px; height: 1px; background: var(--pb); }
+.page-title { font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 6px; }
+.page-sub { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.06em; margin-bottom: 44px; }
+
+.layout { display: grid; grid-template-columns: 400px 1fr; gap: 24px; align-items: start; }
+
+/* ── NFT Card ── */
+.nft-card {
+  background: rgba(139,92,246,0.06);
+  backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+  border: 1px solid var(--border-p);
+  border-radius: 20px; overflow: hidden; position: relative;
+}
+.nft-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1.5px; background: linear-gradient(90deg, var(--purple), var(--pink), var(--purple)); background-size: 200%; animation: shimmer 3s linear infinite; }
+@keyframes shimmer { 0%{background-position:0%} 100%{background-position:200%} }
+
+/* ── B: Liquid Orb visual ── */
+.nft-visual {
+  height: 260px; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 60%, rgba(139,92,246,0.12) 0%, transparent 65%);
+  position: relative; overflow: hidden;
+}
+.orb-ring { position: absolute; border-radius: 50%; border: 1px solid; }
+.or1 { width: 200px; height: 200px; border-color: rgba(167,139,250,0.18); animation: sr 10s linear infinite; }
+.or1::after { content: ''; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 8px; height: 8px; background: var(--pb); border-radius: 50%; box-shadow: 0 0 12px var(--pb), 0 0 24px rgba(167,139,250,0.4); }
+.or2 { width: 160px; height: 160px; border-color: rgba(236,72,153,0.12); animation: sr 15s linear infinite reverse; }
+.or2::after { content: ''; position: absolute; bottom: -3px; right: 20%; width: 5px; height: 5px; background: var(--pink); border-radius: 50%; box-shadow: 0 0 8px var(--pink); }
+@keyframes sr { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+.orb-body {
+  width: 110px; height: 110px; border-radius: 50%; position: relative; z-index: 1;
+  background: conic-gradient(from 200deg, rgba(139,92,246,0.9) 0deg, rgba(236,72,153,0.8) 80deg, rgba(99,102,241,0.9) 150deg, rgba(167,139,250,0.7) 220deg, rgba(56,189,248,0.55) 280deg, rgba(139,92,246,0.9) 360deg);
+  box-shadow: 0 0 40px rgba(139,92,246,0.5), 0 0 80px rgba(139,92,246,0.2);
+  animation: breathe 5s ease-in-out infinite;
+}
+.orb-body::before { content: ''; position: absolute; top: 12%; left: 18%; width: 36%; height: 26%; background: radial-gradient(ellipse, rgba(255,255,255,0.5), transparent 70%); border-radius: 50%; transform: rotate(-25deg); filter: blur(3px); }
+.orb-body::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,0.22); }
+@keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+
+.nft-body { padding: 22px; }
+.nft-name { font-size: 20px; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 4px; }
+.nft-col { font-family: var(--mono); font-size: 10px; color: var(--pb); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 18px; }
+.nft-attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+.nft-attr { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; }
+.attr-label { font-family: var(--mono); font-size: 9px; color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
+.attr-val { font-family: var(--mono); font-size: 12px; color: var(--text1); }
+.attr-val.p { color: var(--pb); }
+.attr-val.g { color: var(--gt); }
+.nft-actions { display: flex; gap: 8px; }
+.btn-nft { flex: 1; padding: 10px; border-radius: 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.btn-nft svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn-nft-primary { background: rgba(124,58,237,0.35); border: 1px solid var(--border-p); color: white; backdrop-filter: blur(10px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.15); }
+.btn-nft-primary:hover { background: rgba(124,58,237,0.5); transform: translateY(-1px); }
+.btn-nft-ghost { background: transparent; border: 1px solid var(--border); color: var(--text2); }
+.btn-nft-ghost:hover { border-color: var(--border-p); color: var(--text1); }
+
+/* ── Right detail stack ── */
+.detail-stack { display: flex; flex-direction: column; gap: 16px; }
+.detail-card {
+  background: var(--glass);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px 22px;
+  transition: border-color 0.2s; position: relative; overflow: hidden;
+}
+.detail-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); }
+.detail-card:hover { border-color: var(--border-p); }
+
+.dc-label { font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+.dc-label a { color: var(--pb); text-decoration: none; font-size: 10px; display: flex; align-items: center; gap: 4px; transition: color 0.2s; }
+.dc-label a:hover { color: white; }
+.dc-label a svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.chain-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.chain-row:last-child { border-bottom: none; padding-bottom: 0; }
+.chain-key { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+.chain-val { font-family: var(--mono); font-size: 11px; color: var(--text1); display: flex; align-items: center; gap: 6px; }
+.copy-btn { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; opacity: 0.4; transition: all 0.2s; }
+.copy-btn:hover { opacity: 1; border-color: var(--border-p); }
+.copy-btn svg { width: 10px; height: 10px; stroke: var(--text2); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Attestation log */
+.attest-log { display: flex; flex-direction: column; }
+.al-entry { display: flex; gap: 11px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); position: relative; }
+.al-entry:last-child { border-bottom: none; }
+.al-dot-wrap { display: flex; flex-direction: column; align-items: center; }
+.al-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+.al-line { width: 1px; flex: 1; background: rgba(255,255,255,0.05); margin-top: 4px; }
+.al-last .al-line { display: none; }
+.al-content { flex: 1; padding-bottom: 2px; }
+.al-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 2px; }
+.al-meta { font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 0.04em; }
+
+/* Capabilities */
+.cap-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.cap { font-family: var(--mono); font-size: 10px; padding: 4px 10px; border-radius: 100px; border: 1px solid; letter-spacing: 0.06em; text-transform: uppercase; }
+.cap-p { color: var(--pb); border-color: rgba(139,92,246,0.25); background: rgba(139,92,246,0.07); }
+.cap-g { color: var(--gt); border-color: rgba(16,185,129,0.22); background: rgba(16,185,129,0.06); }
+.cap-a { color: #FCD34D; border-color: rgba(252,211,77,0.22); background: rgba(252,211,77,0.05); }
+
+/* ── F: Floating Diamond ── accent on nft card top ── */
+.diamond-float {
+  position: absolute; top: 16px; right: 16px;
+  width: 28px; height: 28px;
+  animation: dfloat 4s ease-in-out infinite;
+  opacity: 0.7;
+}
+.diamond-float svg { width: 100%; height: 100%; }
+@keyframes dfloat { 0%,100%{transform:translateY(0) rotate(0deg)} 50%{transform:translateY(-5px) rotate(3deg)} }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .page { padding: 40px 24px 60px; }
+  nav { padding: 0 24px; }
+}
+@media (max-width: 480px) {
+  .page { padding: 32px 16px 48px; }
+  .nft-attrs { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg-wrap"><div class="bg-orb bo1"></div><div class="bg-orb bo2"></div></div>
+
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="logo-mark"><div class="ld-o"></div><div class="ld-i"></div><div class="ld-c"></div></div>
+    <span class="logo-name">Encl<span>av</span></span>
+  </a>
+  <a href="#" class="nav-back">
+    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to dashboard
+  </a>
+</nav>
+
+<div class="page">
+  <div class="page-eyebrow">On-chain agent identity</div>
+  <h1 class="page-title">Agent ID NFT</h1>
+  <p class="page-sub">ERC-7857 · 0G Chain Mainnet · Minted block #4,821,033</p>
+
+  <div class="layout">
+
+    <!-- NFT Card -->
+    <div class="nft-card">
+      <!-- F: Diamond accent -->
+      <div class="diamond-float">
+        <svg viewBox="0 0 28 28" fill="none">
+          <polygon points="14,2 26,10 26,18 14,26 2,18 2,10" fill="rgba(139,92,246,0.3)" stroke="rgba(167,139,250,0.5)" stroke-width="1"/>
+          <polygon points="14,2 26,10 14,14 2,10" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+          <circle cx="14" cy="14" r="2.5" fill="white" opacity="0.8"/>
+        </svg>
+      </div>
+
+      <!-- B: Liquid Orb -->
+      <div class="nft-visual">
+        <div class="orb-ring or2"></div>
+        <div class="orb-ring or1"></div>
+        <div class="orb-body"></div>
+      </div>
+
+      <div class="nft-body">
+        <div class="nft-name">Enclav Agent #0041</div>
+        <div class="nft-col">Enclav Genesis Collection · 0G Chain</div>
+        <div class="nft-attrs">
+          <div class="nft-attr"><div class="attr-label">Fine-tune</div><div class="attr-val p">Epoch 4/4</div></div>
+          <div class="nft-attr"><div class="attr-label">Inference</div><div class="attr-val g">Sealed TEE</div></div>
+          <div class="nft-attr"><div class="attr-label">Training data</div><div class="attr-val">1.2 GB</div></div>
+          <div class="nft-attr"><div class="attr-label">Base model</div><div class="attr-val">Llama 3.1 70B</div></div>
+        </div>
+        <div class="nft-actions">
+          <button class="btn-nft btn-nft-primary">
+            <svg viewBox="0 0 24 24"><polyline points="22 17 12 7 2 17"/></svg>
+            Transfer
+          </button>
+          <button class="btn-nft btn-nft-ghost">
+            <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Explorer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Details -->
+    <div class="detail-stack">
+
+      <div class="detail-card">
+        <div class="dc-label">On-chain details <a href="#">View on 0G Explorer <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></div>
+        <div class="chain-row"><span class="chain-key">Contract</span><span class="chain-val">0x8b2f…4a91 <div class="copy-btn" onclick="copyFeedback(this)"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></div></span></div>
+        <div class="chain-row"><span class="chain-key">Token ID</span><span class="chain-val">#0041</span></div>
+        <div class="chain-row"><span class="chain-key">Owner</span><span class="chain-val">0x3f4a…d91c <div class="copy-btn" onclick="copyFeedback(this)"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></div></span></div>
+        <div class="chain-row"><span class="chain-key">Standard</span><span class="chain-val">ERC-7857</span></div>
+        <div class="chain-row"><span class="chain-key">Minted</span><span class="chain-val">Apr 20, 2026 · Block #4,821,033</span></div>
+        <div class="chain-row"><span class="chain-key">Transfers</span><span class="chain-val">0 (Original owner)</span></div>
+      </div>
+
+      <div class="detail-card">
+        <div class="dc-label">Sealed inference log</div>
+        <div class="attest-log">
+          <div class="al-entry">
+            <div class="al-dot-wrap"><div class="al-dot" style="background:var(--green);box-shadow:0 0 7px var(--green)"></div><div class="al-line"></div></div>
+            <div class="al-content"><div class="al-title">TEE attestation verified</div><div class="al-meta">Intel TDX · Enclave 0xfe29…a4c1 · 2 mins ago</div></div>
+          </div>
+          <div class="al-entry">
+            <div class="al-dot-wrap"><div class="al-dot" style="background:var(--purple);box-shadow:0 0 7px var(--purple)"></div><div class="al-line"></div></div>
+            <div class="al-content"><div class="al-title">Inference completed · auth.service.ts</div><div class="al-meta">Response signed · 847ms · 10 mins ago</div></div>
+          </div>
+          <div class="al-entry">
+            <div class="al-dot-wrap"><div class="al-dot" style="background:var(--purple)"></div><div class="al-line"></div></div>
+            <div class="al-content"><div class="al-title">Fine-tune epoch 4 completed</div><div class="al-meta">0G Compute · H100 · 1.2 GB indexed · 2h ago</div></div>
+          </div>
+          <div class="al-entry al-last">
+            <div class="al-dot-wrap"><div class="al-dot" style="background:#F59E0B;box-shadow:0 0 7px #F59E0B"></div><div class="al-line"></div></div>
+            <div class="al-content"><div class="al-title">Agent ID minted on 0G Chain</div><div class="al-meta">ERC-7857 · Block #4,821,033 · Apr 20, 2026</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-card">
+        <div class="dc-label">Learned capabilities</div>
+        <div class="cap-wrap">
+          <span class="cap cap-p">TypeScript</span>
+          <span class="cap cap-p">Next.js patterns</span>
+          <span class="cap cap-g">0G Compute SDK</span>
+          <span class="cap cap-g">Agent ID ERC-7857</span>
+          <span class="cap cap-p">JWT auth flows</span>
+          <span class="cap cap-a">Solidity</span>
+          <span class="cap cap-g">0G Storage API</span>
+          <span class="cap cap-p">REST API design</span>
+          <span class="cap cap-a">OpenClaw Skills</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function copyFeedback(btn) {
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:10px;height:10px;stroke:#10B981;fill:none;stroke-width:2.5;stroke-linecap:round"><polyline points="20 6 9 17 4 12"/></svg>';
+  btn.style.borderColor = 'rgba(16,185,129,0.4)';
+  setTimeout(() => { btn.innerHTML = orig; btn.style.borderColor = ''; }, 1500);
+}
+</script>
+</body>
+</html>

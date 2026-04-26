@@ -31,7 +31,7 @@ const config: Config = {
         text: {
           1: '#F0EEF8',
           2: '#9B99B0',
-          3: '#2E2C3E',
+          3: '#3D3B52',
         },
       },
       backgroundImage: {
@@ -45,21 +45,52 @@ const config: Config = {
       },
       animation: {
         pulse: 'pulse 2.5s ease-in-out infinite',
+        'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
         spin: 'spin 10s linear infinite',
         'spin-slow': 'spin 16s linear infinite',
+        'spin-orb-outer': 'spin 12s linear infinite',
+        'spin-orb-mid': 'spin 18s linear infinite reverse',
         breathe: 'breathe 5s ease-in-out infinite',
-        'drift': 'drift 14s ease-in-out infinite',
-        'shimmer': 'shimmer 3s linear infinite',
-        'float': 'float 5s ease-in-out infinite',
+        'breathe-orb': 'breathe-orb 5s ease-in-out infinite',
+        drift: 'drift 14s ease-in-out infinite',
+        'drift-slow': 'drift 18s ease-in-out infinite reverse',
+        'drift-delayed': 'drift 20s ease-in-out infinite 5s',
+        shimmer: 'shimmer 3s linear infinite',
+        float: 'float 5s ease-in-out infinite',
+        'fade-up': 'fade-up 0.8s ease both',
+        'fade-up-d1': 'fade-up 0.8s ease 0.1s both',
+        'fade-up-d2': 'fade-up 0.8s ease 0.2s both',
+        'fade-up-d3': 'fade-up 0.8s ease 0.3s both',
+        'fade-up-d4': 'fade-up 0.8s ease 0.4s both',
       },
       keyframes: {
         pulse: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.35' },
         },
+        'pulse-soft': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.35' },
+        },
         breathe: {
           '0%, 100%': { transform: 'scale(1)' },
           '50%': { transform: 'scale(1.04)' },
+        },
+        'breathe-orb': {
+          '0%, 100%': {
+            transform: 'scale(1)',
+            boxShadow:
+              '0 0 50px rgba(139,92,246,0.5), 0 0 100px rgba(139,92,246,0.2), inset 0 0 30px rgba(255,255,255,0.08)',
+          },
+          '50%': {
+            transform: 'scale(1.04)',
+            boxShadow:
+              '0 0 70px rgba(139,92,246,0.6), 0 0 140px rgba(139,92,246,0.25), inset 0 0 30px rgba(255,255,255,0.08)',
+          },
+        },
+        'fade-up': {
+          from: { opacity: '0', transform: 'translateY(24px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
         },
         drift: {
           '0%, 100%': { transform: 'translate(0, 0)' },

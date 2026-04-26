@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --purple: #7c3aed;
+  --purple-bright: #a78bfa;
+  --purple-dim: rgba(139, 92, 246, 0.15);
+  --pink: #ec4899;
+  --green: #10b981;
+  --green-soft: #6ee7b7;
+  --bg: #000000;
+  --bg1: #0d0a1a;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-purple: rgba(167, 139, 250, 0.25);
+  --text-1: #f0eef8;
+  --text-2: #9b99b0;
+  --text-3: #3d3b52;
+  --glass-bg: rgba(255, 255, 255, 0.06);
+  --glass-bg-soft: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-top: rgba(255, 255, 255, 0.25);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-1);
+}
+
+@layer utilities {
+  .glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    position: relative;
+  }
+
+  .glass::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 5%,
+      var(--glass-top) 50%,
+      transparent 95%
+    );
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .glass-heavy {
+    background: var(--glass-bg-soft);
+    -webkit-backdrop-filter: blur(30px);
+    backdrop-filter: blur(30px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+  }
+
+  .glass-heavy::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 10%,
+      rgba(167, 139, 250, 0.4) 50%,
+      transparent 90%
+    );
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  .glass-blur-nav {
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+  }
+
+  .glass-blur-sm {
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+
+  .glass-blur-md {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
