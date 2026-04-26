@@ -1,0 +1,326 @@
+"use client";
+
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  ExternalLink,
+  Orbit,
+  SendHorizontal,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+
+const EXPLORER_BASE = "https://chainscan-galileo.0g.ai";
+
+type CopyTarget = "contract" | "owner" | null;
+
+export default function AgentIdPage() {
+  const [copied, setCopied] = useState<CopyTarget>(null);
+
+  const onChainData = useMemo(
+    () => ({
+      contract: "—",
+      tokenId: "—",
+      owner: "—",
+      standard: "ERC-7857",
+      minted: "—",
+      transfers: "—",
+    }),
+    [],
+  );
+
+  const hasContractAddress = onChainData.contract !== "—";
+  const explorerHref = hasContractAddress
+    ? `${EXPLORER_BASE}/address/${onChainData.contract}`
+    : EXPLORER_BASE;
+
+  const copyValue = async (target: Exclude<CopyTarget, null>, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(target);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      setCopied(target);
+      setTimeout(() => setCopied(null), 1500);
+    }
+  };
+
+  return (
+    <main className="relative min-h-screen overflow-x-hidden bg-black font-geist text-text-1">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div className="absolute left-1/2 top-[-150px] h-[600px] w-[600px] -translate-x-1/2 animate-drift rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.18),transparent_65%)]" />
+        <div className="absolute -bottom-20 -right-20 h-[400px] w-[400px] animate-drift-slow rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.1),transparent_65%)]" />
+      </div>
+
+      <nav className="glass-blur-nav sticky top-0 z-50 flex h-[52px] items-center justify-between border-b border-[var(--border)] bg-black/80 px-4 md:px-10">
+        <Link href="/" className="flex items-center gap-2.5 no-underline">
+          <div className="relative flex h-[30px] w-[30px] items-center justify-center">
+            <div className="absolute h-[26px] w-[26px] rotate-45 rounded-md border border-white/20 bg-purple/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_3px_12px_rgba(124,58,237,0.3)]" />
+            <div className="absolute h-[13px] w-[13px] rotate-45 rounded-[3px] border border-white/20 bg-purple/65" />
+            <div className="absolute z-[1] h-1 w-1 rounded-full bg-white shadow-[0_0_6px_white]" />
+          </div>
+          <span className="text-base font-bold tracking-tight">
+            Encl<span className="text-purple-bright">av</span>
+          </span>
+        </Link>
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-text-3 transition-colors hover:text-text-2"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to dashboard
+        </Link>
+      </nav>
+
+      <section className="relative z-[1] mx-auto max-w-[1100px] px-4 pb-20 pt-12 md:px-10">
+        <p className="mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright before:h-px before:w-[18px] before:bg-purple-bright">
+          On-chain agent identity
+        </p>
+        <h1 className="mb-1 text-[clamp(28px,4vw,42px)] font-extrabold tracking-[-0.03em]">
+          Agent ID INFT
+        </h1>
+        <p className="mb-10 font-mono text-[11px] tracking-[0.06em] text-text-3">
+          ERC-7857 - 0G Chain Galileo - Minted block #
+          {" "}
+          —
+        </p>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[400px_1fr]">
+          <article className="relative overflow-hidden rounded-[20px] border border-purple-bright/25 bg-purple/10 backdrop-blur-[30px]">
+            <div className="absolute inset-x-0 top-0 h-[1.5px] bg-[linear-gradient(90deg,#7C3AED,#EC4899,#7C3AED)] bg-[length:200%_100%] animate-shimmer" />
+            <div className="absolute right-4 top-4 animate-float opacity-70">
+              <Orbit className="h-7 w-7 text-purple-bright" />
+            </div>
+
+            <div className="relative flex h-[260px] items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_50%_60%,rgba(139,92,246,0.12)_0%,transparent_65%)]">
+              <div className="absolute h-40 w-40 rounded-full border border-pink/20 animate-[spin_15s_linear_infinite_reverse]">
+                <span className="absolute bottom-[-3px] right-[20%] h-[5px] w-[5px] rounded-full bg-pink shadow-[0_0_8px_#EC4899]" />
+              </div>
+              <div className="absolute h-[200px] w-[200px] rounded-full border border-purple-bright/20 animate-[spin_10s_linear_infinite]">
+                <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-purple-bright shadow-[0_0_12px_#A78BFA,0_0_24px_rgba(167,139,250,0.4)]" />
+              </div>
+              <div className="relative h-[110px] w-[110px] animate-breathe-orb rounded-full bg-[conic-gradient(from_200deg,rgba(139,92,246,0.9)_0deg,rgba(236,72,153,0.8)_80deg,rgba(99,102,241,0.9)_150deg,rgba(167,139,250,0.7)_220deg,rgba(56,189,248,0.55)_280deg,rgba(139,92,246,0.9)_360deg)] shadow-[0_0_40px_rgba(139,92,246,0.5),0_0_80px_rgba(139,92,246,0.2)]">
+                <div className="absolute inset-0 rounded-full border border-white/20" />
+              </div>
+            </div>
+
+            <div className="p-5">
+              <h2 className="mb-1 text-xl font-extrabold tracking-tight">Enclav Agent #—</h2>
+              <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.08em] text-purple-bright">
+                Enclav Genesis Collection - 0G Chain
+              </p>
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                <NftStat label="Fine-tune" value="—" accent="text-purple-bright" />
+                <NftStat label="Inference" value="—" accent="text-teal-light" />
+                <NftStat label="Training data" value="—" />
+                <NftStat label="Base model" value="—" />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="glass-blur-sm flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-purple-bright/30 bg-purple/35 px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition hover:-translate-y-[1px] hover:bg-purple/50"
+                >
+                  <SendHorizontal className="h-3.5 w-3.5" />
+                  Transfer
+                </button>
+                <a
+                  href={explorerHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-disabled={!hasContractAddress}
+                  onClick={(e) => {
+                    if (!hasContractAddress) e.preventDefault();
+                  }}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.06em] transition ${
+                    hasContractAddress
+                      ? "border-[var(--border)] text-text-2 hover:border-purple-bright/30 hover:text-text-1"
+                      : "cursor-not-allowed border-[var(--border)] text-text-3/70"
+                  }`}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Explorer
+                </a>
+              </div>
+            </div>
+          </article>
+
+          <div className="flex flex-col gap-4">
+            <section className="glass rounded-[14px] p-5">
+              <div className="mb-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
+                <span>On-chain details</span>
+                <a
+                  href={explorerHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-disabled={!hasContractAddress}
+                  onClick={(e) => {
+                    if (!hasContractAddress) e.preventDefault();
+                  }}
+                  className={`inline-flex items-center gap-1 ${
+                    hasContractAddress
+                      ? "text-purple-bright hover:text-white"
+                      : "cursor-not-allowed text-text-3/70"
+                  }`}
+                >
+                  View on 0G Explorer
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+
+              <ChainRow
+                label="Contract"
+                value={onChainData.contract}
+                canCopy
+                copied={copied === "contract"}
+                onCopy={() => copyValue("contract", onChainData.contract)}
+              />
+              <ChainRow label="Token ID" value={onChainData.tokenId} />
+              <ChainRow
+                label="Owner"
+                value={onChainData.owner}
+                canCopy
+                copied={copied === "owner"}
+                onCopy={() => copyValue("owner", onChainData.owner)}
+              />
+              <ChainRow label="Standard" value={onChainData.standard} />
+              <ChainRow label="Minted" value={onChainData.minted} />
+              <ChainRow label="Transfers" value={onChainData.transfers} last />
+            </section>
+
+            <section className="glass rounded-[14px] p-5">
+              <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
+                Sealed inference log
+              </p>
+              <TimelineEntry title="TEE attestation verified" meta="Intel TDX - Enclave — - —" color="bg-teal shadow-[0_0_7px_#10B981]" />
+              <TimelineEntry title="Inference completed - auth.service.ts" meta="Response signed - — - —" color="bg-purple shadow-[0_0_7px_#7C3AED]" />
+              <TimelineEntry title="Fine-tune epoch completed" meta="0G Compute - H100 - indexed —" color="bg-purple" />
+              <TimelineEntry title="Agent ID minted on 0G Chain" meta="ERC-7857 - Block #— - —" color="bg-amber-500 shadow-[0_0_7px_#F59E0B]" last />
+            </section>
+
+            <section className="glass rounded-[14px] p-5">
+              <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
+                Learned capabilities
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <CapabilityTag label="TypeScript" tone="purple" />
+                <CapabilityTag label="Next.js patterns" tone="purple" />
+                <CapabilityTag label="0G Compute SDK" tone="green" />
+                <CapabilityTag label="INFT ERC-7857" tone="green" />
+                <CapabilityTag label="JWT auth flows" tone="purple" />
+                <CapabilityTag label="Solidity" tone="amber" />
+                <CapabilityTag label="0G Storage API" tone="green" />
+                <CapabilityTag label="REST API design" tone="purple" />
+                <CapabilityTag label="OpenClaw Skills" tone="amber" />
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function NftStat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-white/[0.03] px-2.5 py-2">
+      <p className="mb-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-text-3">
+        {label}
+      </p>
+      <p className={`font-mono text-xs ${accent ?? "text-text-1"}`}>{value}</p>
+    </div>
+  );
+}
+
+function ChainRow({
+  label,
+  value,
+  canCopy = false,
+  copied = false,
+  onCopy,
+  last = false,
+}: {
+  label: string;
+  value: string;
+  canCopy?: boolean;
+  copied?: boolean;
+  onCopy?: () => void;
+  last?: boolean;
+}) {
+  return (
+    <div className={`flex items-center justify-between py-2.5 ${last ? "" : "border-b border-white/[0.04]"}`}>
+      <span className="font-mono text-[11px] text-text-3">{label}</span>
+      <span className="flex items-center gap-1.5 font-mono text-[11px] text-text-1">
+        {value}
+        {canCopy ? (
+          <button
+            type="button"
+            onClick={onCopy}
+            className="flex h-[18px] w-[18px] items-center justify-center rounded border border-[var(--border)] opacity-60 transition hover:border-purple-bright/30 hover:opacity-100"
+            aria-label={`Copy ${label}`}
+          >
+            {copied ? (
+              <Check className="h-2.5 w-2.5 text-teal" strokeWidth={2.5} />
+            ) : (
+              <Copy className="h-2.5 w-2.5 text-text-2" strokeWidth={2} />
+            )}
+          </button>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
+function TimelineEntry({
+  title,
+  meta,
+  color,
+  last = false,
+}: {
+  title: string;
+  meta: string;
+  color: string;
+  last?: boolean;
+}) {
+  return (
+    <div className={`flex gap-3 py-2.5 ${last ? "" : "border-b border-white/[0.04]"}`}>
+      <div className="flex flex-col items-center">
+        <span className={`mt-[3px] h-[9px] w-[9px] rounded-full ${color}`} />
+        {last ? null : <span className="mt-1 block w-px flex-1 bg-white/[0.05]" />}
+      </div>
+      <div className="flex-1 pb-0.5">
+        <p className="text-sm font-semibold text-text-2">{title}</p>
+        <p className="font-mono text-[10px] tracking-[0.04em] text-text-3">{meta}</p>
+      </div>
+    </div>
+  );
+}
+
+function CapabilityTag({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "purple" | "green" | "amber";
+}) {
+  const styles =
+    tone === "green"
+      ? "border-teal/25 bg-teal/10 text-teal-light"
+      : tone === "amber"
+        ? "border-amber-300/25 bg-amber-300/10 text-amber-300"
+        : "border-purple-bright/25 bg-purple/10 text-purple-bright";
+
+  return (
+    <span className={`rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] ${styles}`}>
+      {label}
+    </span>
+  );
+}
