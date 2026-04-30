@@ -1,15 +1,10 @@
 # Enclav — CLAUDE.md
 
 ## What This Project Is
-Enclav is an AI coding agent built entirely on 0G's decentralized infrastructure.
-It indexes a developer's private codebase on 0G Storage, runs all LLM inference
-through 0G Compute with TeeML (Intel TDX TEE — hardware-level privacy), and mints
-the agent's learned capabilities as an INFT (Intelligent NFT / ERC-7857) on 0G Chain.
-Built on the OpenClaw agent runtime.
+Enclav is an autonomous code security agent built on 0G infrastructure. A developer connects their GitHub repository and Enclav automatically — with zero manual steps — scans every file for security vulnerabilities, generates fixes, and produces a verifiable security report. All scanning runs inside 0G Sealed Inference TEE (TeeML) so proprietary code never leaves the hardware enclave. The security report and findings are stored on 0G Storage. After the scan completes, a verifiable security certificate is minted as an INFT (ERC-7857) on 0G Chain — proof that this codebase was scanned privately and verifiably. Built on OpenClaw agent runtime with a custom 0g-deploy Skill.
 
 **One-line pitch:**
-AI coding agent where your code never leaves a TEE hardware enclave, learns from
-your codebase, and that intelligence is an on-chain INFT you permanently own.
+Connect your repo, Enclav autonomously scans your entire codebase for vulnerabilities inside a hardware TEE, and mints a verifiable security certificate as an INFT you own.
 
 **Hackathon:** 0G APAC Hackathon 2026 — Track 1: Agentic Infrastructure & OpenClaw Lab
 **Final deadline:** May 16, 2026 23:59 UTC+8
@@ -49,11 +44,11 @@ Use these exact terms — judges will notice wrong naming:
 - Contracts: Solidity 0.8.19, Hardhat
 
 ### 0G Infrastructure (ALL used)
-- `@0gfoundation/0g-ts-sdk` — 0G Storage (upload/download/indexer)
-- `@0glabs/0g-serving-broker` — 0G Compute (inference + account management)
-- OpenClaw — agent orchestration runtime + custom Skills
-- INFT / ERC-7857 — on-chain intelligence tokenization
-- TeeML — TEE-verified inference (every response signed by TEE)
+- `@0gfoundation/0g-ts-sdk` — 0G Storage (repo snapshot + findings report storage)
+- `@0glabs/0g-serving-broker` — 0G Compute (autonomous security analysis + account management)
+- OpenClaw — agent orchestration runtime + custom security Skills
+- INFT / ERC-7857 — on-chain security certificate minting
+- TeeML — TEE-verified inference (every scan response signed by TEE)
 
 ---
 
@@ -67,7 +62,7 @@ Explorer:        https://chainscan-galileo.0g.ai
 Storage Indexer: https://indexer-storage-testnet-turbo.0g.ai
 Storage Flow:    0x22E03a6A89B950F1c82ec5e74F8eCa321a105296
 Faucet:          https://faucet.0g.ai
-LLM Model:       qwen-2.5-7b-instruct (only chatbot on testnet)
+LLM Model:       qwen-2.5-7b-instruct (security analysis on testnet)
 ```
 
 ### Mainnet (Aristotle) — final submission
@@ -105,22 +100,22 @@ enclav/                          ← GitHub repo name: enclav
 │   ├── agent-id/
 │   │   └── page.tsx
 │   └── api/
-│       ├── chat/route.ts        ← OpenClaw + 0G Compute inference
-│       ├── index/route.ts       ← 0G Storage codebase indexer
-│       └── mint/route.ts        ← INFT ERC-7857 minting
+│       ├── chat/route.ts        ← 0G Compute TeeML security analysis
+│       ├── index/route.ts       ← 0G Storage repo ingestion + report snapshot
+│       └── mint/route.ts        ← INFT ERC-7857 security certificate minting
 │
 ├── components/
 │   ├── ui/
 │   │   ├── GlassCard.tsx
 │   │   ├── GlassButton.tsx
-│   │   ├── TeeBadge.tsx         ← shows TeeML attestation hash
+│   │   ├── TeeBadge.tsx         ← shows TeeML attestation hash per scan response
 │   │   ├── LogoMark.tsx         ← glass diamond E mark
 │   │   └── WalletConnect.tsx
 │   ├── dashboard/
-│   │   ├── CodePanel.tsx
-│   │   ├── AgentChat.tsx
+│   │   ├── CodePanel.tsx        ← scan target and findings context
+│   │   ├── AgentChat.tsx        ← autonomous scan progress + findings stream
 │   │   ├── InftPanel.tsx        ← NOT "AgentIdPanel"
-│   │   └── SkillsPanel.tsx
+│   │   └── SkillsPanel.tsx      ← OpenClaw security skills
 │   └── landing/
 │       ├── Hero.tsx
 │       ├── Features.tsx
@@ -129,14 +124,14 @@ enclav/                          ← GitHub repo name: enclav
 ├── lib/
 │   ├── 0g/
 │   │   ├── storage.ts           ← 0G Storage wrapper (@0gfoundation/0g-ts-sdk)
-│   │   ├── compute.ts           ← 0G Compute wrapper (@0glabs/0g-serving-broker)
-│   │   └── inft.ts              ← INFT ERC-7857 minting + transfer
+│   │   ├── compute.ts           ← 0G Compute security scanner wrapper (@0glabs/0g-serving-broker)
+│   │   └── inft.ts              ← INFT ERC-7857 security certificate minting + transfer
 │   ├── openclaw/
 │   │   ├── agent.ts             ← OpenClaw runtime
 │   │   └── skills/
 │   │       └── 0g-deploy.ts     ← open-source skill for community
 │   └── rag/
-│       └── indexer.ts           ← chunk + embed code for 0G Storage
+│       └── indexer.ts           ← repo chunking + findings context indexing
 │
 └── contracts/
     ├── Enclav.sol               ← INFT ERC-7857 implementation
@@ -181,7 +176,7 @@ text-1/2/3: light to muted
 
 ## Key Integration Code
 
-### 0G Storage — upload codebase chunk
+### 0G Storage — upload repository snapshot + findings report
 ```ts
 import { ZgFile, Indexer } from '@0gfoundation/0g-ts-sdk'
 import { ethers } from 'ethers'
@@ -194,10 +189,10 @@ const signer = new ethers.Wallet(process.env.DEPLOYER_PRIVATE_KEY!, provider)
 const indexer = new Indexer(INDEXER)
 
 const [tx, err] = await indexer.upload(zgFile, signer)
-// Save rootHash — needed to download later
+// Save rootHash — used as verifiable scan snapshot reference
 ```
 
-### 0G Compute — inference with TeeML
+### 0G Compute — TeeML security analysis
 ```ts
 import { ZGServingUserBrokerFactory } from '@0glabs/0g-serving-broker'
 
@@ -207,17 +202,17 @@ const PROVIDER = '0xa48f01...' // qwen-2.5-7b-instruct on testnet
 
 const response = await broker.inference.chat(PROVIDER, {
   model: 'qwen-2.5-7b-instruct',
-  messages: [{ role: 'user', content: prompt }]
+  messages: [{ role: 'user', content: securityAuditPrompt }]
 })
 // response includes TEE attestation signature
-// show attestation hash in TeeBadge component
+// parse JSON findings and show attestation hash in TeeBadge component
 ```
 
-### INFT — mint on 0G Chain
+### INFT — mint security certificate on 0G Chain
 ```ts
 // From the integration guide at docs.0g.ai/developer-hub/building-on-0g/inft/integration
 // Dependencies: @openzeppelin/contracts, ethers
-// Contract inherits ERC721 + adds encrypted metadata hash + oracle verification
+// Contract inherits ERC721 + stores verifiable scan metadata hash + oracle verification
 ```
 
 ---
@@ -232,7 +227,7 @@ Every value shown in the UI must be real and live. No hardcoded demo data.
 | TEE attestation hash | TeeML response signature | Don't show if unavailable |
 | INFT token ID | 0G Chain explorer | "—" |
 | Storage size | 0G Storage SDK | "0 GB" |
-| Model name | From 0G Compute service list | "—" |
+| Findings summary | Aggregated security findings | "—" |
 | Explorer links | chainscan.0g.ai or chainscan-galileo.0g.ai | Disabled |
 
 **The "View Docs" link in nav = `https://docs.0g.ai` (external link, 0G official docs)**
@@ -254,10 +249,10 @@ OG_FLOW_CONTRACT=0x22E03a6A89B950F1c82ec5e74F8eCa321a105296
 
 # 0G Compute
 OG_COMPUTE_URL=https://compute-testnet.0g.ai
-OG_COMPUTE_PROVIDER=0xa48f01...   # qwen-2.5-7b-instruct testnet provider
+OG_COMPUTE_PROVIDER=0xa48f01...   # qwen-2.5-7b-instruct security analysis provider
 
 # Contracts
-INFT_CONTRACT_ADDRESS=            # after deployment
+INFT_CONTRACT_ADDRESS=            # security certificate contract address after deployment
 DEPLOYER_PRIVATE_KEY=             # testnet wallet only, never commit
 
 # App
@@ -274,8 +269,37 @@ NEXT_PUBLIC_OG_EXPLORER=https://chainscan-galileo.0g.ai
 - async/await only — never .then()
 - Components: PascalCase, files: kebab-case
 - All 0G SDK calls: wrapped in try/catch
-- Every TeeML response: log attestation hash in dev console
+- Every TeeML response: log attestation hash in dev console and show it in UI
 - Never call any other LLM API (OpenAI, Anthropic, etc.)
+
+---
+
+## Build Order (Phase 3)
+
+### Step 1 — Wallet connection
+- wagmi + viem integration on 0G Galileo testnet (Chain ID 16602)
+
+### Step 2 — Autonomous repo scanner
+- User pastes GitHub repo URL in dashboard
+- Agent automatically fetches all files from GitHub API
+- Uploads file contents to 0G Storage
+- Immediately starts scanning autonomously — no user prompting needed
+- Shows real-time progress: "Scanning auth.service.ts... found 2 issues"
+- Produces structured security findings with severity: Critical, High, Medium, Low
+- Each finding shows: file name, line number, issue description, suggested fix
+
+### Step 3 — 0G Compute TeeML security analysis
+- All scanning runs through 0G Compute with TeeML
+- System prompt instructs model to act as a security auditor returning structured JSON
+- Scans each file and returns findings as JSON array
+- Every response carries TEE attestation hash shown in UI
+- Final report aggregates all findings across all files
+
+### Step 4 — INFT security certificate
+- After scan completes mint INFT on 0G Chain
+- INFT metadata: repo name, scan date, findings count, severity breakdown, root hash
+- Verifiable proof that this exact codebase was scanned privately
+- Shown on agent-id page as security certificate
 
 ---
 

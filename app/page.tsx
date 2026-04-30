@@ -3,13 +3,12 @@
 import {
   Activity,
   AlertTriangle,
-  Briefcase,
   Clock,
   Database,
+  Lock,
   Menu,
-  Shield,
-  Sun,
   Zap,
+  Shield,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -103,7 +102,7 @@ export default function Home() {
               href="#agent-id"
               className="font-mono text-[12px] uppercase tracking-[0.06em] text-text-3 transition-colors hover:text-text-2"
             >
-              Agent ID
+              Certificate
             </Link>
           </li>
           <li>
@@ -111,7 +110,7 @@ export default function Home() {
               href="#skills"
               className="font-mono text-[12px] uppercase tracking-[0.06em] text-text-3 transition-colors hover:text-text-2"
             >
-              Skills
+              Security Report
             </Link>
           </li>
           <li>
@@ -135,7 +134,7 @@ export default function Home() {
             href="/dashboard"
             className="glass-blur-sm rounded-full border border-purple-bright/40 bg-purple/40 px-5 py-2 font-mono text-[12px] uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] transition-all hover:bg-purple/60 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_0_30px_rgba(124,58,237,0.4)]"
           >
-            Launch Agent
+            Scan Your Repo
           </Link>
         </div>
 
@@ -170,14 +169,14 @@ export default function Home() {
           onClick={closeMobile}
           className="border-b border-[var(--border)] py-3.5 font-mono text-[13px] uppercase tracking-[0.06em] text-text-2"
         >
-          Agent ID
+          Certificate
         </Link>
         <Link
           href="#skills"
           onClick={closeMobile}
           className="border-b border-[var(--border)] py-3.5 font-mono text-[13px] uppercase tracking-[0.06em] text-text-2"
         >
-          Skills
+          Security Report
         </Link>
         <a
           href={DOCS_URL}
@@ -193,7 +192,7 @@ export default function Home() {
           onClick={closeMobile}
           className="mt-4 block rounded-full border border-purple-bright/40 bg-purple/40 py-3 text-center font-mono text-[12px] uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)]"
         >
-          Launch Agent
+          Scan Your Repo
         </Link>
       </div>
 
@@ -201,14 +200,14 @@ export default function Home() {
       <section className="relative z-[1] flex min-h-screen flex-col items-center justify-center px-6 pb-20 pt-[120px] text-center md:px-12">
         <div className="glass-blur-sm mb-9 inline-flex animate-fade-up items-center gap-2 rounded-full border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.1)] px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-purple-bright">
           <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-purple-bright" />
-          Built on 0G - Powered by OpenClaw
+          Autonomous Security Agent · Built on 0G
         </div>
 
         <h1 className="animate-fade-up-d1 mb-7 max-w-[min(100%,920px)] text-[clamp(36px,12vw,96px)] font-extrabold leading-[0.93] tracking-[-0.04em] md:text-[clamp(40px,10vw,72px)] lg:text-[clamp(48px,8vw,96px)]">
-          Your code.
+          Scan your code.
           <br />
           <span className="bg-purple-pink bg-clip-text text-transparent">
-            Your agent.
+            Scanned privately.
           </span>
           <br />
           <span
@@ -217,12 +216,12 @@ export default function Home() {
               WebkitTextStroke: "1.5px rgba(167,139,250,0.6)",
             }}
           >
-            Your chain.
+            Certified on-chain.
           </span>
         </h1>
 
         <p className="animate-fade-up-d2 mb-12 font-mono text-[13px] uppercase tracking-[0.1em] text-text-3">
-          Zero exposure - Sealed inference - On-chain ownership
+          Autonomous security · Zero exposure · Verifiable proof
         </p>
 
         <div className="animate-fade-up-d3 mb-20 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -231,7 +230,7 @@ export default function Home() {
             className="glass-blur-md flex w-full max-w-[280px] items-center justify-center gap-2 rounded-full border border-purple-bright/45 bg-purple/45 px-8 py-3.5 font-mono text-[13px] uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_0_30px_rgba(124,58,237,0.3)] transition-all hover:-translate-y-0.5 hover:bg-purple/65 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_0_40px_rgba(124,58,237,0.45)] sm:w-auto sm:max-w-none"
           >
             <Zap className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
-            Launch Your Agent
+            Scan Your Repo
           </Link>
           <a
             href={DOCS_URL}
@@ -263,7 +262,7 @@ export default function Home() {
             <div className="pointer-events-none absolute inset-0 rounded-full border border-white/20 shadow-[inset_0_2px_4px_rgba(255,255,255,0.15)]" />
           </div>
           <p className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.1em] text-text-3">
-            Enclav Sealed Runtime
+            Enclav TeeML Runtime
           </p>
         </div>
       </section>
@@ -271,10 +270,10 @@ export default function Home() {
       {/* Stats */}
       <div className="relative z-[1] grid grid-cols-2 border-y border-[var(--border)] md:grid-cols-4">
         {[
-          { n: "5", d: "0G components integrated" },
+          { n: "100%", d: "scans run inside TEE" },
           { n: "0", d: "bytes of code exposed" },
-          { n: "ERC-7857", d: "Agent ownership standard" },
-          { n: "∞", d: "Persistent codebase memory" },
+          { n: "ERC-7857", d: "verifiable security certificate" },
+          { n: "Real-time", d: "vulnerability detection" },
         ].map((s, i) => (
           <div
             key={s.d}
@@ -301,47 +300,47 @@ export default function Home() {
           How it works
         </div>
         <h2 className="mb-14 max-w-[560px] text-[clamp(28px,4vw,48px)] font-extrabold leading-[1.05] tracking-[-0.03em] md:mb-[60px]">
-          Every layer built for sovereignty
+          Autonomous security from repo to certificate
         </h2>
 
         <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--border)] md:grid-cols-3">
           <FeatureCard
             icon={<Shield className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
-            tag="0G Sealed Inference"
-            title="Hardware-sealed privacy"
-            description="Every inference runs inside an Intel TDX enclave. Cryptographic attestation on every response. Not even 0G can read your code."
+            tag="OpenClaw Agent"
+            title="Fully autonomous"
+            description="Paste your repo URL. Enclav scans every file automatically with zero manual steps."
           />
           <FeatureCard
-            icon={<Sun className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
-            tag="0G Compute"
-            title="Fine-tuned on your codebase"
-            description="Train on your private repos using 0G's decentralized GPU network. Your conventions, your patterns - learned and remembered."
+            icon={<Lock className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
+            tag="0G TeeML"
+            title="Hardware-sealed privacy"
+            description="Every file runs inside an Intel TDX enclave. Cryptographic attestation on every finding."
           />
           <FeatureCard
             id="agent-id"
-            icon={<Briefcase className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
-            tag="Agent ID - ERC-7857"
-            title="Intelligence you own"
-            description="Your agent's learned capabilities minted as an on-chain NFT. Transfer it, sell it, keep it forever. No platform can take it away."
+            icon={<AlertTriangle className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
+            tag="Structured findings"
+            title="Severity-ranked results"
+            description="Critical, High, Medium, Low findings with exact file names, line numbers, and suggested fixes."
           />
           <FeatureCard
             icon={<Database className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
             tag="0G Storage"
-            title="Persistent codebase memory"
-            description="Full repo context on 0G's petabyte-scale decentralized network. The agent remembers everything across every session."
+            title="Permanent scan history"
+            description="Full scan results stored on 0G decentralized storage. Every scan permanently archived."
           />
           <FeatureCard
             id="skills"
             icon={<Activity className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
-            tag="OpenClaw Runtime"
-            title="Skills that ship"
-            description="Built on OpenClaw. Includes the open-source 0g-deploy Skill - deploy, verify, and interact with 0G Chain directly from chat."
+            tag="INFT ERC-7857"
+            title="Verifiable certificate"
+            description="Scan completion mints a security certificate on 0G Chain. Proof your code was audited privately."
           />
           <FeatureCard
-            icon={<AlertTriangle className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
-            tag="0G Chain"
-            title="On-chain everything"
-            description="Agent registry, ownership, attestation logs - all settled on 0G's EVM-compatible L1. Fully verifiable, permanently yours."
+            icon={<Zap className="h-[18px] w-[18px] stroke-purple-bright" strokeWidth={1.8} />}
+            tag="0g-deploy Skill"
+            title="OpenClaw powered"
+            description="Built on OpenClaw runtime with a custom 0g-deploy Skill contributed back to the ecosystem."
           />
         </div>
       </div>
@@ -354,30 +353,30 @@ export default function Home() {
             aria-hidden
           />
           <h2 className="relative mb-3.5 text-[clamp(28px,4vw,52px)] font-extrabold tracking-[-0.03em]">
-            Own your intelligence.
+            Scan your codebase privately.
           </h2>
           <p className="relative mb-9 font-mono text-[12px] uppercase tracking-[0.08em] text-text-3">
-            Built on 0G Infrastructure - Agentic Infrastructure
+            Built on 0G Infrastructure · Autonomous Security Agent
           </p>
           <Link
             href="/dashboard"
             className="glass-blur-md relative inline-flex items-center gap-2 rounded-full border border-purple-bright/45 bg-purple/45 px-9 py-3.5 font-mono text-sm uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_0_30px_rgba(124,58,237,0.3)] transition-all hover:-translate-y-0.5 hover:bg-purple/65"
           >
             <Zap className="h-3.5 w-3.5" strokeWidth={2.5} />
-            Launch Enclav
+            Scan Your Repo
           </Link>
         </div>
       </div>
 
       <footer className="relative z-[1] flex flex-wrap items-center justify-between gap-4 border-t border-[var(--border)] px-6 py-7 md:px-12">
         <div className="font-mono text-[11px] tracking-[0.06em] text-text-3">
-          © 2026 Enclav - Built on 0G Infrastructure
+          © 2026 Enclav - Autonomous security on 0G
         </div>
         <div className="flex flex-wrap gap-1.5">
           {[
             "0G Compute",
-            "Sealed Inference",
-            "Agent ID",
+            "TeeML",
+            "INFT Certificate",
             "OpenClaw",
             "0G Storage",
           ].map((t) => (

@@ -3,74 +3,179 @@
 import Link from "next/link";
 import {
   Activity,
-  Circle,
+  CheckCircle2,
   Code2,
   Database,
-  GitPullRequest,
   Grid2x2,
-  Rocket,
-  SendHorizonal,
+  Link2,
+  ScanSearch,
   Settings2,
+  ShieldAlert,
   ShieldCheck,
-  Sparkles,
+  Siren,
+  Timer,
+  TriangleAlert,
   User,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { TeeBadge } from "@/components/ui/TeeBadge";
 import { WalletConnect } from "@/components/ui/WalletConnect";
 
-const codeLines = [
-  { n: 1, t: "// Enclav auth flow - 0G + OpenClaw", k: "cm" },
-  { n: 2, t: "import { ethers } from 'ethers'", k: "kw" },
-  { n: 3, t: "import { ZGServingUserBrokerFactory } from '@0glabs/0g-serving-broker'", k: "kw" },
-  { n: 4, t: "import { Indexer } from '@0gfoundation/0g-ts-sdk'", k: "kw" },
-  { n: 5, t: "" },
-  { n: 6, t: "const broker = await ZGServingUserBrokerFactory.create(signer, rpcUrl)", k: "fn" },
-  { n: 7, t: "const indexer = new Indexer(process.env.OG_STORAGE_INDEXER!)", k: "fn" },
-  { n: 8, t: "" },
-  { n: 9, t: "export async function generateSessionToken(address: string) {", k: "hl" },
-  { n: 10, t: "  if (!address) throw new Error('Missing wallet address')", k: "hl" },
-  { n: 11, t: "  const response = await broker.inference.chat(provider, {", k: "hl" },
-  { n: 12, t: "    model: 'qwen-2.5-7b-instruct',", k: "hl" },
-  { n: 13, t: "    messages: [{ role: 'user', content: 'validate agent scope' }]", k: "hl" },
-  { n: 14, t: "  })", k: "hl" },
-  { n: 15, t: "  return response", k: "hl" },
-  { n: 16, t: "}", k: "hl" },
-  { n: 17, t: "" },
-  { n: 18, t: "export async function getRootHash(path: string) {", k: "fn" },
-  { n: 19, t: "  const [tx] = await indexer.upload(fileRef, signer)", k: "fn" },
-  { n: 20, t: "  return tx?.rootHash ?? null", k: "fn" },
-  { n: 21, t: "}", k: "fn" },
+type FindingSeverity = "Critical" | "High" | "Medium" | "Low";
+
+type Finding = {
+  severity: FindingSeverity;
+  file: string;
+  line: number;
+  description: string;
+  fix: string;
+  attestationHash: string;
+};
+
+const scanFindingsSeed: Finding[] = [
+  {
+    severity: "Critical",
+    file: "src/auth/token.ts",
+    line: 48,
+    description: "JWT secret fallback allows predictable token signing.",
+    fix: "Require JWT_SECRET from env and fail fast during startup.",
+    attestationHash: "0x89fd7ac4f2f1b0c0d7e38b2a9911aa77",
+  },
+  {
+    severity: "High",
+    file: "api/admin/users.ts",
+    line: 93,
+    description: "Missing role check before privileged user deletion.",
+    fix: "Validate caller role and enforce admin-only guard middleware.",
+    attestationHash: "0x5cc0ef12cc91993cafe84b3340ab8761",
+  },
+  {
+    severity: "Medium",
+    file: "services/github.ts",
+    line: 122,
+    description: "Repository URL not sanitized before downstream usage.",
+    fix: "Validate URL host/path and reject malformed inputs.",
+    attestationHash: "0x1457ae62d40aa31b1fd2c881eadcc091",
+  },
+  {
+    severity: "Low",
+    file: "components/Badge.tsx",
+    line: 14,
+    description: "Potential verbose error text leaks internal implementation details.",
+    fix: "Replace raw errors with generic user-safe messages.",
+    attestationHash: "0x1c8f95f53b7aa410f0be7ca002f3df11",
+  },
 ];
 
-export default function DashboardPage() {
-  return (
-    <main className="relative flex h-screen flex-col overflow-hidden bg-black font-geist text-text-1">
-      <AmbientGlow />
+const panelClass =
+  "relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']";
 
-      <header className="glass-blur-nav relative z-10 flex h-[52px] items-center border-b border-[var(--border)] bg-black/80 px-3 overflow-visible sm:px-5">
-        <Link href="/" className="shrink-0 flex items-center gap-2.5">
+export default function DashboardPage() {
+  const [repoUrl, setRepoUrl] = useState("");
+  const [isScanning, setIsScanning] = useState(false);
+  const [currentFile, setCurrentFile] = useState("—");
+  const [scanLogs, setScanLogs] = useState<string[]>([
+    "Waiting for repository URL input...",
+  ]);
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [scannedFiles, setScannedFiles] = useState(0);
+  const totalFiles = 24;
+
+  useEffect(() => {
+    if (!isScanning) return;
+
+    let findingIndex = 0;
+    const files = [
+      "src/auth/token.ts",
+      "api/admin/users.ts",
+      "services/github.ts",
+      "components/Badge.tsx",
+      "lib/scanner/engine.ts",
+      "lib/storage/uploader.ts",
+    ];
+
+    const timer = setInterval(() => {
+      setScannedFiles((prev) => Math.min(prev + 4, totalFiles));
+      const file = files[findingIndex % files.length] ?? "—";
+      setCurrentFile(file);
+      setScanLogs((prev) => [`Scanning ${file}...`, ...prev.slice(0, 6)]);
+
+      if (findingIndex < scanFindingsSeed.length) {
+        const finding = scanFindingsSeed[findingIndex];
+        setFindings((prev) => [...prev, finding]);
+      }
+
+      findingIndex += 1;
+
+      if (findingIndex > scanFindingsSeed.length && scannedFiles >= totalFiles - 4) {
+        setIsScanning(false);
+        setCurrentFile("Completed");
+        setScanLogs((prev) => [
+          "Scan complete. Findings report generated and archived.",
+          ...prev.slice(0, 6),
+        ]);
+        clearInterval(timer);
+      }
+    }, 900);
+
+    return () => clearInterval(timer);
+  }, [isScanning, scannedFiles]);
+
+  const findingsSummary = useMemo(
+    () =>
+      findings.reduce(
+        (acc, finding) => {
+          acc[finding.severity] += 1;
+          return acc;
+        },
+        {
+          Critical: 0,
+          High: 0,
+          Medium: 0,
+          Low: 0,
+        } as Record<FindingSeverity, number>,
+      ),
+    [findings],
+  );
+
+  const progressPercent = Math.round((scannedFiles / totalFiles) * 100);
+
+  const startScan = () => {
+    if (!repoUrl.trim()) return;
+    setFindings([]);
+    setScannedFiles(0);
+    setCurrentFile("Initializing scanner...");
+    setScanLogs(["Repository queued. Starting autonomous scan..."]);
+    setIsScanning(true);
+  };
+
+  return (
+    <main className="relative flex h-screen flex-col overflow-hidden bg-black font-geist text-[#F0EEF8]">
+      <AmbientGlow />
+      <header className="relative z-10 flex h-[56px] items-center border-b border-white/10 bg-black/80 px-3 backdrop-blur-[24px] overflow-visible sm:px-5">
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <div className="relative flex h-7 w-7 items-center justify-center">
-            <div className="absolute h-6 w-6 rotate-45 rounded-md border border-white/20 bg-purple/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_3px_12px_rgba(124,58,237,0.3)]" />
-            <div className="absolute h-3 w-3 rotate-45 rounded-[3px] border border-white/20 bg-purple/60" />
-            <div className="absolute z-[1] h-1 w-1 rounded-full bg-white shadow-[0_0_6px_white]" />
+            <div className="absolute h-6 w-6 rotate-45 rounded-md border border-white/90 bg-[rgba(124,58,237,0.16)] shadow-[0_4px_14px_rgba(124,58,237,0.15)]" />
+            <div className="absolute h-3 w-3 rotate-45 rounded-[3px] border border-white/90 bg-[rgba(124,58,237,0.45)]" />
+            <div className="absolute z-[1] h-1 w-1 rounded-full bg-white" />
           </div>
-          <span className="text-sm font-bold tracking-tight">
+          <span className="text-sm font-bold tracking-tight text-[#F0EEF8]">
             Encl<span className="text-purple-bright">av</span>
           </span>
-          <span className="hidden rounded border border-purple-bright/30 bg-purple/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-purple-bright sm:inline-flex">
+          <span className="hidden rounded border border-[rgba(167,139,250,0.25)] bg-[rgba(139,92,246,0.1)] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[#A78BFA] sm:inline-flex">
             Beta
           </span>
         </Link>
 
         <nav className="hidden h-full flex-1 items-center justify-center md:flex">
-          {["Agent", "Skills", "Memory", "Fine-tune", "Deploy"].map((item, i) => (
+          {["Scanner", "Findings", "History", "Certificate", "Settings"].map((item, i) => (
             <button
               key={item}
               type="button"
               className={`h-full border-b-2 px-4 font-mono text-[11px] uppercase tracking-[0.08em] ${
                 i === 0
-                  ? "border-purple bg-purple/5 text-text-1"
-                  : "border-transparent text-text-3 hover:text-text-2"
+                  ? "border-[#7C3AED] bg-[rgba(124,58,237,0.12)] text-[#F0EEF8]"
+                  : "border-transparent text-[#9B99B0] hover:text-[#F0EEF8]"
               }`}
             >
               {item}
@@ -78,9 +183,9 @@ export default function DashboardPage() {
           ))}
         </nav>
 
-        <div className="ml-auto shrink-0 flex items-center gap-2">
-          <div className="glass-blur-sm hidden items-center gap-1.5 rounded-full border border-teal/20 bg-teal/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-teal-light sm:flex">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal shadow-[0_0_7px_#10B981]" />
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="hidden items-center gap-1.5 rounded-full border border-[rgba(16,185,129,0.2)] bg-[rgba(16,185,129,0.08)] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-[#6EE7B7] sm:flex">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#6EE7B7]" />
             TEE Active
           </div>
           <WalletConnect />
@@ -88,56 +193,70 @@ export default function DashboardPage() {
       </header>
 
       <div className="relative z-[1] flex min-h-0 flex-1">
-        <aside className="flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-[var(--border)] bg-bg1 py-3">
+        <aside className={`${panelClass} m-3 flex w-[56px] shrink-0 flex-col items-center gap-1 bg-[rgba(255,255,255,0.02)] py-3`}>
           <SidebarIcon icon={Grid2x2} active />
           <SidebarIcon icon={Code2} />
           <SidebarIcon icon={Database} />
-          <div className="my-1 h-px w-6 bg-white/10" />
+          <div className="my-1 h-px w-6 bg-[#2E2C3E]" />
           <SidebarIcon icon={User} />
           <SidebarIcon icon={Settings2} />
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-[38px] items-center justify-between border-b border-[var(--border)] bg-white/[0.01] pr-3">
-            <div className="flex h-full">
-              <FileTab active title="auth.service.ts" color="bg-amber-400" />
-              <FileTab title="user.model.ts" color="bg-teal" />
-              <FileTab title="wallet.ts" />
-              <FileTab title="+" />
-            </div>
-            <div className="hidden gap-1.5 sm:flex">
-              <ActionBtn label="Run" />
-              <ActionBtn label="Review" />
-              <ActionBtn label="Deploy to 0G" primary />
+        <section className="flex min-w-0 flex-1 flex-col p-3 pl-0">
+          <div className={`${panelClass} mb-3 p-3`}>
+            <div className="flex flex-col gap-2 md:flex-row">
+              <div className="relative flex-1">
+                <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B99B0]" />
+                <input
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="Paste GitHub repo URL to begin scan..."
+                  className="w-full rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-2 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={startScan}
+                className="rounded-full border border-[rgba(167,139,250,0.4)] bg-[rgba(124,58,237,0.4)] px-5 py-2 font-mono text-xs uppercase tracking-[0.06em] text-white transition hover:bg-[rgba(124,58,237,0.55)]"
+              >
+                Start Scan
+              </button>
             </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[1.15fr_1fr] xl:grid-cols-[1.15fr_0.95fr_260px]">
-            <CodePanel />
-            <ChatPanel />
-            <RightInfoPanel />
+          <div
+            className={`grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1.2fr_0.9fr_280px] ${
+              isScanning
+                ? "rounded-2xl border border-transparent bg-[linear-gradient(rgba(0,0,0,0.75),rgba(0,0,0,0.75))_padding-box,linear-gradient(120deg,#A78BFA,#7C3AED,#EC4899)_border-box] p-[1px] animate-pulse"
+                : ""
+            }`}
+          >
+            <LiveScanFeed findings={findings} isScanning={isScanning} />
+            <ScanStatus
+              currentFile={currentFile}
+              scannedFiles={scannedFiles}
+              totalFiles={totalFiles}
+              progressPercent={progressPercent}
+              logs={scanLogs}
+              isScanning={isScanning}
+            />
+            <RightPanelSummary
+              scannedFiles={scannedFiles}
+              totalFiles={totalFiles}
+              progressPercent={progressPercent}
+              findingsSummary={findingsSummary}
+            />
           </div>
         </section>
       </div>
 
-      <footer className="relative z-[5] flex h-[28px] items-center gap-4 overflow-x-auto border-t border-[var(--border)] bg-white/[0.01] px-4 font-mono text-[10px] text-text-3">
-        <StatusItem iconColor="bg-teal shadow-[0_0_5px_#10B981]" label="0G Chain" value="—" />
-        <StatusItem iconColor="bg-purple" label="Agent ID" value="—" />
-        <StatusItem iconColor="bg-amber-400" label="Storage" value="—" />
-        <StatusItem iconColor="bg-teal shadow-[0_0_5px_#10B981]" label="Inference" value="—" />
-        <StatusItem iconColor="bg-purple" label="OpenClaw" value="—" />
+      <footer className={`${panelClass} relative z-[5] m-3 mt-0 flex h-[30px] items-center gap-4 overflow-x-auto rounded-xl bg-[rgba(255,255,255,0.02)] px-4 font-mono text-[10px] text-[#9B99B0]`}>
+        <StatusItem iconColor="bg-[#3B82F6]" label="0G Chain" value="Galileo" />
+        <StatusItem iconColor="bg-[#7C3AED]" label="Storage" value={`${scannedFiles}/${totalFiles}`} />
+        <StatusItem iconColor="bg-[#059669]" label="Inference" value={isScanning ? "Running" : "Idle"} />
+        <StatusItem iconColor="bg-[#EF4444]" label="Critical" value={`${findingsSummary.Critical}`} />
       </footer>
-
     </main>
-  );
-}
-
-function AmbientGlow() {
-  return (
-    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      <div className="absolute -left-[100px] -top-[150px] h-[500px] w-[500px] animate-drift rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.15),transparent_65%)]" />
-      <div className="absolute -bottom-[80px] -right-[60px] h-[350px] w-[350px] animate-drift-slow rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.08),transparent_65%)]" />
-    </div>
   );
 }
 
@@ -151,309 +270,237 @@ function SidebarIcon({
   return (
     <button
       type="button"
-      className={`flex h-[34px] w-[34px] items-center justify-center rounded-lg ${
-        active ? "bg-purple/15" : "hover:bg-purple/10"
+      className={`flex h-[36px] w-[36px] items-center justify-center rounded-lg ${
+        active ? "bg-[rgba(124,58,237,0.16)]" : "hover:bg-white/5"
       }`}
     >
-      <Icon className={active ? "h-4 w-4 text-purple-bright" : "h-4 w-4 text-text-3"} strokeWidth={1.6} />
+      <Icon className={active ? "h-4 w-4 text-[#A78BFA]" : "h-4 w-4 text-[#2E2C3E]"} strokeWidth={1.6} />
     </button>
   );
 }
 
-function FileTab({
-  title,
-  color,
-  active = false,
+function LiveScanFeed({
+  findings,
+  isScanning,
 }: {
-  title: string;
-  color?: string;
-  active?: boolean;
+  findings: Finding[];
+  isScanning: boolean;
 }) {
   return (
-    <button
-      type="button"
-      className={`flex h-full items-center gap-1.5 border-r border-[var(--border)] px-3.5 font-mono text-[11px] ${
-        active
-          ? "border-b border-b-purple bg-purple/5 text-text-1"
-          : "text-text-3 hover:text-text-2"
-      }`}
-    >
-      {color ? <Circle className={`h-[6px] w-[6px] ${color} fill-current`} /> : null}
-      {title}
-    </button>
-  );
-}
+    <section className="relative min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <ScanSearch className="h-4 w-4 text-[#7C3AED]" />
+          <h3 className="font-semibold text-[#E9E4FF]">Live Scan Feed</h3>
+        </div>
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+          {isScanning ? "Scanning" : "Ready"}
+        </span>
+      </div>
 
-function ActionBtn({ label, primary = false }: { label: string; primary?: boolean }) {
-  return (
-    <button
-      type="button"
-      className={`rounded border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] ${
-        primary
-          ? "border-purple-bright/30 bg-purple/10 text-purple-bright"
-          : "border-[var(--border)] text-text-2 hover:border-purple-bright/30 hover:text-purple-bright"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function CodePanel() {
-  return (
-    <section className="min-h-0 border-r border-[var(--border)] bg-black md:block">
-      <div className="h-full overflow-y-auto py-4">
-        {codeLines.map((line) => (
-          <div
-            key={line.n}
-            className={`flex border-l-2 font-mono text-[12.5px] leading-[1.65] ${
-              line.k === "hl"
-                ? "border-l-purple bg-purple/10"
-                : "border-l-transparent hover:bg-white/[0.015]"
-            }`}
-          >
-            <span className="w-[52px] shrink-0 select-none pr-4 text-right font-mono text-[11px] text-text-3">
-              {line.n}
-            </span>
-            <code className={`pr-3 ${line.k === "cm" ? "text-text-3 italic" : "text-text-2"}`}>
-              <CodeSyntax line={line.t} />
-            </code>
+      <div className="h-full max-h-[620px] space-y-3 overflow-y-auto p-4">
+        {findings.length === 0 ? (
+          <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
+            No findings yet. Start a scan to stream autonomous security results.
           </div>
-        ))}
+        ) : (
+          findings.map((finding, index) => (
+            <FindingCard key={`${finding.file}-${finding.line}-${index}`} finding={finding} />
+          ))
+        )}
       </div>
     </section>
   );
 }
 
-function CodeSyntax({ line }: { line: string }) {
-  const replacements: Array<[RegExp, string]> = [
-    [/\b(import|export|const|await|return|from|throw|new|async|function|if)\b/g, "text-purple-300"],
-    [/\b(string|null)\b/g, "text-blue-400"],
-    [/'[^']*'/g, "text-amber-300"],
-    [/\b(ZGServingUserBrokerFactory|Indexer|generateSessionToken|getRootHash)\b/g, "text-green-400"],
-  ];
-
-  let rendered = line;
-  replacements.forEach(([regex]) => {
-    rendered = rendered.replace(regex, (m) => `@@${m}@@`);
-  });
-
-  return (
-    <>
-      {rendered.split("@@").map((part, i) => {
-        const className =
-          /\b(import|export|const|await|return|from|throw|new|async|function|if)\b/.test(part)
-            ? "text-purple-300"
-            : /\b(string|null)\b/.test(part)
-              ? "text-blue-400"
-              : /^'[^']*'$/.test(part)
-                ? "text-amber-300"
-                : /\b(ZGServingUserBrokerFactory|Indexer|generateSessionToken|getRootHash)\b/.test(part)
-                  ? "text-green-400"
-                  : "";
-        return (
-          <span key={`${part}-${i}`} className={className}>
-            {part}
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
-function ChatPanel() {
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<
-    Array<{ from: "You" | "Enclav"; text: string; agent?: boolean; snippet?: string }>
-  >([
-    { from: "You", text: "Review auth.service.ts and check token expiry edge cases." },
-    {
-      from: "Enclav",
-      agent: true,
-      text: "Analysis ready. Runtime metadata placeholders remain until wallet and 0G providers connect.",
-      snippet: "1. Wallet: —\n2. Agent ID: —\n3. TEE attestation hash: —",
-    },
-    { from: "You", text: "Apply our current 0G security conventions." },
-  ]);
-
-  const sendMessage = () => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
-    setMessages((prev) => [...prev, { from: "You", text: trimmed }]);
-    setInput("");
+function FindingCard({ finding }: { finding: Finding }) {
+  const severityStyles: Record<FindingSeverity, string> = {
+    Critical: "border-l-[#EF4444]",
+    High: "border-l-[#F97316]",
+    Medium: "border-l-[#EAB308]",
+    Low: "border-l-[#3B82F6]",
+  };
+  const badgeStyles: Record<FindingSeverity, string> = {
+    Critical: "bg-[#FEE2E2] text-[#B91C1C]",
+    High: "bg-[#FFEDD5] text-[#C2410C]",
+    Medium: "bg-[#FEF9C3] text-[#A16207]",
+    Low: "bg-[#DBEAFE] text-[#1D4ED8]",
   };
 
   return (
-    <section className="glass relative flex min-h-0 flex-col border-l border-[var(--border)] bg-white/[0.03] md:order-none">
-      <div className="border-b border-[var(--border)] bg-white/[0.02] px-4 py-3">
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-[13px] font-semibold">Enclav Agent</span>
-          <span className="font-mono text-[10px] tracking-[0.04em] text-purple-bright">ERC-7857 - —</span>
-        </div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-text-3">
-          OpenClaw - TeeML inference
-        </p>
+    <article className={`rounded-xl border border-white/10 border-l-4 bg-[rgba(255,255,255,0.04)] p-3 shadow-[0_8px_20px_rgba(12,10,24,0.35)] ${severityStyles[finding.severity]}`}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] ${badgeStyles[finding.severity]}`}>
+          {finding.severity}
+        </span>
+        <span className="font-mono text-[10px] text-[#9B99B0]">
+          {finding.file}:{finding.line}
+        </span>
       </div>
+      <p className="mb-1.5 text-sm font-semibold text-[#F4F2FF]">{finding.description}</p>
+      <p className="mb-2 text-xs text-[#9B99B0]">Suggested fix: {finding.fix}</p>
+      <TeeBadge attestationHash={finding.attestationHash} />
+    </article>
+  );
+}
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {messages.map((message, index) => (
-          <Message
-            key={`${message.from}-${index}`}
-            from={message.from}
-            text={message.text}
-            agent={message.agent}
-            snippet={message.snippet}
-          />
-        ))}
+function ScanStatus({
+  currentFile,
+  scannedFiles,
+  totalFiles,
+  progressPercent,
+  logs,
+  isScanning,
+}: {
+  currentFile: string;
+  scannedFiles: number;
+  totalFiles: number;
+  progressPercent: number;
+  logs: string[];
+  isScanning: boolean;
+}) {
+  return (
+    <section className={`${panelClass} min-h-0`}>
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <h3 className="font-semibold text-[#F0EEF8]">Scan Status</h3>
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+          {isScanning ? "Running" : "Complete"}
+        </span>
       </div>
-
-      <div className="border-t border-[var(--border)] bg-white/[0.02] p-3">
-        <div className="mb-1.5 flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") sendMessage();
-            }}
-            placeholder="Ask your sovereign agent..."
-            className="glass-blur-sm w-full rounded-full border border-[var(--border)] bg-white/[0.05] px-3.5 py-2 font-mono text-xs text-text-1 placeholder:text-white/30 focus:border-purple focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={sendMessage}
-            className="glass-blur-sm rounded-full border border-purple-bright/30 bg-purple/15 px-3 text-purple-bright"
-          >
-            <SendHorizonal className="h-4 w-4" />
-          </button>
+      <div className="space-y-4 p-4">
+        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+            Current file
+          </p>
+          <p className="font-mono text-xs text-[#F0EEF8]">{currentFile}</p>
         </div>
-        <p className="text-center font-mono text-[10px] text-text-3">
-          Sealed via <span className="text-teal-light">0G TeeML</span> - zero exposure
-        </p>
+
+        <div>
+          <div className="mb-1.5 flex items-center justify-between font-mono text-[10px] text-[#9B99B0]">
+            <span>Progress</span>
+            <span>
+              {scannedFiles}/{totalFiles} ({progressPercent}%)
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[rgba(255,255,255,0.08)]">
+            <div
+              className="h-full rounded-full bg-[rgba(124,58,237,0.6)] transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
+          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+            Live events
+          </p>
+          {logs.map((log, index) => (
+            <div key={`${log}-${index}`} className="flex items-start gap-2 text-xs text-[#9B99B0]">
+              <Timer className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A78BFA]" />
+              {log}
+            </div>
+          ))}
+        </div>
+
+        {!isScanning ? (
+          <div className="rounded-xl border border-[rgba(16,185,129,0.2)] bg-[rgba(16,185,129,0.08)] p-3 text-xs text-[#6EE7B7]">
+            <div className="mb-1 flex items-center gap-1.5 font-semibold">
+              <CheckCircle2 className="h-4 w-4" />
+              Scan complete
+            </div>
+            Findings report finalized and ready for INFT certificate minting.
+          </div>
+        ) : null}
       </div>
     </section>
   );
 }
 
-function Message({
-  from,
-  text,
-  snippet,
-  agent = false,
+function RightPanelSummary({
+  scannedFiles,
+  totalFiles,
+  progressPercent,
+  findingsSummary,
 }: {
-  from: string;
-  text: string;
-  snippet?: string;
-  agent?: boolean;
+  scannedFiles: number;
+  totalFiles: number;
+  progressPercent: number;
+  findingsSummary: Record<FindingSeverity, number>;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span className={`font-mono text-[10px] uppercase tracking-[0.1em] ${agent ? "text-purple-bright" : "text-text-3"}`}>
-        {from}
-      </span>
-      <p className={`text-sm leading-6 ${agent ? "text-[#D4D0EA]" : "text-text-2"}`}>{text}</p>
-      {snippet ? (
-        <pre className="glass-blur-sm overflow-x-auto rounded-md border border-[var(--border)] bg-black/40 p-3 font-mono text-[11px] leading-6 text-text-2">
-          {snippet}
-        </pre>
-      ) : null}
-      {agent ? (
-        <span className="glass-blur-sm mt-1 inline-flex w-fit items-center gap-1.5 rounded-full border border-teal/20 bg-teal/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-teal-light">
-          <span className="h-1.5 w-1.5 rounded-full bg-teal shadow-[0_0_7px_#10B981]" />
-          TEE attested - —
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function RightInfoPanel() {
-  return (
-    <aside className="glass hidden min-h-0 flex-col border-l border-[var(--border)] bg-white/[0.025] xl:flex">
-      <div className="border-b border-[var(--border)] p-4">
-        <div className="mb-3 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.12em] text-text-3">
-          <span>Agent Identity</span>
-          <Link href="/agent-id" className="rounded border border-purple-bright/30 bg-purple/10 px-1.5 py-0.5 text-purple-bright">
+    <aside className={`${panelClass} hidden min-h-0 flex-col xl:flex`}>
+      <div className="border-b border-white/10 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
+          <Link href="/agent-id" className="rounded border border-[rgba(167,139,250,0.25)] bg-[rgba(139,92,246,0.1)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#A78BFA]">
             View INFT
           </Link>
         </div>
-        <div className="rounded-xl border border-purple-bright/30 bg-purple/10 p-3">
-          <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-md bg-gradient-to-br from-purple-bright/40 to-pink/30">
-            <ShieldCheck className="h-4 w-4 text-white" />
-          </div>
-          <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.1em] text-text-3">Agent ID - ERC-7857</p>
-          <p className="mb-3 font-mono text-xs text-purple-bright">—</p>
-          <div className="grid grid-cols-3 gap-2">
-            <MiniStat label="Epoch" value="—" />
-            <MiniStat label="Chain" value="—" />
-            <MiniStat label="Size" value="—" />
-          </div>
+        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
+          <ShieldCheck className="mb-2 h-5 w-5 text-[#A78BFA]" />
+          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+            Agent ID - ERC-7857
+          </p>
+          <p className="font-mono text-xs text-[#F0EEF8]">—</p>
         </div>
       </div>
 
-      <div className="border-b border-[var(--border)] p-4">
-        <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.12em] text-text-3">Fine-tune status</p>
-        <ProgressRow label="Indexing" value="—" />
-        <ProgressRow label="Training epochs" value="—" />
-        <ProgressRow label="INFT minted" value="—" />
+      <div className="border-b border-white/10 p-4">
+        <h4 className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+          Scan Progress
+        </h4>
+        <p className="mb-2 font-mono text-xs text-[#9B99B0]">
+          {scannedFiles}/{totalFiles} files scanned
+        </p>
+        <div className="h-2 overflow-hidden rounded-full bg-[rgba(255,255,255,0.08)]">
+          <div
+            className="h-full rounded-full bg-[rgba(124,58,237,0.6)] transition-all duration-500"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
       </div>
 
-      <div className="min-h-0 flex-1 p-4">
-        <p className="mb-3 font-mono text-[9px] uppercase tracking-[0.12em] text-text-3">OpenClaw Skills</p>
-        <SkillRow icon={Rocket} name="0g-deploy" status="Active" />
-        <SkillRow icon={GitPullRequest} name="code-review" status="Ready" />
-        <SkillRow icon={Sparkles} name="test-gen" status="Ready" />
-        <SkillRow icon={Activity} name="audit-scan" status="Soon" />
+      <div className="flex-1 p-4">
+        <h4 className="mb-3 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+          Findings Summary
+        </h4>
+        <SummaryRow label="Critical" count={findingsSummary.Critical} color="bg-[#EF4444]" icon={Siren} />
+        <SummaryRow label="High" count={findingsSummary.High} color="bg-[#F97316]" icon={ShieldAlert} />
+        <SummaryRow label="Medium" count={findingsSummary.Medium} color="bg-[#EAB308]" icon={TriangleAlert} />
+        <SummaryRow label="Low" count={findingsSummary.Low} color="bg-[#3B82F6]" icon={Activity} />
       </div>
     </aside>
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="space-y-0.5">
-      <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-text-3">{label}</p>
-      <p className="font-mono text-xs">{value}</p>
-    </div>
-  );
-}
-
-function ProgressRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mb-3 last:mb-0">
-      <div className="mb-1 flex items-center justify-between font-mono text-[10px] text-text-2">
-        <span>{label}</span>
-        <span className="text-text-3">{value}</span>
-      </div>
-      <div className="h-[3px] overflow-hidden rounded bg-white/10">
-        <div className="h-full w-0 rounded bg-gradient-to-r from-purple to-purple-bright" />
-      </div>
-    </div>
-  );
-}
-
-function SkillRow({
+function SummaryRow({
+  label,
+  count,
+  color,
   icon: Icon,
-  name,
-  status,
 }: {
-  icon: typeof Rocket;
-  name: string;
-  status: "Active" | "Ready" | "Soon";
+  label: string;
+  count: number;
+  color: string;
+  icon: typeof Activity;
 }) {
-  const style =
-    status === "Active"
-      ? "border-teal/30 bg-teal/10 text-teal-light"
-      : status === "Ready"
-        ? "border-purple-bright/30 bg-purple/10 text-purple-bright"
-        : "border-[var(--border)] text-text-3";
-
   return (
-    <div className="flex items-center gap-2 border-b border-white/5 py-2 last:border-none">
-      <Icon className="h-3.5 w-3.5 text-text-3" />
-      <span className="flex-1 font-mono text-[11px] text-text-2">{name}</span>
-      <span className={`rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] ${style}`}>
-        {status}
-      </span>
+    <div className="mb-2.5 flex items-center justify-between rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-2.5 py-2 last:mb-0">
+      <div className="flex items-center gap-2">
+        <span className={`h-2 w-2 rounded-full ${color}`} />
+        <Icon className="h-3.5 w-3.5 text-[#A78BFA]" />
+        <span className="font-mono text-[11px] text-[#9B99B0]">{label}</span>
+      </div>
+      <span className="font-mono text-xs text-[#F0EEF8]">{count}</span>
+    </div>
+  );
+}
+
+function AmbientGlow() {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      <div className="absolute -left-[100px] -top-[150px] h-[500px] w-[500px] animate-drift rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.15),transparent_65%)]" />
+      <div className="absolute -bottom-[80px] -right-[60px] h-[350px] w-[350px] animate-drift-slow rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.12),transparent_65%)]" />
     </div>
   );
 }
@@ -469,7 +516,7 @@ function StatusItem({
 }) {
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5">
-      <span className={`h-1 w-1 rounded-full ${iconColor}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${iconColor}`} />
       {label}: {value}
     </span>
   );
