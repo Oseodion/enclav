@@ -19,6 +19,8 @@ type StreamFinding = {
 
 const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol", ".go"];
 const encoder = new TextEncoder();
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function parseRepoUrl(repoUrl: string) {
   try {
@@ -112,8 +114,12 @@ export async function POST(request: Request) {
         const signer = new ethers.Wallet(privateKey, provider);
         const broker = await initializeComputeAccount(signer);
 
-        const scanSingleFile = async (file: { path?: string; url?: string }) => {
+        const scanSingleFile = async (
+          file: { path?: string; url?: string },
+          batchIndex: number,
+        ) => {
           if (!file.path || !file.url) return;
+          await sleep(batchIndex * 2000);
 
           streamChunk(controller, { type: "file", filename: file.path });
 
@@ -156,7 +162,12 @@ export async function POST(request: Request) {
 
         for (let index = 0; index < files.length; index += 3) {
           const batch = files.slice(index, index + 3);
-          await Promise.all(batch.map((file) => scanSingleFile(file)));
+          await Promise.all(
+            batch.map((file, batchIndex) => scanSingleFile(file, batchIndex)),
+          );
+          if (index + 3 < files.length) {
+            await sleep(8000);
+          }
         }
 
         const summaryReport = {
