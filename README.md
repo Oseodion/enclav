@@ -1,126 +1,75 @@
 # Enclav
 
-> AI coding agent where your code never leaves a hardware enclave, your agent learns from your codebase, and that intelligence is an on-chain asset you own.
+Autonomous code security agent - connect your repo, Enclav scans every file for vulnerabilities inside a hardware TEE, and mints a verifiable security certificate as an INFT you own.
 
-Built for the **0G APAC Hackathon 2026** - Track 1: Agentic Infrastructure & OpenClaw Lab
-
----
+Built for the 0G APAC Hackathon 2026 - Track 1: Agentic Infrastructure & OpenClaw Lab
 
 ## What It Does
+Enclav is an autonomous security agent built entirely on 0G infrastructure. Connect your GitHub repository and Enclav automatically:
 
-Enclav is an AI coding agent built entirely on 0G's decentralized infrastructure. Connect your GitHub repository, and Enclav:
+- Fetches every file from your repo via GitHub API
+- Uploads file contents to 0G Storage (Log + KV layers) for permanent archiving
+- Autonomously scans every file through 0G Compute TeeML - all code runs inside Intel TDX hardware enclave, zero exposure
+- Streams real-time findings: Critical, High, Medium, Low severity with file names and line numbers
+- Mints a verifiable security certificate as an INFT (ERC-7857) on 0G Chain - cryptographic proof your code was audited privately
 
-1. **Indexes your codebase** into 0G Storage (Log + KV layers) for persistent cross-session memory
-2. **Runs all inference** through 0G Sealed Inference (Intel TDX TEE) - your code never leaves a hardware enclave
-3. **Learns your patterns** via RAG over your indexed codebase - the agent knows your conventions, APIs, and architecture
-4. **Mints your agent** as an ERC-7857 Agent ID NFT on 0G Chain - your trained intelligence, permanently on-chain
-5. **Ships a 0g-deploy Skill** for OpenClaw - deploy and interact with 0G Chain contracts directly from agent chat
-
-Every response carries a cryptographic TEE attestation certificate. Not a promise - proof.
-
----
+Every finding carries a TEE attestation hash - not a promise, proof.
 
 ## Problem
-
-Every AI coding tool (Cursor, GitHub Copilot, Claude Code) sends your proprietary source code to centralized servers. Your internal APIs, business logic, unreleased features - all transit infrastructure you don't control, under terms of service you can't verify.
-
-There is no cryptographic proof that your code stays private. You have to trust the platform.
-
----
+Existing security tools (Snyk, SonarQube, GitHub Advanced Security) require you to send your proprietary source code to centralized servers. Your internal APIs, business logic, and unreleased features transit infrastructure you don't control.
+There is no cryptographic proof your code stays private. You have to trust the platform.
 
 ## Solution
-
-Enclav routes every inference call through 0G Sealed Inference - Intel TDX Trusted Execution Environments on H100 GPUs. Hardware-level isolation means:
-
-- Your code cannot be read, logged, or exfiltrated - not even by 0G
-- Every response is signed with a Remote Attestation (RA) certificate you can verify
-- The privacy guarantee is mathematical, not contractual
-
----
+Enclav routes every scan through 0G Sealed Inference (TeeML) - Intel TDX Trusted Execution Environments. Hardware-level isolation means your code cannot be read, logged, or exfiltrated - not even by 0G. Every response is signed with a Remote Attestation certificate you can verify on-chain.
 
 ## 0G Components Used
-
 | Component | How Enclav uses it |
 |---|---|
-| **OpenClaw** | Agent orchestration runtime + custom `0g-deploy` Skill |
-| **0G Compute** | All LLM inference routed through compute layer |
-| **0G Sealed Inference (TeeML)** | Intel TDX TEE for all LLM calls - hardware privacy |
-| **0G Storage** | Codebase indexing (Log layer) + session memory (KV layer) |
-| **Agent ID (ERC-7857)** | On-chain NFT minting of trained agent capabilities |
-| **0G Chain** | Contract deployment, agent registry, ownership transfers |
-
----
+| OpenClaw | Autonomous agent orchestration + custom 0g-deploy Skill |
+| 0G Compute + TeeML | All security scanning runs in Intel TDX hardware enclave |
+| 0G Storage | Permanent scan archive on Log + KV layers |
+| INFT ERC-7857 | Security certificate minted on-chain after every scan |
+| 0G Chain | Contract deployment, certificate registry, ownership |
 
 ## Architecture
-
 ```
-┌─────────────────────────────────────────────────────┐
-│                    User (Browser)                    │
-│         Next.js 14 - Glass UI - Geist font          │
-└─────────────────┬───────────────────────────────────┘
-                  │ HTTPS
-┌─────────────────▼───────────────────────────────────┐
-│              Next.js API Routes                      │
-│   /api/agent/chat - /api/storage/index               │
-│   /api/agentid/mint - /api/skills/deploy             │
-└──────┬──────────────────┬──────────────┬────────────┘
-       │                  │              │
-┌──────▼──────┐  ┌────────▼───────┐  ┌──▼────────────┐
-│  OpenClaw   │  │  0G Storage    │  │  0G Chain      │
-│  Runtime    │  │  Log + KV      │  │  ERC-7857 NFT  │
-│  + Skills   │  │  Codebase RAG  │  │  Agent Registry│
-└──────┬──────┘  └────────────────┘  └───────────────┘
-       │
-┌──────▼──────────────────────────────────────────────┐
-│         0G Sealed Inference (TeeML)                  │
-│    Intel TDX Hardware Enclave - H100 GPU             │
-│    Remote Attestation on every response              │
-└─────────────────────────────────────────────────────┘
+User connects GitHub repo
+       ↓
+GitHub API fetches all files
+       ↓
+0G Storage - files uploaded and indexed
+       ↓
+OpenClaw Agent - autonomous scan orchestration
+       ↓
+0G Compute TeeML (Intel TDX enclave)
+- security analysis per file
+- structured JSON findings returned
+- TEE attestation hash on every response
+       ↓
+Findings streamed to Live Scan Feed UI
+       ↓
+INFT ERC-7857 minted on 0G Chain
+- security certificate with findings summary
+- permanent verifiable proof of private audit
 ```
-
----
 
 ## Local Setup
-
 ```bash
-# Clone
-git clone https://github.com/YOUR_HANDLE/enclav
+git clone https://github.com/Oseodion/enclav
 cd enclav
-
-# Install
 npm install
-
-# Configure
 cp .env.example .env.local
-# Fill in your 0G API keys (see .env.example)
-
-# Run
+# Fill in your 0G credentials in .env.local
 npm run dev
 # Open http://localhost:3000
 ```
 
-### Contract Deployment (testnet)
-```bash
-# Add your deployer key to .env.local
-npm run deploy:contracts
-# Copy output addresses to .env.local
-```
-
----
-
 ## Team
-- Built during 0G APAC Hackathon 2026
-- Track 1: Agentic Infrastructure & OpenClaw Lab
-
----
+Built during 0G APAC Hackathon 2026 - Track 1: Agentic Infrastructure & OpenClaw Lab
 
 ## Links
-- **Live demo:** TBD
-- **0G Chain contract:** TBD (post-deployment)
-- **0G Explorer:** TBD
-- **Demo video:** TBD
-- **X post:** TBD
-
----
-
-*Built with 0G Compute - 0G Sealed Inference - 0G Storage - Agent ID - OpenClaw*
+- Live demo: TBD
+- 0G Chain contract: TBD
+- 0G Explorer: TBD
+- Demo video: TBD
+- X post: TBD

@@ -79,15 +79,13 @@ export default function AgentIdPage() {
 
       <section className="relative z-[1] mx-auto max-w-[1100px] px-4 pb-20 pt-12 md:px-10">
         <p className="mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright before:h-px before:w-[18px] before:bg-purple-bright">
-          On-chain agent identity
+          Verifiable Security Proof
         </p>
         <h1 className="mb-1 text-[clamp(28px,4vw,42px)] font-extrabold tracking-[-0.03em]">
-          Agent ID INFT
+          Security Certificate
         </h1>
         <p className="mb-10 font-mono text-[11px] tracking-[0.06em] text-text-3">
-          ERC-7857 - 0G Chain Galileo - Minted block #
-          {" "}
-          —
+          ERC-7857 - 0G Chain Galileo - Issued after autonomous scan
         </p>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[400px_1fr]">
@@ -110,15 +108,15 @@ export default function AgentIdPage() {
             </div>
 
             <div className="p-5">
-              <h2 className="mb-1 text-xl font-extrabold tracking-tight">Enclav Agent #—</h2>
+              <h2 className="mb-1 text-xl font-extrabold tracking-tight">Enclav Security Cert #—</h2>
               <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.08em] text-purple-bright">
-                Enclav Genesis Collection - 0G Chain
+                Enclav Security Certificates - 0G Chain
               </p>
               <div className="mb-4 grid grid-cols-2 gap-2">
-                <NftStat label="Fine-tune" value="—" accent="text-purple-bright" />
-                <NftStat label="Inference" value="—" accent="text-teal-light" />
-                <NftStat label="Training data" value="—" />
-                <NftStat label="Base model" value="—" />
+                <NftStat label="Files Scanned" value="—" accent="text-purple-bright" />
+                <NftStat label="Vulnerabilities" value="—" accent="text-teal-light" />
+                <NftStat label="Scan Date" value="—" />
+                <NftStat label="Critical Findings" value="—" />
               </div>
               <div className="flex gap-2">
                 <button
@@ -194,28 +192,28 @@ export default function AgentIdPage() {
 
             <section className="glass rounded-[14px] p-5">
               <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
-                Sealed inference log
+                Scan Attestation Log
               </p>
-              <TimelineEntry title="TEE attestation verified" meta="Intel TDX - Enclave — - —" color="bg-teal shadow-[0_0_7px_#10B981]" />
-              <TimelineEntry title="Inference completed - auth.service.ts" meta="Response signed - — - —" color="bg-purple shadow-[0_0_7px_#7C3AED]" />
-              <TimelineEntry title="Fine-tune epoch completed" meta="0G Compute - H100 - indexed —" color="bg-purple" />
-              <TimelineEntry title="Agent ID minted on 0G Chain" meta="ERC-7857 - Block #— - —" color="bg-amber-500 shadow-[0_0_7px_#F59E0B]" last />
+              <TimelineEntry title="TEE attestation verified" meta="Intel TDX - Scan enclave verified" color="bg-teal shadow-[0_0_7px_#10B981]" />
+              <TimelineEntry title="Autonomous scan completed" meta="All files scanned - Findings aggregated" color="bg-purple shadow-[0_0_7px_#7C3AED]" />
+              <TimelineEntry title="Security certificate minted" meta="ERC-7857 - 0G Chain" color="bg-purple" />
+              <TimelineEntry title="Certificate transferred to owner" meta="Original owner - 0 transfers" color="bg-amber-500 shadow-[0_0_7px_#F59E0B]" last />
             </section>
 
             <section className="glass rounded-[14px] p-5">
               <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
-                Learned capabilities
+                Vulnerability types detected
               </p>
               <div className="flex flex-wrap gap-1.5">
-                <CapabilityTag label="TypeScript" tone="purple" />
-                <CapabilityTag label="Next.js patterns" tone="purple" />
-                <CapabilityTag label="0G Compute SDK" tone="green" />
-                <CapabilityTag label="INFT ERC-7857" tone="green" />
-                <CapabilityTag label="JWT auth flows" tone="purple" />
-                <CapabilityTag label="Solidity" tone="amber" />
-                <CapabilityTag label="0G Storage API" tone="green" />
-                <CapabilityTag label="REST API design" tone="purple" />
-                <CapabilityTag label="OpenClaw Skills" tone="amber" />
+                <CapabilityTag label="JWT Issues" tone="purple" />
+                <CapabilityTag label="Unvalidated Input" tone="purple" />
+                <CapabilityTag label="SQL Injection" tone="green" />
+                <CapabilityTag label="Missing Auth" tone="green" />
+                <CapabilityTag label="Exposed Secrets" tone="purple" />
+                <CapabilityTag label="Weak Encryption" tone="amber" />
+                <CapabilityTag label="XSS Risk" tone="green" />
+                <CapabilityTag label="CSRF" tone="purple" />
+                <CapabilityTag label="Race Condition" tone="amber" />
               </div>
             </section>
           </div>
