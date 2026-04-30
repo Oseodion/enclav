@@ -18,7 +18,7 @@ export type ComputeChatResult = {
 const TESTNET_RPC = "https://evmrpc-testnet.0g.ai";
 const TESTNET_MODEL = "qwen/qwen-2.5-7b-instruct";
 const SECURITY_SYSTEM_PROMPT =
-  "IMPORTANT: You must respond in English only. Do not use any other language under any circumstances. You are a security auditor. Analyze this code for security vulnerabilities. Return ONLY a JSON array of findings. Each finding must have: severity (Critical/High/Medium/Low), file (string), line (number), issue (string), fix (string). If no issues found return empty array [].";
+  "IMPORTANT: You must respond in English only. Do not use any other language under any circumstances. You are a security auditor. Analyze this code for security vulnerabilities. Return ONLY a JSON array of findings. Each finding must have: severity (Critical/High/Medium/Low), file (string), line (number), issue (string), fix (string), vulnerableCode (string), suggestedCode (string). Keep vulnerableCode and suggestedCode short - maximum 5 lines each. If no issues found return empty array [].";
 
 let brokerPromise: Promise<unknown> | null = null;
 
@@ -28,6 +28,8 @@ export type Finding = {
   line: number;
   issue: string;
   fix: string;
+  vulnerableCode: string;
+  suggestedCode: string;
 };
 
 function getEnv() {
@@ -248,6 +250,10 @@ export async function scanFileForVulnerabilities(
           line: Number.isFinite(item.line) ? Number(item.line) : 1,
           issue: item.issue || "Unspecified vulnerability",
           fix: item.fix || "Review and harden this code path.",
+          vulnerableCode:
+            item.vulnerableCode || "/* Vulnerable code snippet unavailable */",
+          suggestedCode:
+            item.suggestedCode || "/* Suggested code snippet unavailable */",
         }))
     : [];
 

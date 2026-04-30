@@ -3,8 +3,10 @@
 import Link from "next/link";
 import {
   Activity,
+  Check,
   CheckCircle2,
   Code2,
+  Copy,
   Database,
   Grid2x2,
   Link2,
@@ -29,6 +31,8 @@ type Finding = {
   line: number;
   description: string;
   fix: string;
+  vulnerableCode?: string;
+  suggestedCode?: string;
   attestationHash: string;
 };
 
@@ -134,6 +138,8 @@ export default function DashboardPage() {
                   line: number;
                   issue: string;
                   fix: string;
+                  vulnerableCode?: string;
+                  suggestedCode?: string;
                 };
                 attestationHash: string;
               }
@@ -158,6 +164,8 @@ export default function DashboardPage() {
                 line: event.finding.line,
                 description: event.finding.issue,
                 fix: event.finding.fix,
+                vulnerableCode: event.finding.vulnerableCode,
+                suggestedCode: event.finding.suggestedCode,
                 attestationHash: event.attestationHash,
               },
             ]);
@@ -355,32 +363,98 @@ function LiveScanFeed({
 }
 
 function FindingCard({ finding }: { finding: Finding }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copiedFix, setCopiedFix] = useState(false);
   const badgeStyles: Record<FindingSeverity, string> = {
     Critical: "bg-[#FCEBEB] text-[#A32D2D]",
     High: "bg-[#FAEEDA] text-[#854F0B]",
     Medium: "bg-[#E6F1FB] text-[#185FA5]",
     Low: "bg-[#E1F5EE] text-[#0F6E56]",
   };
+  const vulnerableCode =
+    finding.vulnerableCode ?? "// Vulnerable snippet unavailable";
+  const suggestedCode =
+    finding.suggestedCode ?? "// Suggested fix snippet unavailable";
+
+  const onCopyFix = async () => {
+    try {
+      await navigator.clipboard.writeText(suggestedCode);
+      setCopiedFix(true);
+      setTimeout(() => setCopiedFix(false), 1500);
+    } catch {
+      setCopiedFix(true);
+      setTimeout(() => setCopiedFix(false), 1500);
+    }
+  };
 
   return (
-    <article className="grid grid-cols-[72px_1fr_auto] gap-3 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-5 py-4 shadow-[0_8px_20px_rgba(12,10,24,0.35)]">
-      <div>
-        <span className={`inline-flex rounded-[4px] px-2 py-[3px] font-mono text-[10px] uppercase tracking-[0.06em] ${badgeStyles[finding.severity]}`}>
-          {finding.severity}
-        </span>
+    <article className="rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-5 py-4 shadow-[0_8px_20px_rgba(12,10,24,0.35)]">
+      <div className="grid grid-cols-[72px_1fr_auto] gap-3">
+        <div>
+          <span className={`inline-flex rounded-[4px] px-2 py-[3px] font-mono text-[10px] uppercase tracking-[0.06em] ${badgeStyles[finding.severity]}`}>
+            {finding.severity}
+          </span>
+        </div>
+
+        <div className="min-w-0">
+          <p className="mb-1 text-[14px] font-medium text-[#F4F2FF]">{finding.description}</p>
+          <p className="mb-2 mt-[10px] text-[12px] leading-[1.6] text-[#9B99B0]">Suggested fix: {finding.fix}</p>
+          <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[0.5px] border-[rgba(110,231,183,0.45)] bg-[rgba(16,185,129,0.08)] px-2 py-[3px] font-mono text-[10px] text-[#6EE7B7]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
+            TEEML {shortHash(finding.attestationHash)}
+          </span>
+        </div>
+
+        <div className="flex flex-col items-end gap-1.5 text-right font-mono text-[11px] text-[#9B99B0]">
+          <span>
+            {finding.file}:{finding.line}
+          </span>
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="rounded border border-white/20 px-2 py-[3px] text-[10px] text-[#9B99B0] transition hover:rounded-md hover:border-[#7C3AED]/60 hover:text-[#A78BFA]"
+          >
+            View Fix
+          </button>
+        </div>
       </div>
 
-      <div className="min-w-0">
-        <p className="mb-1 text-[14px] font-medium text-[#F4F2FF]">{finding.description}</p>
-        <p className="mb-2 mt-[10px] text-[12px] leading-[1.6] text-[#9B99B0]">Suggested fix: {finding.fix}</p>
-        <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[0.5px] border-[rgba(110,231,183,0.45)] bg-[rgba(16,185,129,0.08)] px-2 py-[3px] font-mono text-[10px] text-[#6EE7B7]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
-          TEEML {shortHash(finding.attestationHash)}
-        </span>
-      </div>
-
-      <div className="text-right font-mono text-[11px] text-[#9B99B0]">
-        {finding.file}:{finding.line}
+      <div
+        className={`overflow-hidden transition-[max-height] duration-300 ease-in-out ${
+          expanded ? "max-h-[600px] pt-4" : "max-h-0"
+        }`}
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="rounded-md border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.08)] p-3">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#FCA5A5]">
+              Vulnerable
+            </p>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[#FECACA]">
+              {vulnerableCode}
+            </pre>
+          </div>
+          <div className="rounded-md border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.08)] p-3">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#6EE7B7]">
+              Suggested fix
+            </p>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[#A7F3D0]">
+              {suggestedCode}
+            </pre>
+          </div>
+        </div>
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => void onCopyFix()}
+            className="inline-flex items-center gap-1.5 rounded border border-white/20 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-[#9B99B0] transition hover:border-[#7C3AED]/60 hover:text-[#A78BFA]"
+          >
+            {copiedFix ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            {copiedFix ? "Copied" : "Copy fix"}
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] text-[#6B6980]">
+          AI-generated suggestion - review carefully before applying to your codebase
+        </p>
       </div>
     </article>
   );
