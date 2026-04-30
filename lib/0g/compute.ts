@@ -56,14 +56,13 @@ async function resolveProviderAddress(
 ) {
   if (configuredProviderAddress) return configuredProviderAddress;
 
-  const listService = broker.inference.listService;
-  if (!listService) {
+  if (!broker.inference.listService) {
     throw new Error(
       "OG_COMPUTE_PROVIDER is required for security scanning (provider auto-discovery unavailable).",
     );
   }
 
-  const services = await listService(0, 20, true);
+  const services = await broker.inference.listService(0, 20, true);
   const providerAddress = services.find((s) => !!s.provider)?.provider;
   if (!providerAddress) {
     throw new Error(

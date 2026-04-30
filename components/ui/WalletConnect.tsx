@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, LogOut, Wallet } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 
 function shortenAddress(address?: string) {
@@ -11,13 +11,17 @@ function shortenAddress(address?: string) {
 
 export function WalletConnect() {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
 
   const availableConnectors = useMemo(() => connectors, [connectors]);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  if (isConnected) {
+  if (mounted && isConnected) {
     return (
       <div className="relative">
         <button
