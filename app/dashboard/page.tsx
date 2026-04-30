@@ -17,9 +17,10 @@ import {
   TriangleAlert,
   User,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { TeeBadge } from "@/components/ui/TeeBadge";
 import { WalletConnect } from "@/components/ui/WalletConnect";
+import { useWallet } from "@/lib/wallet";
 
 type FindingSeverity = "Critical" | "High" | "Medium" | "Low";
 
@@ -32,94 +33,21 @@ type Finding = {
   attestationHash: string;
 };
 
-const scanFindingsSeed: Finding[] = [
-  {
-    severity: "Critical",
-    file: "src/auth/token.ts",
-    line: 48,
-    description: "JWT secret fallback allows predictable token signing.",
-    fix: "Require JWT_SECRET from env and fail fast during startup.",
-    attestationHash: "0x89fd7ac4f2f1b0c0d7e38b2a9911aa77",
-  },
-  {
-    severity: "High",
-    file: "api/admin/users.ts",
-    line: 93,
-    description: "Missing role check before privileged user deletion.",
-    fix: "Validate caller role and enforce admin-only guard middleware.",
-    attestationHash: "0x5cc0ef12cc91993cafe84b3340ab8761",
-  },
-  {
-    severity: "Medium",
-    file: "services/github.ts",
-    line: 122,
-    description: "Repository URL not sanitized before downstream usage.",
-    fix: "Validate URL host/path and reject malformed inputs.",
-    attestationHash: "0x1457ae62d40aa31b1fd2c881eadcc091",
-  },
-  {
-    severity: "Low",
-    file: "components/Badge.tsx",
-    line: 14,
-    description: "Potential verbose error text leaks internal implementation details.",
-    fix: "Replace raw errors with generic user-safe messages.",
-    attestationHash: "0x1c8f95f53b7aa410f0be7ca002f3df11",
-  },
-];
-
 const panelClass =
   "relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']";
 
 export default function DashboardPage() {
+  const { address, isConnected } = useWallet();
   const [repoUrl, setRepoUrl] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [currentFile, setCurrentFile] = useState("—");
+  const [scanError, setScanError] = useState<string | null>(null);
   const [scanLogs, setScanLogs] = useState<string[]>([
     "Waiting for repository URL input...",
   ]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [scannedFiles, setScannedFiles] = useState(0);
-  const totalFiles = 24;
-
-  useEffect(() => {
-    if (!isScanning) return;
-
-    let findingIndex = 0;
-    const files = [
-      "src/auth/token.ts",
-      "api/admin/users.ts",
-      "services/github.ts",
-      "components/Badge.tsx",
-      "lib/scanner/engine.ts",
-      "lib/storage/uploader.ts",
-    ];
-
-    const timer = setInterval(() => {
-      setScannedFiles((prev) => Math.min(prev + 4, totalFiles));
-      const file = files[findingIndex % files.length] ?? "—";
-      setCurrentFile(file);
-      setScanLogs((prev) => [`Scanning ${file}...`, ...prev.slice(0, 6)]);
-
-      if (findingIndex < scanFindingsSeed.length) {
-        const finding = scanFindingsSeed[findingIndex];
-        setFindings((prev) => [...prev, finding]);
-      }
-
-      findingIndex += 1;
-
-      if (findingIndex > scanFindingsSeed.length && scannedFiles >= totalFiles - 4) {
-        setIsScanning(false);
-        setCurrentFile("Completed");
-        setScanLogs((prev) => [
-          "Scan complete. Findings report generated and archived.",
-          ...prev.slice(0, 6),
-        ]);
-        clearInterval(timer);
-      }
-    }, 900);
-
-    return () => clearInterval(timer);
-  }, [isScanning, scannedFiles]);
+  const [totalFiles, setTotalFiles] = useState(0);
 
   const findingsSummary = useMemo(
     () =>
@@ -138,15 +66,126 @@ export default function DashboardPage() {
     [findings],
   );
 
-  const progressPercent = Math.round((scannedFiles / totalFiles) * 100);
+  const progressPercent =
+    totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
 
-  const startScan = () => {
-    if (!repoUrl.trim()) return;
+  const startScan = async () => {
+    const trimmedRepoUrl = repoUrl.trim();
+    if (!trimmedRepoUrl) return;
+    if (!isConnected || !address) {
+      setScanError("Connect your wallet before starting a scan.");
+      return;
+    }
+
+    setScanError(null);
     setFindings([]);
     setScannedFiles(0);
+    setTotalFiles(0);
     setCurrentFile("Initializing scanner...");
     setScanLogs(["Repository queued. Starting autonomous scan..."]);
     setIsScanning(true);
+
+    try {
+      const response = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repoUrl: trimmedRepoUrl,
+          walletAddress: address,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(payload.error ?? "Scan request failed.");
+      }
+
+      const totalFromHeader = Number(response.headers.get("X-Total-Files") ?? "0");
+      if (Number.isFinite(totalFromHeader) && totalFromHeader > 0) {
+        setTotalFiles(totalFromHeader);
+      }
+
+      if (!response.body) {
+        throw new Error("Missing stream body from scan endpoint.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as
+            | { type: "file"; filename: string }
+            | {
+                type: "finding";
+                finding: {
+                  severity: FindingSeverity;
+                  file: string;
+                  line: number;
+                  issue: string;
+                  fix: string;
+                };
+                attestationHash: string;
+              }
+            | { type: "complete"; totalFiles: number; totalFindings: number }
+            | { type: "error"; message: string };
+
+          if (event.type === "file") {
+            setCurrentFile(event.filename);
+            setScannedFiles((prev) => prev + 1);
+            setScanLogs((prev) => [
+              `Scanning ${event.filename}...`,
+              ...prev.slice(0, 6),
+            ]);
+          }
+
+          if (event.type === "finding") {
+            setFindings((prev) => [
+              ...prev,
+              {
+                severity: event.finding.severity,
+                file: event.finding.file,
+                line: event.finding.line,
+                description: event.finding.issue,
+                fix: event.finding.fix,
+                attestationHash: event.attestationHash,
+              },
+            ]);
+          }
+
+          if (event.type === "complete") {
+            setTotalFiles(event.totalFiles);
+            setCurrentFile("Completed");
+            setScanLogs((prev) => [
+              `Scan complete. ${event.totalFindings} findings detected.`,
+              ...prev.slice(0, 6),
+            ]);
+          }
+
+          if (event.type === "error") {
+            setScanError(event.message);
+          }
+        }
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unexpected scan error.";
+      setScanError(message);
+      setScanLogs((prev) => [`Scan failed: ${message}`, ...prev.slice(0, 6)]);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   return (
@@ -222,6 +261,9 @@ export default function DashboardPage() {
                 Start Scan
               </button>
             </div>
+            {scanError ? (
+              <p className="mt-2 font-mono text-[11px] text-[#EF4444]">{scanError}</p>
+            ) : null}
           </div>
 
           <div
