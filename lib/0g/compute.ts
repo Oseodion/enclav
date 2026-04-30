@@ -72,7 +72,7 @@ export async function initializeComputeAccount(signer: ethers.Signer) {
   const broker = (await createBroker(signer)) as {
     ledger?: {
       getLedger?: () => Promise<unknown>;
-      addLedger?: (amount: bigint) => Promise<unknown>;
+      addLedger?: (amount: number, gasPrice?: number) => Promise<unknown>;
     };
   };
 
@@ -81,25 +81,18 @@ export async function initializeComputeAccount(signer: ethers.Signer) {
     return broker;
   }
 
-  const existingLedger = await ledgerApi.getLedger();
-  const hasAccount = (() => {
-    if (!existingLedger) return false;
-    if (typeof existingLedger === "bigint") return existingLedger > BigInt(0);
-    if (typeof existingLedger === "number") return existingLedger > 0;
-    if (typeof existingLedger === "string") return existingLedger !== "0";
-    if (typeof existingLedger === "object") {
-      const balance = (existingLedger as { balance?: bigint | number | string })
-        .balance;
-      if (typeof balance === "bigint") return balance > BigInt(0);
-      if (typeof balance === "number") return balance > 0;
-      if (typeof balance === "string") return balance !== "0";
-      return true;
+  try {
+    await ledgerApi.getLedger();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.includes("Account does not exist") ||
+      message.includes("add-account")
+    ) {
+      await ledgerApi.addLedger(3);
+      return broker;
     }
-    return false;
-  })();
-
-  if (!hasAccount) {
-    await ledgerApi.addLedger(ethers.parseEther("0.01"));
+    throw error;
   }
 
   return broker;
