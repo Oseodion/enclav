@@ -16,7 +16,7 @@ export type ComputeChatResult = {
 };
 
 const TESTNET_RPC = "https://evmrpc-testnet.0g.ai";
-const TESTNET_MODEL = "qwen-2.5-7b-instruct";
+const TESTNET_MODEL = "qwen/qwen-2.5-7b-instruct";
 const SECURITY_SYSTEM_PROMPT =
   "You are a security auditor. Analyze this code for security vulnerabilities. Return ONLY a JSON array of findings. Each finding must have: severity (Critical/High/Medium/Low), file (string), line (number), issue (string), fix (string). If no issues found return empty array [].";
 
@@ -169,8 +169,10 @@ export async function scanFileForVulnerabilities(
     providerAddress,
   );
 
+  const service =
+    await sdkBroker.inference.getServiceMetadata(resolvedProviderAddress);
   const payload = {
-    model: model || TESTNET_MODEL,
+    model: model || service.model || TESTNET_MODEL,
     messages: [
       { role: "system", content: SECURITY_SYSTEM_PROMPT },
       {
@@ -179,9 +181,6 @@ export async function scanFileForVulnerabilities(
       },
     ],
   };
-
-  const service =
-    await sdkBroker.inference.getServiceMetadata(resolvedProviderAddress);
   const billingHeaders = await sdkBroker.inference.getRequestHeaders(
     resolvedProviderAddress,
     JSON.stringify(payload),
@@ -278,7 +277,7 @@ export async function inferWithTeeML(
   );
   const service = await broker.inference.getServiceMetadata(resolvedProviderAddress);
   const payload = {
-    model: model || service.model,
+    model: model || service.model || TESTNET_MODEL,
     messages,
   };
 
