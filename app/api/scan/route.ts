@@ -1,5 +1,8 @@
 import { ethers } from "ethers";
-import { createBroker, scanFileForVulnerabilities } from "@/lib/0g/compute";
+import {
+  initializeComputeAccount,
+  scanFileForVulnerabilities,
+} from "@/lib/0g/compute";
 import { uploadFile } from "@/lib/0g/storage";
 
 type ScanRequestBody = {
@@ -97,7 +100,7 @@ export async function POST(request: Request) {
         }
 
         const signer = new ethers.Wallet(privateKey, provider);
-        const broker = await createBroker(signer);
+        const broker = await initializeComputeAccount(signer);
 
         for (const file of files) {
           if (!file.path || !file.url) continue;

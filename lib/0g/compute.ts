@@ -68,6 +68,43 @@ export async function createBroker(signer: ethers.Signer) {
   }
 }
 
+export async function initializeComputeAccount(signer: ethers.Signer) {
+  const broker = (await createBroker(signer)) as {
+    ledger?: {
+      getLedger?: () => Promise<unknown>;
+      addLedger?: (amount: bigint) => Promise<unknown>;
+    };
+  };
+
+  const ledgerApi = broker.ledger;
+  if (!ledgerApi?.getLedger || !ledgerApi?.addLedger) {
+    return broker;
+  }
+
+  const existingLedger = await ledgerApi.getLedger();
+  const hasAccount = (() => {
+    if (!existingLedger) return false;
+    if (typeof existingLedger === "bigint") return existingLedger > BigInt(0);
+    if (typeof existingLedger === "number") return existingLedger > 0;
+    if (typeof existingLedger === "string") return existingLedger !== "0";
+    if (typeof existingLedger === "object") {
+      const balance = (existingLedger as { balance?: bigint | number | string })
+        .balance;
+      if (typeof balance === "bigint") return balance > BigInt(0);
+      if (typeof balance === "number") return balance > 0;
+      if (typeof balance === "string") return balance !== "0";
+      return true;
+    }
+    return false;
+  })();
+
+  if (!hasAccount) {
+    await ledgerApi.addLedger(ethers.parseEther("0.01"));
+  }
+
+  return broker;
+}
+
 async function getBroker() {
   if (!brokerPromise) {
     const { privateKey } = getEnv();
