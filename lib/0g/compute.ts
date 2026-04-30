@@ -33,10 +33,45 @@ export type Finding = {
 function getEnv() {
   return {
     rpcUrl: process.env.OG_RPC_URL ?? TESTNET_RPC,
-    providerAddress: process.env.OG_COMPUTE_PROVIDER ?? "",
+    providerAddress:
+      process.env.OG_COMPUTE_PROVIDER ??
+      process.env.ZEROG_COMPUTE_PROVIDER ??
+      "",
     model: process.env.OG_COMPUTE_MODEL ?? TESTNET_MODEL,
     privateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",
   };
+}
+
+async function resolveProviderAddress(
+  broker: {
+    inference: {
+      listService?: (
+        offset?: number,
+        limit?: number,
+        includeUnacknowledged?: boolean,
+      ) => Promise<Array<{ provider?: string }>>;
+    };
+  },
+  configuredProviderAddress?: string,
+) {
+  if (configuredProviderAddress) return configuredProviderAddress;
+
+  const listService = broker.inference.listService;
+  if (!listService) {
+    throw new Error(
+      "OG_COMPUTE_PROVIDER is required for security scanning (provider auto-discovery unavailable).",
+    );
+  }
+
+  const services = await listService(0, 20, true);
+  const providerAddress = services.find((s) => !!s.provider)?.provider;
+  if (!providerAddress) {
+    throw new Error(
+      "OG_COMPUTE_PROVIDER is required for security scanning (no providers found via listService).",
+    );
+  }
+
+  return providerAddress;
 }
 
 export async function createBroker(signer: ethers.Signer) {
@@ -117,17 +152,23 @@ export async function scanFileForVulnerabilities(
   content: string,
 ): Promise<{ findings: Finding[]; attestationHash: string }> {
   const { providerAddress, model } = getEnv();
-  if (!providerAddress) {
-    throw new Error("OG_COMPUTE_PROVIDER is required for security scanning.");
-  }
 
   const sdkBroker = broker as {
     inference: {
+      listService?: (
+        offset?: number,
+        limit?: number,
+        includeUnacknowledged?: boolean,
+      ) => Promise<Array<{ provider?: string }>>;
       getServiceMetadata: (provider: string) => Promise<{ endpoint: string; model?: string }>;
       getRequestHeaders: (provider: string, payload: string) => Promise<Record<string, string>>;
       processResponse: (provider: string, key: string, usage?: string) => Promise<void>;
     };
   };
+  const resolvedProviderAddress = await resolveProviderAddress(
+    sdkBroker,
+    providerAddress,
+  );
 
   const payload = {
     model: model || TESTNET_MODEL,
@@ -140,9 +181,10 @@ export async function scanFileForVulnerabilities(
     ],
   };
 
-  const service = await sdkBroker.inference.getServiceMetadata(providerAddress);
+  const service =
+    await sdkBroker.inference.getServiceMetadata(resolvedProviderAddress);
   const billingHeaders = await sdkBroker.inference.getRequestHeaders(
-    providerAddress,
+    resolvedProviderAddress,
     JSON.stringify(payload),
   );
 
@@ -180,7 +222,7 @@ export async function scanFileForVulnerabilities(
   }
 
   await sdkBroker.inference.processResponse(
-    providerAddress,
+    resolvedProviderAddress,
     attestationHash,
     responseJson.usage ? JSON.stringify(responseJson.usage) : undefined,
   );
@@ -219,25 +261,30 @@ export async function inferWithTeeML(
 ): Promise<ComputeChatResult> {
   const { providerAddress, model } = getEnv();
 
-  if (!providerAddress) {
-    throw new Error("OG_COMPUTE_PROVIDER is required for inference.");
-  }
-
   const broker = (await getBroker()) as {
     inference: {
+      listService?: (
+        offset?: number,
+        limit?: number,
+        includeUnacknowledged?: boolean,
+      ) => Promise<Array<{ provider?: string }>>;
       getServiceMetadata: (provider: string) => Promise<{ endpoint: string; model?: string }>;
       getRequestHeaders: (provider: string, payload: string) => Promise<Record<string, string>>;
       processResponse: (provider: string, key: string, usage?: string) => Promise<void>;
     };
   };
-  const service = await broker.inference.getServiceMetadata(providerAddress);
+  const resolvedProviderAddress = await resolveProviderAddress(
+    broker,
+    providerAddress,
+  );
+  const service = await broker.inference.getServiceMetadata(resolvedProviderAddress);
   const payload = {
     model: model || service.model,
     messages,
   };
 
   const billingHeaders = await broker.inference.getRequestHeaders(
-    providerAddress,
+    resolvedProviderAddress,
     JSON.stringify(payload),
   );
 
@@ -277,7 +324,7 @@ export async function inferWithTeeML(
   }
 
   await broker.inference.processResponse(
-    providerAddress,
+    resolvedProviderAddress,
     attestationHash,
     responseJson.usage ? JSON.stringify(responseJson.usage) : undefined,
   );
@@ -286,6 +333,6 @@ export async function inferWithTeeML(
     content,
     attestationHash,
     model: payload.model ?? TESTNET_MODEL,
-    providerAddress,
+    providerAddress: resolvedProviderAddress,
   };
 }
