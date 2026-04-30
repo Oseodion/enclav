@@ -10,6 +10,7 @@ import {
   SendHorizontal,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { WalletConnect } from "@/components/ui/WalletConnect";
 
 const EXPLORER_BASE = "https://chainscan-galileo.0g.ai";
 
@@ -64,13 +65,16 @@ export default function AgentIdPage() {
             Encl<span className="text-purple-bright">av</span>
           </span>
         </Link>
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-text-3 transition-colors hover:text-text-2"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to dashboard
-        </Link>
+        <div className="flex items-center gap-2">
+          <WalletConnect />
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-text-3 transition-colors hover:text-text-2"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to dashboard
+          </Link>
+        </div>
       </nav>
 
       <section className="relative z-[1] mx-auto max-w-[1100px] px-4 pb-20 pt-12 md:px-10">
