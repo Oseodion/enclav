@@ -340,7 +340,7 @@ function LiveScanFeed({
         </span>
       </div>
 
-      <div className="h-full max-h-[620px] space-y-3 overflow-y-auto p-4">
+      <div className="h-full max-h-[620px] space-y-3 overflow-y-auto p-4 pb-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
         {findings.length === 0 ? (
           <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
             No findings yet. Start a scan to stream autonomous security results.
@@ -356,34 +356,41 @@ function LiveScanFeed({
 }
 
 function FindingCard({ finding }: { finding: Finding }) {
-  const severityStyles: Record<FindingSeverity, string> = {
-    Critical: "border-l-[#EF4444]",
-    High: "border-l-[#F97316]",
-    Medium: "border-l-[#EAB308]",
-    Low: "border-l-[#3B82F6]",
-  };
   const badgeStyles: Record<FindingSeverity, string> = {
-    Critical: "bg-[#FEE2E2] text-[#B91C1C]",
-    High: "bg-[#FFEDD5] text-[#C2410C]",
-    Medium: "bg-[#FEF9C3] text-[#A16207]",
-    Low: "bg-[#DBEAFE] text-[#1D4ED8]",
+    Critical: "bg-[#FCEBEB] text-[#A32D2D]",
+    High: "bg-[#FAEEDA] text-[#854F0B]",
+    Medium: "bg-[#E6F1FB] text-[#185FA5]",
+    Low: "bg-[#E1F5EE] text-[#0F6E56]",
   };
 
   return (
-    <article className={`rounded-xl border border-white/10 border-l-4 bg-[rgba(255,255,255,0.04)] p-3 shadow-[0_8px_20px_rgba(12,10,24,0.35)] ${severityStyles[finding.severity]}`}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] ${badgeStyles[finding.severity]}`}>
+    <article className="grid grid-cols-[72px_1fr_auto] gap-3 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-4 py-3 shadow-[0_8px_20px_rgba(12,10,24,0.35)]">
+      <div>
+        <span className={`inline-flex rounded-[4px] px-2 py-[3px] font-mono text-[10px] uppercase tracking-[0.06em] ${badgeStyles[finding.severity]}`}>
           {finding.severity}
         </span>
-        <span className="font-mono text-[10px] text-[#9B99B0]">
-          {finding.file}:{finding.line}
+      </div>
+
+      <div className="min-w-0">
+        <p className="mb-1 text-[14px] font-medium text-[#F4F2FF]">{finding.description}</p>
+        <p className="mb-2 text-[12px] text-[#9B99B0]">Suggested fix: {finding.fix}</p>
+        <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[0.5px] border-[rgba(110,231,183,0.45)] bg-[rgba(16,185,129,0.08)] px-2 py-[3px] font-mono text-[10px] text-[#6EE7B7]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
+          TEEML {shortHash(finding.attestationHash)}
         </span>
       </div>
-      <p className="mb-1.5 text-sm font-semibold text-[#F4F2FF]">{finding.description}</p>
-      <p className="mb-2 text-xs text-[#9B99B0]">Suggested fix: {finding.fix}</p>
-      <TeeBadge attestationHash={finding.attestationHash} />
+
+      <div className="text-right font-mono text-[11px] text-[#9B99B0]">
+        {finding.file}:{finding.line}
+      </div>
     </article>
   );
+}
+
+function shortHash(value: string) {
+  if (!value) return "—";
+  if (value.length < 12) return value;
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
 function ScanStatus({
