@@ -1,7 +1,8 @@
-import { Indexer } from "@0gfoundation/0g-ts-sdk";
+import { Indexer, MemData } from "@0gfoundation/0g-ts-sdk";
 import { ethers } from "ethers";
 
 const STORAGE_INDEXER_URL = "https://indexer-storage-testnet-turbo.0g.ai";
+const STORAGE_RPC_URL = "https://evmrpc-testnet.0g.ai";
 
 export function createStorageClient(_signer: ethers.Signer) {
   try {
@@ -20,33 +21,25 @@ export async function uploadFile(
   signer: ethers.Signer,
 ) {
   try {
-    const indexer = createStorageClient(signer) as unknown as {
-      upload?: (...args: unknown[]) => Promise<unknown>;
-      uploadFile?: (...args: unknown[]) => Promise<unknown>;
-    };
+    void filename;
+    const indexer = createStorageClient(signer);
+    const bytes = new TextEncoder().encode(content);
+    const memData = new MemData(bytes);
 
-    const payload = {
-      name: filename,
-      data: content,
-      size: Buffer.byteLength(content, "utf8"),
-    };
+    const [result, uploadError] = await indexer.upload(
+      memData,
+      STORAGE_RPC_URL,
+      signer,
+    );
 
-    let result: unknown;
-    if (typeof indexer.uploadFile === "function") {
-      result = await indexer.uploadFile(payload, signer);
-    } else if (typeof indexer.upload === "function") {
-      result = await indexer.upload(payload, signer);
-    } else {
-      throw new Error("Indexer upload method not found.");
+    if (uploadError) {
+      throw uploadError;
     }
 
-    const asRecord = result as
-      | { rootHash?: string }
-      | Array<{ rootHash?: string }>
+    const parsed = result as
+      | { rootHash?: string; rootHashes?: string[] }
       | undefined;
-    const rootHash = Array.isArray(asRecord)
-      ? asRecord[0]?.rootHash
-      : asRecord?.rootHash;
+    const rootHash = parsed?.rootHash ?? parsed?.rootHashes?.[0];
 
     if (!rootHash) {
       throw new Error("Missing rootHash in storage upload response.");
