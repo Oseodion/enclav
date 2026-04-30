@@ -9,6 +9,13 @@ type ScanRequestBody = {
   repoUrl?: string;
   walletAddress?: string;
 };
+type StreamFinding = {
+  severity: "Critical" | "High" | "Medium" | "Low";
+  file: string;
+  line: number;
+  issue: string;
+  fix: string;
+};
 
 const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol", ".go"];
 const encoder = new TextEncoder();
@@ -91,6 +98,9 @@ export async function POST(request: Request) {
   const stream = new ReadableStream<Uint8Array>({
     start: async (controller) => {
       let totalFindings = 0;
+      const aggregatedFindings: Array<
+        StreamFinding & { attestationHash: string }
+      > = [];
 
       try {
         const provider = new ethers.JsonRpcProvider("https://evmrpc-testnet.0g.ai");
@@ -102,22 +112,22 @@ export async function POST(request: Request) {
         const signer = new ethers.Wallet(privateKey, provider);
         const broker = await initializeComputeAccount(signer);
 
-        for (const file of files) {
-          if (!file.path || !file.url) continue;
+        const scanSingleFile = async (file: { path?: string; url?: string }) => {
+          if (!file.path || !file.url) return;
 
           streamChunk(controller, { type: "file", filename: file.path });
 
           const blobRes = await fetch(file.url, {
             headers: { Accept: "application/vnd.github+json" },
           });
+          if (!blobRes.ok) return;
 
-          if (!blobRes.ok) continue;
           const blobJson = (await blobRes.json()) as {
             content?: string;
             encoding?: string;
           };
+          if (!blobJson.content) return;
 
-          if (!blobJson.content) continue;
           const decodedContent =
             blobJson.encoding === "base64"
               ? Buffer.from(blobJson.content.replace(/\n/g, ""), "base64").toString("utf8")
@@ -132,18 +142,41 @@ export async function POST(request: Request) {
 
           for (const finding of result.findings) {
             totalFindings += 1;
+            aggregatedFindings.push({
+              ...finding,
+              attestationHash: result.attestationHash,
+            });
             streamChunk(controller, {
               type: "finding",
               finding,
               attestationHash: result.attestationHash,
             });
           }
+        };
+
+        for (let index = 0; index < files.length; index += 3) {
+          const batch = files.slice(index, index + 3);
+          await Promise.all(batch.map((file) => scanSingleFile(file)));
         }
+
+        const summaryReport = {
+          repoUrl,
+          scanDate: new Date().toISOString(),
+          totalFiles: files.length,
+          findings: aggregatedFindings,
+          totalFindings,
+        };
+        const rootHash = await uploadFile(
+          JSON.stringify(summaryReport, null, 2),
+          `scan-report-${owner}-${repo}-${Date.now()}.json`,
+          signer,
+        );
 
         streamChunk(controller, {
           type: "complete",
           totalFiles: files.length,
           totalFindings,
+          rootHash,
         });
         controller.close();
       } catch (error) {
