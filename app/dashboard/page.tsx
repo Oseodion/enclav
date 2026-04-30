@@ -18,7 +18,6 @@ import {
   User,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { TeeBadge } from "@/components/ui/TeeBadge";
 import { WalletConnect } from "@/components/ui/WalletConnect";
 import { useWallet } from "@/lib/wallet";
 
@@ -340,7 +339,7 @@ function LiveScanFeed({
         </span>
       </div>
 
-      <div className="h-full max-h-[620px] space-y-3 overflow-y-auto p-4 pb-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="h-full max-h-[620px] space-y-3 overflow-y-auto p-4 pb-12 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
         {findings.length === 0 ? (
           <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
             No findings yet. Start a scan to stream autonomous security results.
@@ -364,7 +363,7 @@ function FindingCard({ finding }: { finding: Finding }) {
   };
 
   return (
-    <article className="grid grid-cols-[72px_1fr_auto] gap-3 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-4 py-3 shadow-[0_8px_20px_rgba(12,10,24,0.35)]">
+    <article className="grid grid-cols-[72px_1fr_auto] gap-3 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-5 py-4 shadow-[0_8px_20px_rgba(12,10,24,0.35)]">
       <div>
         <span className={`inline-flex rounded-[4px] px-2 py-[3px] font-mono text-[10px] uppercase tracking-[0.06em] ${badgeStyles[finding.severity]}`}>
           {finding.severity}
@@ -373,7 +372,7 @@ function FindingCard({ finding }: { finding: Finding }) {
 
       <div className="min-w-0">
         <p className="mb-1 text-[14px] font-medium text-[#F4F2FF]">{finding.description}</p>
-        <p className="mb-2 text-[12px] text-[#9B99B0]">Suggested fix: {finding.fix}</p>
+        <p className="mb-2 mt-[10px] text-[12px] leading-[1.6] text-[#9B99B0]">Suggested fix: {finding.fix}</p>
         <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[0.5px] border-[rgba(110,231,183,0.45)] bg-[rgba(16,185,129,0.08)] px-2 py-[3px] font-mono text-[10px] text-[#6EE7B7]">
           <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
           TEEML {shortHash(finding.attestationHash)}

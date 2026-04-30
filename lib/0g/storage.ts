@@ -4,7 +4,7 @@ import { ethers } from "ethers";
 const STORAGE_INDEXER_URL = "https://indexer-storage-testnet-turbo.0g.ai";
 const STORAGE_RPC_URL = "https://evmrpc-testnet.0g.ai";
 const STORAGE_UPLOAD_TX_OPTS = {
-  gasPrice: ethers.parseUnits("10", "gwei"),
+  gasPrice: ethers.parseUnits("30", "gwei"),
 };
 
 export function createStorageClient(_signer: ethers.Signer) {
