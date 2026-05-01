@@ -3,6 +3,10 @@ import { HardhatUserConfig } from "hardhat/config";
 
 loadEnv({ path: ".env.local" });
 
+if (!process.env.DEPLOYER_PRIVATE_KEY) {
+  throw new Error("DEPLOYER_PRIVATE_KEY not set in environment");
+}
+
 const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY ?? "";
 
 const config: HardhatUserConfig = {
