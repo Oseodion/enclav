@@ -3,10 +3,8 @@
 import Link from "next/link";
 import {
   Activity,
-  Check,
   CheckCircle2,
   Code2,
-  Copy,
   Database,
   Grid2x2,
   Link2,
@@ -358,7 +356,6 @@ function LiveScanFeed({
 
 function FindingCard({ finding }: { finding: Finding }) {
   const [expanded, setExpanded] = useState(false);
-  const [copiedFix, setCopiedFix] = useState(false);
   const badgeStyles: Record<FindingSeverity, string> = {
     Critical: "bg-[#FCEBEB] text-[#A32D2D]",
     High: "bg-[#FAEEDA] text-[#854F0B]",
@@ -369,18 +366,6 @@ function FindingCard({ finding }: { finding: Finding }) {
     finding.severity === "Critical" || finding.severity === "High"
       ? "https://owasp.org/www-project-top-ten/"
       : "https://owasp.org/www-community/vulnerabilities/";
-
-  const onCopyFix = async () => {
-    const copyPayload = `Issue: ${finding.description}\nFix: ${finding.fix}`;
-    try {
-      await navigator.clipboard.writeText(copyPayload);
-      setCopiedFix(true);
-      setTimeout(() => setCopiedFix(false), 1500);
-    } catch {
-      setCopiedFix(true);
-      setTimeout(() => setCopiedFix(false), 1500);
-    }
-  };
 
   return (
     <article className="rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-5 py-4 shadow-[0_8px_20px_rgba(12,10,24,0.35)]">
@@ -433,19 +418,6 @@ function FindingCard({ finding }: { finding: Finding }) {
             Learn more
           </a>
         </div>
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={() => void onCopyFix()}
-            className="inline-flex items-center gap-1.5 rounded border border-white/20 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-[#9B99B0] transition hover:border-[#7C3AED]/60 hover:text-[#A78BFA]"
-          >
-            {copiedFix ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            {copiedFix ? "Copied" : "Copy fix"}
-          </button>
-        </div>
-        <p className="mt-2 text-[11px] text-[#6B6980]">
-          AI-generated suggestion - always review with your security team
-        </p>
       </div>
     </article>
   );
