@@ -4,37 +4,149 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Check,
+  Clock3,
   Copy,
   ExternalLink,
+  Lock,
   Orbit,
   SendHorizontal,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { WalletConnect } from "@/components/ui/WalletConnect";
+import { ethers } from "ethers";
+import { useAccount, useConnect } from "wagmi";
 
 const EXPLORER_BASE = "https://chainscan-galileo.0g.ai";
+const INFT_CONTRACT_ADDRESS =
+  process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ??
+  "0xE4B6b9f3628990ae769816c7ddE7c7bB33076b7c";
+const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
+const CERTIFICATE_EVENT_ABI = [
+  "event CertificateMinted(uint256 indexed tokenId, address indexed recipient, string repoUrl, string reportHash)",
+  "function getCertificate(uint256 tokenId) view returns ((string repoUrl,string scanDate,uint256 filesScanned,uint256 totalFindings,uint256 criticalCount,uint256 highCount,uint256 mediumCount,uint256 lowCount,string reportHash))",
+] as const;
+
+type CertificateData = {
+  tokenId: string;
+  owner: string;
+  repoUrl: string;
+  scanDate: string;
+  filesScanned: number;
+  totalFindings: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  reportHash: string;
+  txHash: string;
+};
 
 type CopyTarget = "contract" | "owner" | null;
 
 export default function AgentIdPage() {
   const [copied, setCopied] = useState<CopyTarget>(null);
+  const [certificate, setCertificate] = useState<CertificateData | null>(null);
+  const [isLoadingCertificate, setIsLoadingCertificate] = useState(false);
+  const [hasFetchedCertificate, setHasFetchedCertificate] = useState(false);
+  const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
 
-  const onChainData = useMemo(
-    () => ({
-      contract: "—",
-      tokenId: "—",
-      owner: "—",
+  useEffect(() => {
+    async function loadCertificate() {
+      if (!isConnected || !address) {
+        setCertificate(null);
+        setHasFetchedCertificate(false);
+        return;
+      }
+
+      setIsLoadingCertificate(true);
+      try {
+        const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
+        const contract = new ethers.Contract(
+          INFT_CONTRACT_ADDRESS,
+          CERTIFICATE_EVENT_ABI,
+          provider,
+        );
+
+        const iface = new ethers.Interface(CERTIFICATE_EVENT_ABI);
+        const eventFragment = iface.getEvent("CertificateMinted");
+        if (!eventFragment) {
+          throw new Error("CertificateMinted event not found in ABI");
+        }
+        const topic0 = eventFragment.topicHash;
+        const recipientTopic = ethers.zeroPadValue(address, 32);
+        const logs = await provider.getLogs({
+          address: INFT_CONTRACT_ADDRESS,
+          topics: [topic0, null, recipientTopic],
+          fromBlock: 0,
+          toBlock: "latest",
+        });
+
+        if (logs.length === 0) {
+          setCertificate(null);
+          return;
+        }
+
+        const latestLog = logs[logs.length - 1];
+        const parsed = iface.parseLog({
+          topics: latestLog.topics,
+          data: latestLog.data,
+        });
+        const tokenId = parsed?.args?.tokenId?.toString() ?? "0";
+        const cert = await contract.getCertificate(tokenId);
+
+        setCertificate({
+          tokenId,
+          owner: address,
+          repoUrl: cert.repoUrl,
+          scanDate: cert.scanDate,
+          filesScanned: Number(cert.filesScanned),
+          totalFindings: Number(cert.totalFindings),
+          criticalCount: Number(cert.criticalCount),
+          highCount: Number(cert.highCount),
+          mediumCount: Number(cert.mediumCount),
+          lowCount: Number(cert.lowCount),
+          reportHash: cert.reportHash,
+          txHash: latestLog.transactionHash,
+        });
+      } catch {
+        setCertificate(null);
+      } finally {
+        setIsLoadingCertificate(false);
+        setHasFetchedCertificate(true);
+      }
+    }
+
+    void loadCertificate();
+  }, [address, isConnected]);
+
+  const onChainData = useMemo(() => {
+    if (certificate) {
+      return {
+        contract: INFT_CONTRACT_ADDRESS,
+        tokenId: certificate.tokenId,
+        owner: certificate.owner,
+        standard: "ERC-7857",
+        minted: certificate.scanDate,
+        transfers: "0",
+      };
+    }
+
+    return {
+      contract: INFT_CONTRACT_ADDRESS,
+      tokenId: "Not minted",
+      owner: isConnected && address ? address : "Connect wallet",
       standard: "ERC-7857",
-      minted: "—",
-      transfers: "—",
-    }),
-    [],
-  );
+      minted: "No scans yet",
+      transfers: "0",
+    };
+  }, [address, certificate, isConnected]);
 
-  const hasContractAddress = onChainData.contract !== "—";
-  const explorerHref = hasContractAddress
-    ? `${EXPLORER_BASE}/address/${onChainData.contract}`
-    : EXPLORER_BASE;
+  const contractExplorerHref = `${EXPLORER_BASE}/address/${INFT_CONTRACT_ADDRESS}`;
+  const txExplorerHref = certificate?.txHash
+    ? `${EXPLORER_BASE}/tx/${certificate.txHash}`
+    : null;
+  const hasCertificate = Boolean(certificate);
 
   const copyValue = async (target: Exclude<CopyTarget, null>, value: string) => {
     try {
@@ -108,15 +220,39 @@ export default function AgentIdPage() {
             </div>
 
             <div className="p-5">
-              <h2 className="mb-1 text-xl font-extrabold tracking-tight">Enclav Security Cert #—</h2>
+              <h2 className="mb-1 text-xl font-extrabold tracking-tight">
+                Enclav Security Cert #{hasCertificate ? certificate?.tokenId : "Not minted"}
+              </h2>
               <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.08em] text-purple-bright">
                 Enclav Security Certificates - 0G Chain
               </p>
               <div className="mb-4 grid grid-cols-2 gap-2">
-                <NftStat label="Files Scanned" value="—" accent="text-purple-bright" />
-                <NftStat label="Vulnerabilities" value="—" accent="text-teal-light" />
-                <NftStat label="Scan Date" value="—" />
-                <NftStat label="Critical Findings" value="—" />
+                {isLoadingCertificate ? (
+                  <>
+                    <SkeletonStat />
+                    <SkeletonStat />
+                    <SkeletonStat />
+                    <SkeletonStat />
+                  </>
+                ) : (
+                  <>
+                    <NftStat
+                      label="Files Scanned"
+                      value={String(certificate?.filesScanned ?? 0)}
+                      accent="text-purple-bright"
+                    />
+                    <NftStat
+                      label="Vulnerabilities"
+                      value={String(certificate?.totalFindings ?? 0)}
+                      accent="text-teal-light"
+                    />
+                    <NftStat label="Scan Date" value={certificate?.scanDate ?? "No scans yet"} />
+                    <NftStat
+                      label="Critical Findings"
+                      value={String(certificate?.criticalCount ?? 0)}
+                    />
+                  </>
+                )}
               </div>
               <div className="flex gap-2">
                 <button
@@ -127,20 +263,24 @@ export default function AgentIdPage() {
                   Transfer
                 </button>
                 <a
-                  href={explorerHref}
+                  href={txExplorerHref ?? "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-disabled={!hasContractAddress}
+                  aria-disabled={!txExplorerHref}
                   onClick={(e) => {
-                    if (!hasContractAddress) e.preventDefault();
+                    if (!txExplorerHref) e.preventDefault();
                   }}
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.06em] transition ${
-                    hasContractAddress
+                    txExplorerHref
                       ? "border-[var(--border)] text-text-2 hover:border-purple-bright/30 hover:text-text-1"
                       : "cursor-not-allowed border-[var(--border)] text-text-3/70"
                   }`}
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
+                  {txExplorerHref ? (
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  ) : (
+                    <Lock className="h-3 w-3" />
+                  )}
                   Explorer
                 </a>
               </div>
@@ -148,22 +288,27 @@ export default function AgentIdPage() {
           </article>
 
           <div className="flex flex-col gap-4">
+            {hasFetchedCertificate && !isLoadingCertificate && !hasCertificate ? (
+              <section className="glass rounded-[14px] border border-purple-bright/20 p-5">
+                <p className="mb-3 text-sm text-text-2">
+                  No certificate yet - run a scan to mint your first
+                </p>
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center rounded-full border border-purple-bright/30 bg-purple/20 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-purple-bright"
+                >
+                  Go to scanner
+                </Link>
+              </section>
+            ) : null}
             <section className="glass rounded-[14px] p-5">
               <div className="mb-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
                 <span>On-chain details</span>
                 <a
-                  href={explorerHref}
+                  href={contractExplorerHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-disabled={!hasContractAddress}
-                  onClick={(e) => {
-                    if (!hasContractAddress) e.preventDefault();
-                  }}
-                  className={`inline-flex items-center gap-1 ${
-                    hasContractAddress
-                      ? "text-purple-bright hover:text-white"
-                      : "cursor-not-allowed text-text-3/70"
-                  }`}
+                  className="inline-flex items-center gap-1 text-purple-bright hover:text-white"
                 >
                   View on 0G Explorer
                   <ExternalLink className="h-3 w-3" />
@@ -177,16 +322,35 @@ export default function AgentIdPage() {
                 copied={copied === "contract"}
                 onCopy={() => copyValue("contract", onChainData.contract)}
               />
-              <ChainRow label="Token ID" value={onChainData.tokenId} />
+              <ChainRow label="Token ID" value={onChainData.tokenId} muted={!hasCertificate} />
               <ChainRow
                 label="Owner"
                 value={onChainData.owner}
-                canCopy
+                canCopy={Boolean(isConnected && address)}
                 copied={copied === "owner"}
                 onCopy={() => copyValue("owner", onChainData.owner)}
+                actionButton={
+                  !isConnected ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const first = connectors.find((c) => c.ready) ?? connectors[0];
+                        if (first) connect({ connector: first });
+                      }}
+                      className="font-mono text-[11px] text-[#A78BFA] hover:underline"
+                    >
+                      Connect wallet
+                    </button>
+                  ) : undefined
+                }
               />
               <ChainRow label="Standard" value={onChainData.standard} />
               <ChainRow label="Minted" value={onChainData.minted} />
+              <ChainRow
+                label="Report Hash"
+                value={certificate?.reportHash || "Run a scan to generate your certificate"}
+                muted={!hasCertificate}
+              />
               <ChainRow label="Transfers" value={onChainData.transfers} last />
             </section>
 
@@ -194,10 +358,19 @@ export default function AgentIdPage() {
               <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
                 Scan Attestation Log
               </p>
-              <TimelineEntry title="TEE attestation verified" meta="Intel TDX - Scan enclave verified" color="bg-teal shadow-[0_0_7px_#10B981]" />
-              <TimelineEntry title="Autonomous scan completed" meta="All files scanned - Findings aggregated" color="bg-purple shadow-[0_0_7px_#7C3AED]" />
-              <TimelineEntry title="Security certificate minted" meta="ERC-7857 - 0G Chain" color="bg-purple" />
-              <TimelineEntry title="Certificate transferred to owner" meta="Original owner - 0 transfers" color="bg-amber-500 shadow-[0_0_7px_#F59E0B]" last />
+              {hasCertificate ? (
+                <>
+                  <TimelineEntry title="TEE attestation verified" meta="Intel TDX - Scan enclave verified" color="bg-teal shadow-[0_0_7px_#10B981]" />
+                  <TimelineEntry title="Autonomous scan completed" meta="All files scanned - Findings aggregated" color="bg-purple shadow-[0_0_7px_#7C3AED]" />
+                  <TimelineEntry title="Security certificate minted" meta="ERC-7857 - 0G Chain" color="bg-purple" />
+                  <TimelineEntry title="Certificate transferred to owner" meta="Original owner - 0 transfers" color="bg-amber-500 shadow-[0_0_7px_#F59E0B]" last />
+                </>
+              ) : (
+                <div className="flex items-center gap-2 text-[12px] text-text-3">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  Waiting for first scan...
+                </div>
+              )}
             </section>
 
             <section className="glass rounded-[14px] p-5">
@@ -248,6 +421,8 @@ function ChainRow({
   canCopy = false,
   copied = false,
   onCopy,
+  actionButton,
+  muted = false,
   last = false,
 }: {
   label: string;
@@ -255,13 +430,20 @@ function ChainRow({
   canCopy?: boolean;
   copied?: boolean;
   onCopy?: () => void;
+  actionButton?: ReactNode;
+  muted?: boolean;
   last?: boolean;
 }) {
   return (
     <div className={`flex items-center justify-between py-2.5 ${last ? "" : "border-b border-white/[0.04]"}`}>
       <span className="font-mono text-[11px] text-text-3">{label}</span>
-      <span className="flex items-center gap-1.5 font-mono text-[11px] text-text-1">
+      <span
+        className={`flex items-center gap-1.5 font-mono text-[11px] ${
+          muted ? "text-[#2E2C3E]" : "text-text-1"
+        }`}
+      >
         {value}
+        {actionButton}
         {canCopy ? (
           <button
             type="button"
@@ -277,6 +459,15 @@ function ChainRow({
           </button>
         ) : null}
       </span>
+    </div>
+  );
+}
+
+function SkeletonStat() {
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-white/[0.03] px-2.5 py-2">
+      <div className="mb-1 h-2 w-16 animate-pulse rounded bg-white/10" />
+      <div className="h-3 w-12 animate-pulse rounded bg-white/10" />
     </div>
   );
 }

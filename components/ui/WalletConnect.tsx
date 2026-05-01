@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 
 function shortenAddress(address?: string) {
-  if (!address) return "—";
+  if (!address) return "Not connected";
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 

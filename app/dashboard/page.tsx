@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Siren,
+  Sparkles,
   Timer,
   TriangleAlert,
   User,
@@ -50,6 +51,8 @@ export default function DashboardPage() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [scannedFiles, setScannedFiles] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
+  const [mintedTokenId, setMintedTokenId] = useState<string | null>(null);
+  const [certificateExplorerUrl, setCertificateExplorerUrl] = useState<string | null>(null);
 
   const findingsSummary = useMemo(
     () =>
@@ -84,6 +87,8 @@ export default function DashboardPage() {
     setScannedFiles(0);
     setTotalFiles(0);
     setScanCompleted(false);
+    setMintedTokenId(null);
+    setCertificateExplorerUrl(null);
     setCurrentFile("Initializing scanner...");
     setScanLogs(["Repository queued. Starting autonomous scan..."]);
     setIsScanning(true);
@@ -141,7 +146,13 @@ export default function DashboardPage() {
                 };
                 attestationHash: string;
               }
-            | { type: "complete"; totalFiles: number; totalFindings: number }
+            | {
+                type: "complete";
+                totalFiles: number;
+                totalFindings: number;
+                tokenId?: string | null;
+                explorerUrl?: string | null;
+              }
             | { type: "error"; message: string };
 
           if (event.type === "file") {
@@ -171,6 +182,8 @@ export default function DashboardPage() {
             setTotalFiles(event.totalFiles);
             setCurrentFile("Completed");
             setScanCompleted(true);
+            setMintedTokenId(event.tokenId ?? null);
+            setCertificateExplorerUrl(event.explorerUrl ?? null);
             setScanLogs((prev) => [
               `Scan complete. ${event.totalFindings} findings detected.`,
               ...prev.slice(0, 6),
@@ -276,6 +289,32 @@ export default function DashboardPage() {
               Supports public GitHub repositories only · Results may vary by codebase ·
               AI-generated findings — always verify with your security team
             </p>
+            {scanCompleted && mintedTokenId ? (
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[rgba(16,185,129,0.25)] bg-[rgba(16,185,129,0.08)] px-3 py-2 text-[#6EE7B7]">
+                <div className="flex items-center gap-2 text-xs">
+                  <Sparkles className="h-4 w-4" />
+                  <span>Security certificate minted — Token #{mintedTokenId}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {certificateExplorerUrl ? (
+                    <a
+                      href={certificateExplorerUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#A78BFA] hover:underline"
+                    >
+                      Explorer
+                    </a>
+                  ) : null}
+                  <Link
+                    href="/agent-id"
+                    className="rounded-full border border-[rgba(167,139,250,0.4)] bg-[rgba(124,58,237,0.35)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white"
+                  >
+                    View Certificate
+                  </Link>
+                </div>
+              </div>
+            ) : null}
             {scanError ? (
               <p className="mt-2 font-mono text-[11px] text-[#EF4444]">{scanError}</p>
             ) : null}
@@ -309,7 +348,12 @@ export default function DashboardPage() {
       </div>
 
       <footer className={`${panelClass} relative z-[5] m-3 mt-0 flex h-[30px] items-center gap-4 overflow-x-auto rounded-xl bg-[rgba(255,255,255,0.02)] px-4 font-mono text-[10px] text-[#9B99B0]`}>
-        <StatusItem iconColor="bg-[#3B82F6]" label="0G Chain" value="Galileo" />
+        <StatusItem iconColor="bg-[#3B82F6]" label="0G Chain" value="0G Galileo" />
+        <StatusItem
+          iconColor={isConnected ? "bg-[#10B981]" : "bg-[#6B7280]"}
+          label="Wallet"
+          value={isConnected && address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}
+        />
         <StatusItem iconColor="bg-[#7C3AED]" label="Storage" value={`${scannedFiles}/${totalFiles}`} />
         <StatusItem iconColor="bg-[#059669]" label="Inference" value={isScanning ? "Running" : "Idle"} />
         <StatusItem iconColor="bg-[#EF4444]" label="Critical" value={`${findingsSummary.Critical}`} />
@@ -535,7 +579,7 @@ function RightPanelSummary({
           <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Agent ID - ERC-7857
           </p>
-          <p className="font-mono text-xs text-[#F0EEF8]">—</p>
+          <p className="font-mono text-xs text-[#2E2C3E]">Not minted</p>
         </div>
       </div>
 
