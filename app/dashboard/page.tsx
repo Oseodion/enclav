@@ -62,6 +62,8 @@ type ScanHistoryEntry = {
 const panelClass =
   "relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']";
 const SCAN_HISTORY_KEY = "enclav-scan-history-v1";
+const getWalletHistoryKey = (walletAddress?: string) =>
+  walletAddress ? `${SCAN_HISTORY_KEY}:${walletAddress.toLowerCase()}` : null;
 
 export default function DashboardPage() {
   const { address, isConnected } = useWallet();
@@ -92,15 +94,36 @@ export default function DashboardPage() {
   const [mintStatusMessage, setMintStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isConnected || !address) {
+      setScanHistory([]);
+      return;
+    }
+    const walletHistoryKey = getWalletHistoryKey(address);
+    if (!walletHistoryKey) return;
+
     try {
-      const raw = localStorage.getItem(SCAN_HISTORY_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as ScanHistoryEntry[];
-      setScanHistory(Array.isArray(parsed) ? parsed.slice(0, 5) : []);
+      const walletRaw = localStorage.getItem(walletHistoryKey);
+      if (walletRaw) {
+        const parsed = JSON.parse(walletRaw) as ScanHistoryEntry[];
+        setScanHistory(Array.isArray(parsed) ? parsed.slice(0, 5) : []);
+        return;
+      }
+
+      // One-time migration from legacy global key.
+      const legacyRaw = localStorage.getItem(SCAN_HISTORY_KEY);
+      if (legacyRaw) {
+        const parsedLegacy = JSON.parse(legacyRaw) as ScanHistoryEntry[];
+        const migrated = Array.isArray(parsedLegacy) ? parsedLegacy.slice(0, 5) : [];
+        localStorage.setItem(walletHistoryKey, JSON.stringify(migrated));
+        setScanHistory(migrated);
+        return;
+      }
+
+      setScanHistory([]);
     } catch {
       setScanHistory([]);
     }
-  }, []);
+  }, [address, isConnected]);
 
   const findingsSummary = useMemo(
     () =>
@@ -121,16 +144,22 @@ export default function DashboardPage() {
 
   const progressPercent =
     totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
-  const mostRecentFindings = findings.length > 0 ? findings : (scanHistory[0]?.findings ?? []);
+  const mostRecentFindings = isConnected
+    ? findings.length > 0
+      ? findings
+      : (scanHistory[0]?.findings ?? [])
+    : [];
   const filteredFindings =
     severityFilter === "All"
       ? mostRecentFindings
       : mostRecentFindings.filter((item) => item.severity === severityFilter);
 
   const persistScanHistory = (entry: ScanHistoryEntry) => {
+    const walletHistoryKey = getWalletHistoryKey(address);
+    if (!walletHistoryKey) return;
     setScanHistory((prev) => {
       const next = [entry, ...prev].slice(0, 5);
-      localStorage.setItem(SCAN_HISTORY_KEY, JSON.stringify(next));
+      localStorage.setItem(walletHistoryKey, JSON.stringify(next));
       return next;
     });
   };
@@ -348,7 +377,10 @@ export default function DashboardPage() {
           { ...first, tokenId: result.tokenId ?? undefined, explorerUrl: result.explorerUrl },
           ...rest,
         ];
-        localStorage.setItem(SCAN_HISTORY_KEY, JSON.stringify(next));
+        const walletHistoryKey = getWalletHistoryKey(address);
+        if (walletHistoryKey) {
+          localStorage.setItem(walletHistoryKey, JSON.stringify(next));
+        }
         return next;
       });
     } catch (error) {
@@ -597,11 +629,12 @@ export default function DashboardPage() {
             <FindingsTab
               findings={filteredFindings}
               hasScanData={mostRecentFindings.length > 0}
+              canView={isConnected}
               severityFilter={severityFilter}
               onFilterChange={setSeverityFilter}
             />
           ) : null}
-          {activeTab === "history" ? <HistoryTab history={scanHistory} /> : null}
+          {activeTab === "history" ? <HistoryTab history={scanHistory} canView={isConnected} /> : null}
           {activeTab === "settings" ? (
             <SettingsTab
               address={address ?? null}
@@ -690,10 +723,7 @@ function LiveScanFeed({
   isScanning: boolean;
 }) {
   return (
-    <section
-      className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']"
-      style={{ height: "calc(100vh - 280px)" }}
-    >
+    <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-2">
           <ScanSearch className="h-4 w-4 text-[#7C3AED]" />
@@ -815,17 +845,14 @@ function ScanStatus({
   scanCompleted: boolean;
 }) {
   return (
-    <section
-      className={`${panelClass} flex min-h-0 flex-col overflow-hidden`}
-      style={{ height: "calc(100vh - 280px)" }}
-    >
+    <section className={`${panelClass} flex h-full min-h-0 flex-col overflow-hidden`}>
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <h3 className="font-semibold text-[#F0EEF8]">Scan Status</h3>
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
           {isScanning ? "Running" : scanCompleted ? "Complete" : "Waiting"}
         </span>
       </div>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+      <div className="space-y-4 p-4">
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Current file
@@ -965,11 +992,13 @@ function SummaryRow({
 function FindingsTab({
   findings,
   hasScanData,
+  canView,
   severityFilter,
   onFilterChange,
 }: {
   findings: Finding[];
   hasScanData: boolean;
+  canView: boolean;
   severityFilter: SeverityFilter;
   onFilterChange: (value: SeverityFilter) => void;
 }) {
@@ -994,7 +1023,11 @@ function FindingsTab({
           ))}
         </div>
       </div>
-      {!hasScanData ? (
+      {!canView ? (
+        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
+          Connect wallet to view findings history.
+        </div>
+      ) : !hasScanData ? (
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
           Run a scan to see findings
         </div>
@@ -1022,11 +1055,21 @@ function FindingsTab({
   );
 }
 
-function HistoryTab({ history }: { history: ScanHistoryEntry[] }) {
+function HistoryTab({
+  history,
+  canView,
+}: {
+  history: ScanHistoryEntry[];
+  canView: boolean;
+}) {
   return (
     <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4`}>
       <h3 className="mb-3 text-sm font-semibold text-[#F0EEF8]">Scan History</h3>
-      {history.length === 0 ? (
+      {!canView ? (
+        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
+          Connect wallet to view scan history.
+        </div>
+      ) : history.length === 0 ? (
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
           No scan history yet
         </div>
@@ -1039,7 +1082,7 @@ function HistoryTab({ history }: { history: ScanHistoryEntry[] }) {
                 {new Date(item.scanDate).toLocaleString()} · {item.filesScanned} files · {item.totalFindings} findings
               </p>
               <p className="font-mono text-[10px] text-[#9B99B0]">
-                C:{item.criticalCount} H:{item.highCount} M:{item.mediumCount} L:{item.lowCount}
+                Critical: {item.criticalCount} · High: {item.highCount} · Medium: {item.mediumCount} · Low: {item.lowCount}
               </p>
               <Link href="/agent-id" className="mt-2 inline-flex rounded border border-[rgba(167,139,250,0.35)] px-2 py-1 font-mono text-[10px] uppercase text-[#A78BFA]">
                 View Certificate
