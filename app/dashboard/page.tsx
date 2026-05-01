@@ -196,10 +196,16 @@ export default function DashboardPage() {
       <AmbientGlow />
       <header className="relative z-10 flex h-[56px] items-center border-b border-white/10 bg-black/80 px-3 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <div className="relative flex h-7 w-7 items-center justify-center">
-            <div className="absolute h-6 w-6 rotate-45 rounded-md border border-white/90 bg-[rgba(124,58,237,0.16)] shadow-[0_4px_14px_rgba(124,58,237,0.15)]" />
-            <div className="absolute h-3 w-3 rotate-45 rounded-[3px] border border-white/90 bg-[rgba(124,58,237,0.45)]" />
-            <div className="absolute z-[1] h-1 w-1 rounded-full bg-white" />
+          <div className="relative flex h-[34px] w-[34px] items-center justify-center">
+            <div
+              className="absolute h-[30px] w-[30px] rotate-45 rounded-[7px] border border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_16px_rgba(124,58,237,0.35)]"
+              style={{ background: "rgba(139,92,246,0.2)" }}
+            />
+            <div
+              className="absolute h-[15px] w-[15px] rotate-45 rounded-[3px] border border-white/25"
+              style={{ background: "rgba(139,92,246,0.7)" }}
+            />
+            <div className="absolute z-[1] h-[5px] w-[5px] rounded-full bg-white shadow-[0_0_8px_white]" />
           </div>
           <span className="text-sm font-bold tracking-tight text-[#F0EEF8]">
             Encl<span className="text-purple-bright">av</span>
@@ -259,7 +265,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={startScan}
-                className="rounded-full border border-[rgba(167,139,250,0.4)] bg-[rgba(124,58,237,0.4)] px-5 py-2 font-mono text-xs uppercase tracking-[0.06em] text-white transition hover:bg-[rgba(124,58,237,0.55)]"
+                className="rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)]"
               >
                 Start Scan
               </button>
@@ -392,7 +398,7 @@ function FindingCard({ finding }: { finding: Finding }) {
           <button
             type="button"
             onClick={() => setExpanded((prev) => !prev)}
-            className="rounded border border-white/20 px-2 py-[3px] text-[10px] text-[#9B99B0] transition hover:rounded-md hover:border-[#7C3AED]/60 hover:text-[#A78BFA]"
+            className="rounded-[6px] border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-2 py-[3px] text-[10px] text-[#E9E4FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] hover:text-white"
           >
             View Fix
           </button>
@@ -581,8 +587,20 @@ function SummaryRow({
 function AmbientGlow() {
   return (
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      <div className="absolute -left-[100px] -top-[150px] h-[500px] w-[500px] animate-drift rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.15),transparent_65%)]" />
-      <div className="absolute -bottom-[80px] -right-[60px] h-[350px] w-[350px] animate-drift-slow rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.12),transparent_65%)]" />
+      <div
+        className="absolute -left-[180px] -top-[220px] h-[600px] w-[600px] rounded-full"
+        style={{
+          background: "radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 65%)",
+          animation: "drift 20s ease-in-out infinite",
+        }}
+      />
+      <div
+        className="absolute -bottom-[220px] -right-[180px] h-[600px] w-[600px] rounded-full"
+        style={{
+          background: "radial-gradient(circle, rgba(236,72,153,0.05) 0%, transparent 65%)",
+          animation: "drift 20s ease-in-out infinite",
+        }}
+      />
     </div>
   );
 }

@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   title: "Enclav",
   description:
     "Your code. Your agent. Your chain. Built on 0G and OpenClaw.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
