@@ -19,8 +19,29 @@ type StreamFinding = {
 
 const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol", ".go"];
 const encoder = new TextEncoder();
+const STORAGE_UPLOAD_TIMEOUT_MS = 30_000;
+const COMPUTE_SCAN_TIMEOUT_MS = 45_000;
+const SUMMARY_UPLOAD_TIMEOUT_MS = 30_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.floor(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error: unknown) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
 
 function parseRepoUrl(repoUrl: string) {
   try {
@@ -100,6 +121,9 @@ export async function POST(request: Request) {
   const stream = new ReadableStream<Uint8Array>({
     start: async (controller) => {
       let totalFindings = 0;
+      let processedFiles = 0;
+      let failedFiles = 0;
+      let rootHash: string | null = null;
       const aggregatedFindings: Array<
         StreamFinding & { attestationHash: string }
       > = [];
@@ -139,24 +163,42 @@ export async function POST(request: Request) {
               ? Buffer.from(blobJson.content.replace(/\n/g, ""), "base64").toString("utf8")
               : blobJson.content;
 
-          await uploadFile(decodedContent, file.path, signer);
-          const result = await scanFileForVulnerabilities(
-            broker,
-            file.path,
-            decodedContent,
-          );
+          try {
+            await withTimeout(
+              uploadFile(decodedContent, file.path, signer),
+              STORAGE_UPLOAD_TIMEOUT_MS,
+              `Storage upload for ${file.path}`,
+            );
+            const result = await withTimeout(
+              scanFileForVulnerabilities(broker, file.path, decodedContent),
+              COMPUTE_SCAN_TIMEOUT_MS,
+              `Compute scan for ${file.path}`,
+            );
 
-          for (const finding of result.findings) {
-            totalFindings += 1;
-            aggregatedFindings.push({
-              ...finding,
-              attestationHash: result.attestationHash,
-            });
+            for (const finding of result.findings) {
+              totalFindings += 1;
+              aggregatedFindings.push({
+                ...finding,
+                attestationHash: result.attestationHash,
+              });
+              streamChunk(controller, {
+                type: "finding",
+                finding,
+                attestationHash: result.attestationHash,
+              });
+            }
+          } catch (error) {
+            failedFiles += 1;
+            const message =
+              error instanceof Error
+                ? error.message
+                : `Failed scanning ${file.path}.`;
             streamChunk(controller, {
-              type: "finding",
-              finding,
-              attestationHash: result.attestationHash,
+              type: "error",
+              message: `${file.path}: ${message}`,
             });
+          } finally {
+            processedFiles += 1;
           }
         };
 
@@ -170,30 +212,51 @@ export async function POST(request: Request) {
           }
         }
 
-        const summaryReport = {
-          repoUrl,
-          scanDate: new Date().toISOString(),
-          totalFiles: files.length,
-          findings: aggregatedFindings,
-          totalFindings,
-        };
-        const rootHash = await uploadFile(
-          JSON.stringify(summaryReport, null, 2),
-          `scan-report-${owner}-${repo}-${Date.now()}.json`,
-          signer,
-        );
-
-        streamChunk(controller, {
-          type: "complete",
-          totalFiles: files.length,
-          totalFindings,
-          rootHash,
-        });
-        controller.close();
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Unexpected scan pipeline error.";
         streamChunk(controller, { type: "error", message });
+      } finally {
+        try {
+          const provider = new ethers.JsonRpcProvider("https://evmrpc-testnet.0g.ai");
+          const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
+          if (privateKey) {
+            const signer = new ethers.Wallet(privateKey, provider);
+            const summaryReport = {
+              repoUrl,
+              scanDate: new Date().toISOString(),
+              totalFiles: files.length,
+              processedFiles,
+              failedFiles,
+              findings: aggregatedFindings,
+              totalFindings,
+            };
+            rootHash = await withTimeout(
+              uploadFile(
+                JSON.stringify(summaryReport, null, 2),
+                `scan-report-${owner}-${repo}-${Date.now()}.json`,
+                signer,
+              ),
+              SUMMARY_UPLOAD_TIMEOUT_MS,
+              "Summary report upload",
+            );
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Failed to store summary report.";
+          streamChunk(controller, { type: "error", message });
+        }
+
+        streamChunk(controller, {
+          type: "complete",
+          totalFiles: files.length,
+          processedFiles,
+          failedFiles,
+          totalFindings,
+          rootHash,
+        });
         controller.close();
       }
     },
