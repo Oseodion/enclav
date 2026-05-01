@@ -43,6 +43,18 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   });
 }
 
+function createSequentialTaskRunner() {
+  let lastTask = Promise.resolve();
+  return async <T>(task: () => Promise<T>): Promise<T> => {
+    const run = lastTask.then(task, task);
+    lastTask = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  };
+}
+
 function parseRepoUrl(repoUrl: string) {
   try {
     const url = new URL(repoUrl);
@@ -137,17 +149,20 @@ export async function POST(request: Request) {
 
         const signer = new ethers.Wallet(privateKey, provider);
         const broker = await initializeComputeAccount(signer);
+        const runStorageUploadSequentially = createSequentialTaskRunner();
 
         const scanSingleFile = async (
           file: { path?: string; url?: string },
           batchIndex: number,
         ) => {
           if (!file.path || !file.url) return;
+          const filePath = file.path;
+          const fileUrl = file.url;
           await sleep(batchIndex * 2000);
 
-          streamChunk(controller, { type: "file", filename: file.path });
+          streamChunk(controller, { type: "file", filename: filePath });
 
-          const blobRes = await fetch(file.url, {
+          const blobRes = await fetch(fileUrl, {
             headers: { Accept: "application/vnd.github+json" },
           });
           if (!blobRes.ok) return;
@@ -164,15 +179,17 @@ export async function POST(request: Request) {
               : blobJson.content;
 
           try {
-            await withTimeout(
-              uploadFile(decodedContent, file.path, signer),
-              STORAGE_UPLOAD_TIMEOUT_MS,
-              `Storage upload for ${file.path}`,
+            await runStorageUploadSequentially(() =>
+              withTimeout(
+                uploadFile(decodedContent, filePath, signer),
+                STORAGE_UPLOAD_TIMEOUT_MS,
+                `Storage upload for ${filePath}`,
+              ),
             );
             const result = await withTimeout(
-              scanFileForVulnerabilities(broker, file.path, decodedContent),
+              scanFileForVulnerabilities(broker, filePath, decodedContent),
               COMPUTE_SCAN_TIMEOUT_MS,
-              `Compute scan for ${file.path}`,
+              `Compute scan for ${filePath}`,
             );
 
             for (const finding of result.findings) {
@@ -192,10 +209,10 @@ export async function POST(request: Request) {
             const message =
               error instanceof Error
                 ? error.message
-                : `Failed scanning ${file.path}.`;
+                : `Failed scanning ${filePath}.`;
             streamChunk(controller, {
               type: "error",
-              message: `${file.path}: ${message}`,
+              message: `${filePath}: ${message}`,
             });
           } finally {
             processedFiles += 1;
