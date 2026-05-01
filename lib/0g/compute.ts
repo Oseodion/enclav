@@ -17,6 +17,7 @@ export type ComputeChatResult = {
 
 const TESTNET_RPC = "https://evmrpc-testnet.0g.ai";
 const TESTNET_MODEL = "qwen/qwen-2.5-7b-instruct";
+const COMPUTE_API_BASE_URL_DEFAULT = "https://indexer-storage-testnet-turbo.0g.ai";
 const SECURITY_SYSTEM_PROMPT =
   "IMPORTANT: You must respond in English only. Do not use any other language under any circumstances. You are a security auditor. Analyze this code for security vulnerabilities. Return ONLY a JSON array of findings. Each finding must have: severity (Critical/High/Medium/Low), file (string), line (number), issue (string), fix (string), vulnerableCode (string), suggestedCode (string). Keep vulnerableCode and suggestedCode short - maximum 5 lines each. If no issues found return empty array [].";
 
@@ -35,6 +36,8 @@ export type Finding = {
 function getEnv() {
   return {
     rpcUrl: process.env.OG_RPC_URL ?? TESTNET_RPC,
+    computeApiBaseUrl:
+      process.env.OG_COMPUTE_API_BASE_URL ?? COMPUTE_API_BASE_URL_DEFAULT,
     providerAddress:
       process.env.OG_COMPUTE_PROVIDER ??
       process.env.ZEROG_COMPUTE_PROVIDER ??
@@ -77,6 +80,7 @@ async function resolveProviderAddress(
 
 export async function createBroker(signer: ethers.Signer) {
   try {
+    const { rpcUrl } = getEnv();
     const brokerModule = ServingBroker as unknown as Record<string, unknown>;
     const factory = brokerModule["ZGServingUserBrokerFactory"] as
       | {
@@ -85,7 +89,7 @@ export async function createBroker(signer: ethers.Signer) {
       | undefined;
 
     if (factory?.create) {
-      return await factory.create(signer, TESTNET_RPC);
+      return await factory.create(signer, rpcUrl);
     }
 
     const fallbackCreate = brokerModule["createZGComputeNetworkBroker"] as
@@ -136,11 +140,11 @@ export async function initializeComputeAccount(signer: ethers.Signer) {
 
 async function getBroker() {
   if (!brokerPromise) {
-    const { privateKey } = getEnv();
+    const { privateKey, rpcUrl } = getEnv();
     if (!privateKey) {
       throw new Error("DEPLOYER_PRIVATE_KEY is required for 0G Compute calls.");
     }
-    const provider = new ethers.JsonRpcProvider(TESTNET_RPC);
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
     const wallet = new ethers.Wallet(privateKey, provider);
     brokerPromise = createBroker(wallet);
   }

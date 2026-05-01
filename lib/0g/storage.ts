@@ -1,8 +1,11 @@
 import { Indexer, MemData } from "@0gfoundation/0g-ts-sdk";
 import { ethers } from "ethers";
 
-const STORAGE_INDEXER_URL = "https://indexer-storage-testnet-turbo.0g.ai";
-const STORAGE_RPC_URL = "https://evmrpc-testnet.0g.ai";
+const DEFAULT_STORAGE_INDEXER_URL = "https://indexer-storage-testnet-turbo.0g.ai";
+const DEFAULT_STORAGE_RPC_URL = "https://evmrpc-testnet.0g.ai";
+const STORAGE_INDEXER_URL =
+  process.env.OG_STORAGE_INDEXER_URL ?? DEFAULT_STORAGE_INDEXER_URL;
+const STORAGE_RPC_URL = process.env.OG_RPC_URL ?? DEFAULT_STORAGE_RPC_URL;
 const MAX_UPLOAD_RETRIES = 3;
 const BASE_GAS_PRICE_GWEI = BigInt(100);
 const BASE_PRIORITY_GWEI = BigInt(10);
@@ -63,9 +66,8 @@ class HighGasSigner extends ethers.AbstractSigner {
   }
 }
 
-export function createStorageClient(_signer: ethers.Signer) {
+export function createStorageClient() {
   try {
-    void _signer;
     return new Indexer(STORAGE_INDEXER_URL);
   } catch (error) {
     const message =
@@ -81,7 +83,7 @@ export async function uploadFile(
 ) {
   try {
     void filename;
-    const indexer = createStorageClient(signer);
+    const indexer = createStorageClient();
     const bytes = new TextEncoder().encode(content);
     const memData = new MemData(bytes);
 
