@@ -21,7 +21,7 @@ import { useAccount, useConnect } from "wagmi";
 const EXPLORER_BASE = "https://chainscan-galileo.0g.ai";
 const INFT_CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ??
-  "0xE4B6b9f3628990ae769816c7ddE7c7bB33076b7c";
+  "0x3052bed0971c6F21967ed8186d6B3B4D431F632f";
 const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
 const CERTIFICATE_EVENT_ABI = [
   "event CertificateMinted(uint256 indexed tokenId, address indexed recipient, string repoUrl, string reportHash)",
@@ -64,6 +64,11 @@ export default function AgentIdPage() {
 
       setIsLoadingCertificate(true);
       try {
+        console.log("[agent-id] loading certificate", {
+          address,
+          contract: INFT_CONTRACT_ADDRESS,
+          rpc: OG_RPC_URL,
+        });
         const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
         const contract = new ethers.Contract(
           INFT_CONTRACT_ADDRESS,
@@ -76,13 +81,11 @@ export default function AgentIdPage() {
         if (!eventFragment) {
           throw new Error("CertificateMinted event not found in ABI");
         }
-        const topic0 = eventFragment.topicHash;
-        const recipientTopic = ethers.zeroPadValue(address, 32);
-        const logs = await provider.getLogs({
-          address: INFT_CONTRACT_ADDRESS,
-          topics: [topic0, null, recipientTopic],
-          fromBlock: 0,
-          toBlock: "latest",
+        const filter = contract.filters.CertificateMinted(null, address);
+        const logs = await contract.queryFilter(filter, 0, "latest");
+        console.log("[agent-id] certificate events found", {
+          count: logs.length,
+          latestTx: logs.at(-1)?.transactionHash ?? null,
         });
 
         if (logs.length === 0) {
@@ -92,7 +95,7 @@ export default function AgentIdPage() {
 
         const latestLog = logs[logs.length - 1];
         const parsed = iface.parseLog({
-          topics: latestLog.topics,
+          topics: latestLog.topics as string[],
           data: latestLog.data,
         });
         const tokenId = parsed?.args?.tokenId?.toString() ?? "0";
@@ -112,7 +115,8 @@ export default function AgentIdPage() {
           reportHash: cert.reportHash,
           txHash: latestLog.transactionHash,
         });
-      } catch {
+      } catch (error) {
+        console.log("[agent-id] certificate load failed", error);
         setCertificate(null);
       } finally {
         setIsLoadingCertificate(false);

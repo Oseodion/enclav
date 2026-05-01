@@ -269,16 +269,21 @@ export default function DashboardPage() {
           }
 
           if (event.type === "error") {
-            const isFileLevelError =
+            const lowerMessage = event.message.toLowerCase();
+            const isTimeoutNotice =
+              event.message.includes(":") && lowerMessage.includes("timed out");
+            const isRateLimitNotice =
               event.message.includes(":") &&
-              (event.message.toLowerCase().includes("rate") ||
+              (lowerMessage.includes("rate") ||
                 event.message.includes("Scan failed for this file"));
-            if (isFileLevelError) {
+            if (isTimeoutNotice || isRateLimitNotice) {
               const [filePath] = event.message.split(":");
               setScanNotices((prev) => [
                 {
                   id: `${Date.now()}-${filePath}`,
-                  message: `⚠ ${filePath} — rate limited, skipped`,
+                  message: isTimeoutNotice
+                    ? `${filePath} — upload timed out, scan continuing...`
+                    : `⚠ ${filePath} — rate limited, skipped`,
                 },
                 ...prev.slice(0, 8),
               ]);
@@ -704,6 +709,11 @@ function LiveScanFeed({
           <div
             key={notice.id}
             className="rounded-md border border-white/5 bg-[rgba(255,255,255,0.02)] px-3 py-2 font-mono text-[10px] text-[#2E2C3E]"
+            title={
+              notice.message.includes("timed out")
+                ? "Storage uploads may timeout on testnet — this does not affect scan results"
+                : undefined
+            }
           >
             {notice.message}
           </div>
