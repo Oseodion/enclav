@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 
-const OG_RPC_URL = process.env.OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
+const OG_RPC_URL = process.env.OG_RPC_URL ?? "";
 const INFT_CONTRACT_ADDRESS = process.env.INFT_CONTRACT_ADDRESS ?? "";
 const CHAINSCAN_BASE_URL = "https://chainscan-galileo.0g.ai";
 
@@ -33,6 +33,9 @@ export async function mintCertificate(
 ): Promise<MintCertificateResult> {
   if (!INFT_CONTRACT_ADDRESS) {
     throw new Error("INFT_CONTRACT_ADDRESS is required to mint certificates.");
+  }
+  if (!OG_RPC_URL) {
+    throw new Error("OG_RPC_URL is required to mint certificates.");
   }
 
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY;

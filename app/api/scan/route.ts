@@ -18,7 +18,14 @@ type StreamFinding = {
   fix: string;
 };
 
-const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol", ".go"];
+const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol"];
+const ALLOWED_SCAN_PREFIXES = ["app/", "components/", "lib/", "pages/"];
+const EXCLUDED_SCAN_PREFIXES = [
+  "contracts/",
+  "contracts/scripts/",
+  "node_modules/",
+  "design-templates/",
+];
 const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
@@ -154,12 +161,31 @@ export async function POST(request: Request) {
     tree?: Array<{ path?: string; type?: string; url?: string }>;
   };
 
-  const files = (treeJson.tree ?? []).filter(
-    (node) =>
-      node.type === "blob" &&
-      !!node.path &&
-      CODE_EXTENSIONS.some((ext) => node.path?.toLowerCase().endsWith(ext)),
-  );
+  const files = (treeJson.tree ?? []).filter((node) => {
+    if (node.type !== "blob" || !node.path) return false;
+    const filePath = node.path.toLowerCase();
+
+    const isEnvFile =
+      filePath === ".env" ||
+      filePath.endsWith("/.env") ||
+      filePath.startsWith(".env.") ||
+      filePath.includes("/.env.");
+    if (isEnvFile) return false;
+
+    if (filePath === "hardhat.config.ts") return false;
+
+    const isExcluded = EXCLUDED_SCAN_PREFIXES.some((prefix) =>
+      filePath.startsWith(prefix),
+    );
+    if (isExcluded) return false;
+
+    const isAllowedFolder = ALLOWED_SCAN_PREFIXES.some((prefix) =>
+      filePath.startsWith(prefix),
+    );
+    if (!isAllowedFolder) return false;
+
+    return CODE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
+  });
 
   const stream = new ReadableStream<Uint8Array>({
     start: async (controller) => {

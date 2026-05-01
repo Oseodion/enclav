@@ -34,6 +34,10 @@ type Finding = {
   fix: string;
   attestationHash: string;
 };
+type ScanNotice = {
+  id: string;
+  message: string;
+};
 
 const panelClass =
   "relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']";
@@ -49,6 +53,7 @@ export default function DashboardPage() {
     "Waiting for repository URL input...",
   ]);
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [scanNotices, setScanNotices] = useState<ScanNotice[]>([]);
   const [scannedFiles, setScannedFiles] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [mintedTokenId, setMintedTokenId] = useState<string | null>(null);
@@ -84,6 +89,7 @@ export default function DashboardPage() {
 
     setScanError(null);
     setFindings([]);
+    setScanNotices([]);
     setScannedFiles(0);
     setTotalFiles(0);
     setScanCompleted(false);
@@ -191,7 +197,22 @@ export default function DashboardPage() {
           }
 
           if (event.type === "error") {
-            setScanError(event.message);
+            const isFileLevelError =
+              event.message.includes(":") &&
+              (event.message.toLowerCase().includes("rate") ||
+                event.message.includes("Scan failed for this file"));
+            if (isFileLevelError) {
+              const [filePath] = event.message.split(":");
+              setScanNotices((prev) => [
+                {
+                  id: `${Date.now()}-${filePath}`,
+                  message: `⚠ ${filePath} — rate limited, skipped`,
+                },
+                ...prev.slice(0, 8),
+              ]);
+            } else {
+              setScanError(event.message);
+            }
           }
         }
       }
@@ -327,7 +348,11 @@ export default function DashboardPage() {
                 : ""
             }`}
           >
-            <LiveScanFeed findings={findings} isScanning={isScanning} />
+            <LiveScanFeed
+              findings={findings}
+              notices={scanNotices}
+              isScanning={isScanning}
+            />
             <ScanStatus
               currentFile={currentFile}
               scannedFiles={scannedFiles}
@@ -349,14 +374,14 @@ export default function DashboardPage() {
       </div>
 
       <footer className={`${panelClass} relative z-[5] m-3 mt-0 flex h-[30px] items-center gap-4 overflow-x-auto rounded-xl bg-[rgba(255,255,255,0.02)] px-4 font-mono text-[10px] text-[#9B99B0]`}>
-        <StatusItem iconColor="bg-[#3B82F6]" label="0G Chain" value="0G Galileo" />
+        <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value="0G Galileo" />
         <StatusItem
-          iconColor={isConnected ? "bg-[#10B981]" : "bg-[#6B7280]"}
+          iconColor={isConnected ? "bg-[#A78BFA]" : "bg-[#A78BFA]"}
           label="Wallet"
           value={isConnected && address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}
         />
-        <StatusItem iconColor="bg-[#7C3AED]" label="Storage" value={`${scannedFiles}/${totalFiles}`} />
-        <StatusItem iconColor="bg-[#059669]" label="Inference" value={isScanning ? "Running" : "Idle"} />
+        <StatusItem iconColor="bg-[#3B82F6]" label="Storage" value={`${scannedFiles}/${totalFiles}`} />
+        <StatusItem iconColor="bg-[#10B981]" label="Inference" value={isScanning ? "Running" : "Idle"} />
         <StatusItem iconColor="bg-[#EF4444]" label="Critical" value={`${findingsSummary.Critical}`} />
       </footer>
     </main>
@@ -384,9 +409,11 @@ function SidebarIcon({
 
 function LiveScanFeed({
   findings,
+  notices,
   isScanning,
 }: {
   findings: Finding[];
+  notices: ScanNotice[];
   isScanning: boolean;
 }) {
   return (
@@ -401,7 +428,15 @@ function LiveScanFeed({
         </span>
       </div>
 
-      <div className="h-full min-h-0 flex-1 space-y-3 overflow-y-auto p-4 pb-[60px] [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="h-full min-h-0 flex-1 space-y-[12px] overflow-y-auto p-5 pb-[60px] [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
+        {notices.map((notice) => (
+          <div
+            key={notice.id}
+            className="rounded-md border border-white/5 bg-[rgba(255,255,255,0.02)] px-3 py-2 font-mono text-[10px] text-[#2E2C3E]"
+          >
+            {notice.message}
+          </div>
+        ))}
         {findings.length === 0 ? (
           <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
             No findings yet. Start a scan to stream autonomous security results.

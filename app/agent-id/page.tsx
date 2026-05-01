@@ -160,12 +160,12 @@ export default function AgentIdPage() {
   const hasCertificate = Boolean(certificate);
   const dynamicCapabilityTags = hasCertificate
     ? [
-        { label: `Critical: ${certificate?.criticalCount ?? 0}`, tone: "amber" as const },
-        { label: `High: ${certificate?.highCount ?? 0}`, tone: "purple" as const },
-        { label: `Medium: ${certificate?.mediumCount ?? 0}`, tone: "green" as const },
-        { label: `Low: ${certificate?.lowCount ?? 0}`, tone: "purple" as const },
+        { label: `CRITICAL: ${certificate?.criticalCount ?? 0}`, tone: "critical" as const },
+        { label: `HIGH: ${certificate?.highCount ?? 0}`, tone: "high" as const },
+        { label: `MEDIUM: ${certificate?.mediumCount ?? 0}`, tone: "medium" as const },
+        { label: `LOW: ${certificate?.lowCount ?? 0}`, tone: "low" as const },
       ]
-    : [{ label: "No scan data yet", tone: "purple" as const }];
+    : [{ label: "No scan data yet", tone: "low" as const }];
 
   const copyValue = async (target: Exclude<CopyTarget, null>, value: string) => {
     try {
@@ -209,7 +209,7 @@ export default function AgentIdPage() {
       </nav>
 
       <section className="relative z-[1] mx-auto max-w-[1100px] px-4 pb-20 pt-12 md:px-10">
-        <p className="mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright before:h-px before:w-[18px] before:bg-purple-bright">
+        <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright">
           Verifiable Security Proof
         </p>
         <h1 className="mb-1 text-[clamp(28px,4vw,42px)] font-extrabold tracking-[-0.03em]">
@@ -516,14 +516,16 @@ function CapabilityTag({
   tone,
 }: {
   label: string;
-  tone: "purple" | "green" | "amber";
+  tone: "critical" | "high" | "medium" | "low";
 }) {
   const styles =
-    tone === "green"
-      ? "border-teal/25 bg-teal/10 text-teal-light"
-      : tone === "amber"
-        ? "border-amber-300/25 bg-amber-300/10 text-amber-300"
-        : "border-purple-bright/25 bg-purple/10 text-purple-bright";
+    tone === "critical"
+      ? "border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.1)] text-[#FCA5A5]"
+      : tone === "high"
+        ? "border-[rgba(249,115,22,0.3)] bg-[rgba(249,115,22,0.1)] text-[#FDC8A4]"
+        : tone === "medium"
+          ? "border-[rgba(234,179,8,0.3)] bg-[rgba(234,179,8,0.1)] text-[#FDE68A]"
+          : "border-[rgba(59,130,246,0.3)] bg-[rgba(59,130,246,0.1)] text-[#93C5FD]";
 
   return (
     <span className={`rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] ${styles}`}>
