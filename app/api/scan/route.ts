@@ -3,6 +3,7 @@ import {
   initializeComputeAccount,
   scanFileForVulnerabilities,
 } from "@/lib/0g/compute";
+import { mintCertificate } from "@/lib/0g/inft";
 import { uploadFile } from "@/lib/0g/storage";
 
 type ScanRequestBody = {
@@ -166,6 +167,8 @@ export async function POST(request: Request) {
       let processedFiles = 0;
       let failedFiles = 0;
       let rootHash: string | null = null;
+      let mintedTokenId: string | null = null;
+      let certificateExplorerUrl: string | null = null;
       const aggregatedFindings: Array<
         StreamFinding & { attestationHash: string }
       > = [];
@@ -290,6 +293,39 @@ export async function POST(request: Request) {
           streamChunk(controller, { type: "error", message });
         }
 
+        try {
+          const severityCounts = aggregatedFindings.reduce(
+            (acc, item) => {
+              acc[item.severity] += 1;
+              return acc;
+            },
+            {
+              Critical: 0,
+              High: 0,
+              Medium: 0,
+              Low: 0,
+            } as Record<StreamFinding["severity"], number>,
+          );
+
+          const mintResult = await mintCertificate(walletAddress, {
+            repoUrl,
+            scanDate: new Date().toISOString(),
+            filesScanned: processedFiles,
+            totalFindings,
+            criticalCount: severityCounts.Critical,
+            highCount: severityCounts.High,
+            mediumCount: severityCounts.Medium,
+            lowCount: severityCounts.Low,
+            reportHash: rootHash ?? "",
+          });
+          mintedTokenId = mintResult.tokenId;
+          certificateExplorerUrl = mintResult.explorerUrl;
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Certificate minting failed.";
+          streamChunk(controller, { type: "error", message });
+        }
+
         streamChunk(controller, {
           type: "complete",
           totalFiles: files.length,
@@ -297,6 +333,8 @@ export async function POST(request: Request) {
           failedFiles,
           totalFindings,
           rootHash,
+          tokenId: mintedTokenId,
+          explorerUrl: certificateExplorerUrl,
         });
         controller.close();
       }
