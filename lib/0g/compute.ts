@@ -156,112 +156,126 @@ export async function scanFileForVulnerabilities(
   filename: string,
   content: string,
 ): Promise<{ findings: Finding[]; attestationHash: string }> {
-  const { providerAddress, model } = getEnv();
-
-  const sdkBroker = broker as {
-    inference: {
-      listService?: (
-        offset?: number,
-        limit?: number,
-        includeUnacknowledged?: boolean,
-      ) => Promise<Array<{ provider?: string }>>;
-      getServiceMetadata: (provider: string) => Promise<{ endpoint: string; model?: string }>;
-      getRequestHeaders: (provider: string, payload: string) => Promise<Record<string, string>>;
-      processResponse: (provider: string, key: string, usage?: string) => Promise<void>;
-    };
-  };
-  const resolvedProviderAddress = await resolveProviderAddress(
-    sdkBroker,
-    providerAddress,
-  );
-
-  const service =
-    await sdkBroker.inference.getServiceMetadata(resolvedProviderAddress);
-  const payload = {
-    model: model || service.model || TESTNET_MODEL,
-    messages: [
-      { role: "system", content: SECURITY_SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Filename: ${filename}\n\nCode:\n${content}`,
-      },
-    ],
-  };
-  const billingHeaders = await sdkBroker.inference.getRequestHeaders(
-    resolvedProviderAddress,
-    JSON.stringify(payload),
-  );
-
-  const response = await fetch(`${service.endpoint}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...billingHeaders,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(
-      `Security scan request failed (${response.status}): ${errorBody}`,
-    );
-  }
-
-  const responseJson = (await response.json()) as {
-    id?: string;
-    usage?: unknown;
-    choices?: Array<{
-      message?: {
-        content?: string;
-      };
-    }>;
-  };
-
-  const rawContent = responseJson.choices?.[0]?.message?.content?.trim() ?? "[]";
-  const attestationHash = response.headers.get("ZG-Res-Key") ?? responseJson.id;
-
-  if (!attestationHash) {
-    throw new Error("Missing TeeML attestation hash in scan response.");
-  }
-
-  await sdkBroker.inference.processResponse(
-    resolvedProviderAddress,
-    attestationHash,
-    responseJson.usage ? JSON.stringify(responseJson.usage) : undefined,
-  );
-
-  let parsed: unknown = [];
   try {
-    parsed = JSON.parse(rawContent);
-  } catch {
-    parsed = [];
+    const { providerAddress, model } = getEnv();
+
+    const sdkBroker = broker as {
+      inference: {
+        listService?: (
+          offset?: number,
+          limit?: number,
+          includeUnacknowledged?: boolean,
+        ) => Promise<Array<{ provider?: string }>>;
+        getServiceMetadata: (
+          provider: string,
+        ) => Promise<{ endpoint: string; model?: string }>;
+        getRequestHeaders: (
+          provider: string,
+          payload: string,
+        ) => Promise<Record<string, string>>;
+        processResponse: (
+          provider: string,
+          key: string,
+          usage?: string,
+        ) => Promise<void>;
+      };
+    };
+    const resolvedProviderAddress = await resolveProviderAddress(
+      sdkBroker,
+      providerAddress,
+    );
+
+    const service =
+      await sdkBroker.inference.getServiceMetadata(resolvedProviderAddress);
+    const payload = {
+      model: model || service.model || TESTNET_MODEL,
+      messages: [
+        { role: "system", content: SECURITY_SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: `Filename: ${filename}\n\nCode:\n${content}`,
+        },
+      ],
+    };
+    const billingHeaders = await sdkBroker.inference.getRequestHeaders(
+      resolvedProviderAddress,
+      JSON.stringify(payload),
+    );
+
+    const response = await fetch(`${service.endpoint}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...billingHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(
+        `Security scan request failed (${response.status}): ${errorBody}`,
+      );
+    }
+
+    const responseJson = (await response.json()) as {
+      id?: string;
+      usage?: unknown;
+      choices?: Array<{
+        message?: {
+          content?: string;
+        };
+      }>;
+    };
+
+    const rawContent = responseJson.choices?.[0]?.message?.content?.trim() ?? "[]";
+    const attestationHash = response.headers.get("ZG-Res-Key") ?? responseJson.id;
+
+    if (!attestationHash) {
+      throw new Error("Missing TeeML attestation hash in scan response.");
+    }
+
+    await sdkBroker.inference.processResponse(
+      resolvedProviderAddress,
+      attestationHash,
+      responseJson.usage ? JSON.stringify(responseJson.usage) : undefined,
+    );
+
+    let parsed: unknown = [];
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch {
+      parsed = [];
+    }
+
+    const findings: Finding[] = Array.isArray(parsed)
+      ? parsed
+          .map((item) => item as Partial<Finding>)
+          .filter((item) => item.issue && item.fix)
+          .map((item) => ({
+            severity:
+              item.severity === "Critical" ||
+              item.severity === "High" ||
+              item.severity === "Medium" ||
+              item.severity === "Low"
+                ? item.severity
+                : "Low",
+            file: item.file || filename,
+            line: Number.isFinite(item.line) ? Number(item.line) : 1,
+            issue: item.issue || "Unspecified vulnerability",
+            fix: item.fix || "Review and harden this code path.",
+            vulnerableCode:
+              item.vulnerableCode || "/* Vulnerable code snippet unavailable */",
+            suggestedCode:
+              item.suggestedCode || "/* Suggested code snippet unavailable */",
+          }))
+      : [];
+
+    return { findings, attestationHash };
+  } catch (error) {
+    console.error("0G compute file scan failed", { filename, error });
+    throw new Error("Scan failed for this file — continuing");
   }
-
-  const findings: Finding[] = Array.isArray(parsed)
-    ? parsed
-        .map((item) => item as Partial<Finding>)
-        .filter((item) => item.issue && item.fix)
-        .map((item) => ({
-          severity:
-            item.severity === "Critical" ||
-            item.severity === "High" ||
-            item.severity === "Medium" ||
-            item.severity === "Low"
-              ? item.severity
-              : "Low",
-          file: item.file || filename,
-          line: Number.isFinite(item.line) ? Number(item.line) : 1,
-          issue: item.issue || "Unspecified vulnerability",
-          fix: item.fix || "Review and harden this code path.",
-          vulnerableCode:
-            item.vulnerableCode || "/* Vulnerable code snippet unavailable */",
-          suggestedCode:
-            item.suggestedCode || "/* Suggested code snippet unavailable */",
-        }))
-    : [];
-
-  return { findings, attestationHash };
 }
 
 export async function inferWithTeeML(

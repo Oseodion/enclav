@@ -18,6 +18,8 @@ type StreamFinding = {
 };
 
 const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol", ".go"];
+const GITHUB_REPO_URL_PATTERN =
+  /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
 const STORAGE_UPLOAD_TIMEOUT_MS = 30_000;
 const COMPUTE_SCAN_TIMEOUT_MS = 45_000;
@@ -80,6 +82,13 @@ export async function POST(request: Request) {
   if (!repoUrl || !walletAddress) {
     return new Response(
       JSON.stringify({ error: "repoUrl and walletAddress are required." }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (!GITHUB_REPO_URL_PATTERN.test(repoUrl)) {
+    return new Response(
+      JSON.stringify({ error: "Please enter a valid public GitHub repository URL" }),
       { status: 400, headers: { "Content-Type": "application/json" } },
     );
   }

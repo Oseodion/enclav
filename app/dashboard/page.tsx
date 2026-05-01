@@ -8,6 +8,7 @@ import {
   Database,
   ExternalLink,
   Grid2x2,
+  Info,
   Link2,
   ScanSearch,
   Settings2,
@@ -270,6 +271,11 @@ export default function DashboardPage() {
                 Start Scan
               </button>
             </div>
+            <p className="mt-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-[var(--text-3)]">
+              <Info className="h-3 w-3" />
+              Supports public GitHub repositories only · Results may vary by codebase ·
+              AI-generated findings — always verify with your security team
+            </p>
             {scanError ? (
               <p className="mt-2 font-mono text-[11px] text-[#EF4444]">{scanError}</p>
             ) : null}
