@@ -287,7 +287,7 @@ export default function DashboardPage() {
             <p className="mt-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-[var(--text-3)]">
               <Info className="h-3 w-3" />
               Supports public GitHub repositories only · Results may vary by codebase ·
-              AI-generated findings — always verify with your security team
+              AI-generated findings · always verify with your security team
             </p>
             {scanCompleted && mintedTokenId ? (
               <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[rgba(16,185,129,0.25)] bg-[rgba(16,185,129,0.08)] px-3 py-2 text-[#6EE7B7]">
@@ -342,6 +342,7 @@ export default function DashboardPage() {
               totalFiles={totalFiles}
               progressPercent={progressPercent}
               findingsSummary={findingsSummary}
+              mintedTokenId={mintedTokenId}
             />
           </div>
         </section>
@@ -559,11 +560,13 @@ function RightPanelSummary({
   totalFiles,
   progressPercent,
   findingsSummary,
+  mintedTokenId,
 }: {
   scannedFiles: number;
   totalFiles: number;
   progressPercent: number;
   findingsSummary: Record<FindingSeverity, number>;
+  mintedTokenId: string | null;
 }) {
   return (
     <aside className={`${panelClass} hidden min-h-0 flex-col xl:flex`}>
@@ -579,7 +582,13 @@ function RightPanelSummary({
           <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Agent ID - ERC-7857
           </p>
-          <p className="font-mono text-xs text-[#2E2C3E]">Not minted</p>
+          <p
+            className={`font-mono text-xs ${
+              mintedTokenId ? "text-[#F0EEF8]" : "text-[#2E2C3E]"
+            }`}
+          >
+            {mintedTokenId ? `Token #${mintedTokenId}` : "Not minted"}
+          </p>
         </div>
       </div>
 

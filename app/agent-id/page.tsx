@@ -120,6 +120,17 @@ export default function AgentIdPage() {
     void loadCertificate();
   }, [address, isConnected]);
 
+  const formattedScanDate = certificate?.scanDate
+    ? `${new Date(certificate.scanDate).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })} at ${new Date(certificate.scanDate).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      })}`
+    : "No scans yet";
+
   const onChainData = useMemo(() => {
     if (certificate) {
       return {
@@ -127,7 +138,7 @@ export default function AgentIdPage() {
         tokenId: certificate.tokenId,
         owner: certificate.owner,
         standard: "ERC-7857",
-        minted: certificate.scanDate,
+        minted: formattedScanDate,
         transfers: "0",
       };
     }
@@ -140,13 +151,21 @@ export default function AgentIdPage() {
       minted: "No scans yet",
       transfers: "0",
     };
-  }, [address, certificate, isConnected]);
+  }, [address, certificate, formattedScanDate, isConnected]);
 
   const contractExplorerHref = `${EXPLORER_BASE}/address/${INFT_CONTRACT_ADDRESS}`;
   const txExplorerHref = certificate?.txHash
     ? `${EXPLORER_BASE}/tx/${certificate.txHash}`
     : null;
   const hasCertificate = Boolean(certificate);
+  const dynamicCapabilityTags = hasCertificate
+    ? [
+        { label: `Critical: ${certificate?.criticalCount ?? 0}`, tone: "amber" as const },
+        { label: `High: ${certificate?.highCount ?? 0}`, tone: "purple" as const },
+        { label: `Medium: ${certificate?.mediumCount ?? 0}`, tone: "green" as const },
+        { label: `Low: ${certificate?.lowCount ?? 0}`, tone: "purple" as const },
+      ]
+    : [{ label: "No scan data yet", tone: "purple" as const }];
 
   const copyValue = async (target: Exclude<CopyTarget, null>, value: string) => {
     try {
@@ -246,7 +265,7 @@ export default function AgentIdPage() {
                       value={String(certificate?.totalFindings ?? 0)}
                       accent="text-teal-light"
                     />
-                    <NftStat label="Scan Date" value={certificate?.scanDate ?? "No scans yet"} />
+                    <NftStat label="Scan Date" value={formattedScanDate} />
                     <NftStat
                       label="Critical Findings"
                       value={String(certificate?.criticalCount ?? 0)}
@@ -257,6 +276,7 @@ export default function AgentIdPage() {
               <div className="flex gap-2">
                 <button
                   type="button"
+                  title="Transfer functionality coming soon"
                   className="glass-blur-sm flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-purple-bright/30 bg-purple/35 px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition hover:-translate-y-[1px] hover:bg-purple/50"
                 >
                   <SendHorizontal className="h-3.5 w-3.5" />
@@ -378,15 +398,9 @@ export default function AgentIdPage() {
                 Vulnerability types detected
               </p>
               <div className="flex flex-wrap gap-1.5">
-                <CapabilityTag label="JWT Issues" tone="purple" />
-                <CapabilityTag label="Unvalidated Input" tone="purple" />
-                <CapabilityTag label="SQL Injection" tone="green" />
-                <CapabilityTag label="Missing Auth" tone="green" />
-                <CapabilityTag label="Exposed Secrets" tone="purple" />
-                <CapabilityTag label="Weak Encryption" tone="amber" />
-                <CapabilityTag label="XSS Risk" tone="green" />
-                <CapabilityTag label="CSRF" tone="purple" />
-                <CapabilityTag label="Race Condition" tone="amber" />
+                {dynamicCapabilityTags.map((tag) => (
+                  <CapabilityTag key={tag.label} label={tag.label} tone={tag.tone} />
+                ))}
               </div>
             </section>
           </div>
