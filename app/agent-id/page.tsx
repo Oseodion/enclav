@@ -8,8 +8,10 @@ import {
   Copy,
   ExternalLink,
   Lock,
+  Menu,
   Orbit,
   SendHorizontal,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { WalletConnect } from "@/components/ui/WalletConnect";
@@ -44,6 +46,7 @@ type CertificateData = {
 type CopyTarget = "contract" | "owner" | null;
 
 export default function AgentIdPage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [copied, setCopied] = useState<CopyTarget>(null);
   const [certificate, setCertificate] = useState<CertificateData | null>(null);
   const [isLoadingCertificate, setIsLoadingCertificate] = useState(false);
@@ -196,7 +199,7 @@ export default function AgentIdPage() {
             Encl<span className="text-purple-bright">av</span>
           </span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="hidden items-center gap-2 md:flex">
           <WalletConnect />
           <Link
             href="/dashboard"
@@ -206,7 +209,28 @@ export default function AgentIdPage() {
             Back to dashboard
           </Link>
         </div>
+        <button
+          type="button"
+          className="md:hidden"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          aria-label="Toggle certificate menu"
+        >
+          {mobileMenuOpen ? <X className="h-5 w-5 text-text-2" /> : <Menu className="h-5 w-5 text-text-2" />}
+        </button>
       </nav>
+      {mobileMenuOpen ? (
+        <div className="sticky top-[52px] z-40 border-b border-[var(--border)] bg-black/95 px-4 py-3 md:hidden">
+          <div className="flex flex-col gap-2">
+            <WalletConnect />
+            <Link
+              href="/dashboard"
+              className="rounded-md border border-[var(--border)] px-3 py-2 text-center font-mono text-[11px] uppercase tracking-[0.06em] text-text-2"
+            >
+              Back to dashboard
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       <section className="relative z-[1] mx-auto max-w-[1100px] px-4 pb-20 pt-12 md:px-10">
         <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright">

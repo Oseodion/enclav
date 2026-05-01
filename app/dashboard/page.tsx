@@ -5,11 +5,12 @@ import {
   Activity,
   CheckCircle2,
   Code2,
-  Database,
   ExternalLink,
   Grid2x2,
+  History,
   Info,
   Link2,
+  Menu,
   ScanSearch,
   Settings2,
   ShieldAlert,
@@ -18,11 +19,13 @@ import {
   Sparkles,
   Timer,
   TriangleAlert,
-  User,
+  X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { WalletConnect } from "@/components/ui/WalletConnect";
+import { INFT_CONTRACT_ADDRESS, mintFromWallet, type MintScanData } from "@/lib/0g/inft";
 import { useWallet } from "@/lib/wallet";
+import { useDisconnect, useWalletClient } from "wagmi";
 
 type FindingSeverity = "Critical" | "High" | "Medium" | "Low";
 
@@ -38,12 +41,35 @@ type ScanNotice = {
   id: string;
   message: string;
 };
+type ActiveTab = "scanner" | "findings" | "history" | "settings";
+type SeverityFilter = "All" | FindingSeverity;
+type ScanHistoryEntry = {
+  id: string;
+  repoUrl: string;
+  scanDate: string;
+  filesScanned: number;
+  totalFindings: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  reportHash: string;
+  findings: Finding[];
+  tokenId?: string | null;
+  explorerUrl?: string | null;
+};
 
 const panelClass =
   "relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']";
+const SCAN_HISTORY_KEY = "enclav-scan-history-v1";
 
 export default function DashboardPage() {
   const { address, isConnected } = useWallet();
+  const { data: walletClient } = useWalletClient();
+  const { disconnect } = useDisconnect();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("scanner");
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("All");
   const [repoUrl, setRepoUrl] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [scanCompleted, setScanCompleted] = useState(false);
@@ -54,10 +80,27 @@ export default function DashboardPage() {
   ]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [scanNotices, setScanNotices] = useState<ScanNotice[]>([]);
+  const [latestScanData, setLatestScanData] = useState<MintScanData | null>(null);
+  const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
   const [scannedFiles, setScannedFiles] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [mintedTokenId, setMintedTokenId] = useState<string | null>(null);
   const [certificateExplorerUrl, setCertificateExplorerUrl] = useState<string | null>(null);
+  const [mintStatus, setMintStatus] = useState<
+    "idle" | "awaiting_wallet" | "minting" | "success" | "cancelled" | "error"
+  >("idle");
+  const [mintStatusMessage, setMintStatusMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SCAN_HISTORY_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as ScanHistoryEntry[];
+      setScanHistory(Array.isArray(parsed) ? parsed.slice(0, 5) : []);
+    } catch {
+      setScanHistory([]);
+    }
+  }, []);
 
   const findingsSummary = useMemo(
     () =>
@@ -78,6 +121,19 @@ export default function DashboardPage() {
 
   const progressPercent =
     totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
+  const mostRecentFindings = findings.length > 0 ? findings : (scanHistory[0]?.findings ?? []);
+  const filteredFindings =
+    severityFilter === "All"
+      ? mostRecentFindings
+      : mostRecentFindings.filter((item) => item.severity === severityFilter);
+
+  const persistScanHistory = (entry: ScanHistoryEntry) => {
+    setScanHistory((prev) => {
+      const next = [entry, ...prev].slice(0, 5);
+      localStorage.setItem(SCAN_HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   const startScan = async () => {
     const trimmedRepoUrl = repoUrl.trim();
@@ -88,13 +144,17 @@ export default function DashboardPage() {
     }
 
     setScanError(null);
+    setActiveTab("scanner");
     setFindings([]);
     setScanNotices([]);
+    setLatestScanData(null);
     setScannedFiles(0);
     setTotalFiles(0);
     setScanCompleted(false);
     setMintedTokenId(null);
     setCertificateExplorerUrl(null);
+    setMintStatus("idle");
+    setMintStatusMessage(null);
     setCurrentFile("Initializing scanner...");
     setScanLogs(["Repository queued. Starting autonomous scan..."]);
     setIsScanning(true);
@@ -128,6 +188,7 @@ export default function DashboardPage() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      const streamedFindings: Finding[] = [];
 
       while (true) {
         const { value, done } = await reader.read();
@@ -156,8 +217,7 @@ export default function DashboardPage() {
                 type: "complete";
                 totalFiles: number;
                 totalFindings: number;
-                tokenId?: string | null;
-                explorerUrl?: string | null;
+                scanData: MintScanData;
               }
             | { type: "error"; message: string };
 
@@ -171,25 +231,37 @@ export default function DashboardPage() {
           }
 
           if (event.type === "finding") {
-            setFindings((prev) => [
-              ...prev,
-              {
-                severity: event.finding.severity,
-                file: event.finding.file,
-                line: event.finding.line,
-                description: event.finding.issue,
-                fix: event.finding.fix,
-                attestationHash: event.attestationHash,
-              },
-            ]);
+            const normalizedFinding: Finding = {
+              severity: event.finding.severity,
+              file: event.finding.file,
+              line: event.finding.line,
+              description: event.finding.issue,
+              fix: event.finding.fix,
+              attestationHash: event.attestationHash,
+            };
+            streamedFindings.push(normalizedFinding);
+            setFindings((prev) => [...prev, normalizedFinding]);
           }
 
           if (event.type === "complete") {
             setTotalFiles(event.totalFiles);
             setCurrentFile("Completed");
             setScanCompleted(true);
-            setMintedTokenId(event.tokenId ?? null);
-            setCertificateExplorerUrl(event.explorerUrl ?? null);
+            setLatestScanData(event.scanData);
+            const entry: ScanHistoryEntry = {
+              id: `${Date.now()}-${trimmedRepoUrl}`,
+              repoUrl: event.scanData.repoUrl,
+              scanDate: event.scanData.scanDate,
+              filesScanned: event.scanData.filesScanned,
+              totalFindings: event.scanData.totalFindings,
+              criticalCount: event.scanData.criticalCount,
+              highCount: event.scanData.highCount,
+              mediumCount: event.scanData.mediumCount,
+              lowCount: event.scanData.lowCount,
+              reportHash: event.scanData.reportHash,
+              findings: streamedFindings,
+            };
+            persistScanHistory(entry);
             setScanLogs((prev) => [
               `Scan complete. ${event.totalFindings} findings detected.`,
               ...prev.slice(0, 6),
@@ -226,6 +298,46 @@ export default function DashboardPage() {
     }
   };
 
+  const handleMintCertificate = async () => {
+    if (!latestScanData || !walletClient) return;
+    try {
+      setMintStatus("awaiting_wallet");
+      setMintStatusMessage("Waiting for wallet confirmation...");
+      const result = await mintFromWallet(
+        walletClient,
+        latestScanData,
+        () => {
+          setMintStatus("minting");
+          setMintStatusMessage("Minting certificate...");
+        },
+      );
+      setMintedTokenId(result.tokenId);
+      setCertificateExplorerUrl(result.explorerUrl);
+      setMintStatus("success");
+      setMintStatusMessage(`Security certificate minted — Token #${result.tokenId}`);
+      setScanHistory((prev) => {
+        if (prev.length === 0) return prev;
+        const [first, ...rest] = prev;
+        const next = [
+          { ...first, tokenId: result.tokenId, explorerUrl: result.explorerUrl },
+          ...rest,
+        ];
+        localStorage.setItem(SCAN_HISTORY_KEY, JSON.stringify(next));
+        return next;
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message.toLowerCase() : "Mint failed";
+      if (message.includes("user rejected") || message.includes("denied")) {
+        setMintStatus("cancelled");
+        setMintStatusMessage("Certificate minting cancelled");
+        return;
+      }
+      setMintStatus("error");
+      setMintStatusMessage("Certificate minting failed");
+    }
+  };
+
   return (
     <main className="relative flex h-screen flex-col overflow-hidden bg-black font-geist text-[#F0EEF8]">
       <AmbientGlow />
@@ -251,19 +363,36 @@ export default function DashboardPage() {
         </Link>
 
         <nav className="hidden h-full flex-1 items-center justify-center md:flex">
-          {["Scanner", "Findings", "History", "Certificate", "Settings"].map((item, i) => (
-            <button
-              key={item}
-              type="button"
-              className={`h-full border-b-2 px-4 font-mono text-[11px] uppercase tracking-[0.08em] ${
-                i === 0
-                  ? "border-[#7C3AED] bg-[rgba(124,58,237,0.12)] text-[#F0EEF8]"
-                  : "border-transparent text-[#9B99B0] hover:text-[#F0EEF8]"
-              }`}
-            >
-              {item}
-            </button>
-          ))}
+          {[
+            { label: "Scanner", key: "scanner" as const },
+            { label: "Findings", key: "findings" as const },
+            { label: "History", key: "history" as const },
+            { label: "Certificate", href: "/agent-id" },
+            { label: "Settings", key: "settings" as const },
+          ].map((item) =>
+            "href" in item ? (
+              <Link
+                key={item.label}
+                href={item.href ?? "/agent-id"}
+                className="h-full border-b-2 border-transparent px-4 font-mono text-[11px] uppercase tracking-[0.08em] text-[#9B99B0] hover:text-[#F0EEF8]"
+              >
+                <span className="inline-flex h-full items-center">{item.label}</span>
+              </Link>
+            ) : (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => setActiveTab(item.key)}
+                className={`h-full border-b-2 px-4 font-mono text-[11px] uppercase tracking-[0.08em] ${
+                  activeTab === item.key
+                    ? "border-[#7C3AED] bg-[rgba(124,58,237,0.12)] text-[#F0EEF8]"
+                    : "border-transparent text-[#9B99B0] hover:text-[#F0EEF8]"
+                }`}
+              >
+                {item.label}
+              </button>
+            ),
+          )}
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -272,20 +401,38 @@ export default function DashboardPage() {
             TEE Active
           </div>
           <WalletConnect />
+          <button
+            type="button"
+            className="md:hidden"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            aria-label="Toggle dashboard menu"
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5 text-[#F0EEF8]" /> : <Menu className="h-5 w-5 text-[#F0EEF8]" />}
+          </button>
         </div>
       </header>
+      {mobileMenuOpen ? (
+        <div className="relative z-20 border-b border-white/10 bg-black/95 px-4 py-2 md:hidden">
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => { setActiveTab("scanner"); setMobileMenuOpen(false); }} className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">Scanner</button>
+            <button type="button" onClick={() => { setActiveTab("findings"); setMobileMenuOpen(false); }} className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">Findings</button>
+            <button type="button" onClick={() => { setActiveTab("history"); setMobileMenuOpen(false); }} className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">History</button>
+            <button type="button" onClick={() => { setActiveTab("settings"); setMobileMenuOpen(false); }} className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">Settings</button>
+            <Link href="/agent-id" className="col-span-2 rounded-md border border-white/10 px-3 py-2 text-center text-xs text-[#F0EEF8]">Certificate</Link>
+          </div>
+        </div>
+      ) : null}
 
       <div className="relative z-[1] flex min-h-0 flex-1">
-        <aside className={`${panelClass} m-3 flex w-[56px] shrink-0 flex-col items-center gap-1 bg-[rgba(255,255,255,0.02)] py-3`}>
-          <SidebarIcon icon={Grid2x2} active />
-          <SidebarIcon icon={Code2} />
-          <SidebarIcon icon={Database} />
+        <aside className={`${panelClass} m-3 hidden w-[56px] shrink-0 flex-col items-center gap-1 bg-[rgba(255,255,255,0.02)] py-3 md:flex`}>
+          <SidebarIcon icon={Grid2x2} active={activeTab === "scanner"} title="Scanner" onClick={() => setActiveTab("scanner")} />
+          <SidebarIcon icon={Code2} active={activeTab === "findings"} title="Findings" onClick={() => setActiveTab("findings")} />
+          <SidebarIcon icon={History} active={activeTab === "history"} title="History" onClick={() => setActiveTab("history")} />
           <div className="my-1 h-px w-6 bg-[#2E2C3E]" />
-          <SidebarIcon icon={User} />
-          <SidebarIcon icon={Settings2} />
+          <SidebarIcon icon={Settings2} active={activeTab === "settings"} title="Settings" onClick={() => setActiveTab("settings")} />
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col p-3 pl-0">
+        <section className="flex min-w-0 flex-1 flex-col p-3 md:pl-0">
           <div className={`${panelClass} mb-3 p-3`}>
             <div className="flex flex-col gap-2 md:flex-row">
               <div className="relative flex-1">
@@ -310,6 +457,26 @@ export default function DashboardPage() {
               Supports public GitHub repositories only · Results may vary by codebase ·
               AI-generated findings · always verify with your security team
             </p>
+            {scanCompleted && latestScanData && !mintedTokenId ? (
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[rgba(167,139,250,0.25)] bg-[rgba(124,58,237,0.08)] px-3 py-2 text-[#D8CEF9]">
+                <div className="flex items-center gap-2 text-xs">
+                  <Sparkles className="h-4 w-4" />
+                  <span>{mintStatusMessage ?? "Scan complete. Mint your security certificate from your wallet."}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleMintCertificate}
+                  disabled={mintStatus === "awaiting_wallet" || mintStatus === "minting" || !isConnected}
+                  className="rounded-full border border-[rgba(167,139,250,0.4)] bg-[rgba(124,58,237,0.35)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {mintStatus === "awaiting_wallet"
+                    ? "Waiting for wallet confirmation..."
+                    : mintStatus === "minting"
+                      ? "Minting certificate..."
+                      : "Mint Security Certificate"}
+                </button>
+              </div>
+            ) : null}
             {scanCompleted && mintedTokenId ? (
               <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[rgba(16,185,129,0.25)] bg-[rgba(16,185,129,0.08)] px-3 py-2 text-[#6EE7B7]">
                 <div className="flex items-center gap-2 text-xs">
@@ -341,35 +508,49 @@ export default function DashboardPage() {
             ) : null}
           </div>
 
-          <div
-            className={`grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1.2fr_0.9fr_280px] ${
-              isScanning
-                ? "rounded-2xl border border-transparent bg-[linear-gradient(rgba(0,0,0,0.75),rgba(0,0,0,0.75))_padding-box,linear-gradient(120deg,#A78BFA,#7C3AED,#EC4899)_border-box] p-[1px] animate-pulse"
-                : ""
-            }`}
-          >
-            <LiveScanFeed
-              findings={findings}
-              notices={scanNotices}
-              isScanning={isScanning}
+          {activeTab === "scanner" ? (
+            <div
+              className={`grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1.2fr_0.9fr_280px] ${
+                isScanning
+                  ? "rounded-2xl border border-transparent bg-[linear-gradient(rgba(0,0,0,0.75),rgba(0,0,0,0.75))_padding-box,linear-gradient(120deg,#A78BFA,#7C3AED,#EC4899)_border-box] p-[1px] animate-pulse"
+                  : ""
+              }`}
+            >
+              <LiveScanFeed findings={findings} notices={scanNotices} isScanning={isScanning} />
+              <ScanStatus
+                currentFile={currentFile}
+                scannedFiles={scannedFiles}
+                totalFiles={totalFiles}
+                progressPercent={progressPercent}
+                logs={scanLogs}
+                isScanning={isScanning}
+                scanCompleted={scanCompleted}
+              />
+              <RightPanelSummary
+                scannedFiles={scannedFiles}
+                totalFiles={totalFiles}
+                progressPercent={progressPercent}
+                findingsSummary={findingsSummary}
+                mintedTokenId={mintedTokenId}
+              />
+            </div>
+          ) : null}
+          {activeTab === "findings" ? (
+            <FindingsTab
+              findings={filteredFindings}
+              hasScanData={mostRecentFindings.length > 0}
+              severityFilter={severityFilter}
+              onFilterChange={setSeverityFilter}
             />
-            <ScanStatus
-              currentFile={currentFile}
-              scannedFiles={scannedFiles}
-              totalFiles={totalFiles}
-              progressPercent={progressPercent}
-              logs={scanLogs}
-              isScanning={isScanning}
-              scanCompleted={scanCompleted}
+          ) : null}
+          {activeTab === "history" ? <HistoryTab history={scanHistory} /> : null}
+          {activeTab === "settings" ? (
+            <SettingsTab
+              address={address ?? null}
+              isConnected={isConnected}
+              onDisconnect={disconnect}
             />
-            <RightPanelSummary
-              scannedFiles={scannedFiles}
-              totalFiles={totalFiles}
-              progressPercent={progressPercent}
-              findingsSummary={findingsSummary}
-              mintedTokenId={mintedTokenId}
-            />
-          </div>
+          ) : null}
         </section>
       </div>
 
@@ -391,13 +572,19 @@ export default function DashboardPage() {
 function SidebarIcon({
   icon: Icon,
   active = false,
+  title,
+  onClick,
 }: {
   icon: typeof Grid2x2;
   active?: boolean;
+  title: string;
+  onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      title={title}
+      onClick={onClick}
       className={`flex h-[36px] w-[36px] items-center justify-center rounded-lg ${
         active ? "bg-[rgba(124,58,237,0.16)]" : "hover:bg-white/5"
       }`}
@@ -675,6 +862,120 @@ function SummaryRow({
       </div>
       <span className="font-mono text-xs text-[#F0EEF8]">{count}</span>
     </div>
+  );
+}
+
+function FindingsTab({
+  findings,
+  hasScanData,
+  severityFilter,
+  onFilterChange,
+}: {
+  findings: Finding[];
+  hasScanData: boolean;
+  severityFilter: SeverityFilter;
+  onFilterChange: (value: SeverityFilter) => void;
+}) {
+  return (
+    <section className={`${panelClass} min-h-0 p-4`}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-[#F0EEF8]">Findings</h3>
+        <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
+          {(["All", "Critical", "High", "Medium", "Low"] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => onFilterChange(filter)}
+              className={`rounded px-2 py-1 font-mono text-[10px] uppercase ${
+                severityFilter === filter
+                  ? "bg-[rgba(124,58,237,0.3)] text-white"
+                  : "text-[#9B99B0]"
+              }`}
+            >
+              {filter}
+            </button>
+          ))}
+        </div>
+      </div>
+      {!hasScanData ? (
+        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
+          Run a scan to see findings
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {findings.map((finding, index) => (
+            <div key={`${finding.file}-${finding.line}-${index}`} className="rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="rounded bg-[rgba(124,58,237,0.2)] px-2 py-0.5 font-mono text-[10px] uppercase text-[#E9E4FF]">
+                  {finding.severity}
+                </span>
+                <button type="button" className="rounded border border-[rgba(167,139,250,0.4)] px-2 py-1 font-mono text-[10px] uppercase text-[#E9E4FF]">
+                  View Fix
+                </button>
+              </div>
+              <p className="text-sm text-[#F4F2FF]">{finding.description}</p>
+              <p className="font-mono text-[11px] text-[#9B99B0]">
+                {finding.file}:{finding.line}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HistoryTab({ history }: { history: ScanHistoryEntry[] }) {
+  return (
+    <section className={`${panelClass} min-h-0 p-4`}>
+      <h3 className="mb-3 text-sm font-semibold text-[#F0EEF8]">Scan History</h3>
+      {history.length === 0 ? (
+        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
+          No scan history yet
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {history.map((item) => (
+            <div key={item.id} className="rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
+              <p className="mb-1 text-sm text-[#F4F2FF]">{item.repoUrl}</p>
+              <p className="mb-1 font-mono text-[11px] text-[#9B99B0]">
+                {new Date(item.scanDate).toLocaleString()} · {item.filesScanned} files · {item.totalFindings} findings
+              </p>
+              <p className="font-mono text-[10px] text-[#9B99B0]">
+                C:{item.criticalCount} H:{item.highCount} M:{item.mediumCount} L:{item.lowCount}
+              </p>
+              <Link href="/agent-id" className="mt-2 inline-flex rounded border border-[rgba(167,139,250,0.35)] px-2 py-1 font-mono text-[10px] uppercase text-[#A78BFA]">
+                View Certificate
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SettingsTab({
+  address,
+  isConnected,
+  onDisconnect,
+}: {
+  address: string | null;
+  isConnected: boolean;
+  onDisconnect: () => void;
+}) {
+  return (
+    <section className={`${panelClass} min-h-0 p-4`}>
+      <h3 className="mb-3 text-sm font-semibold text-[#F0EEF8]">Settings</h3>
+      <div className="space-y-2 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3 font-mono text-xs">
+        <p className="text-[#9B99B0]">Wallet: <span className="text-[#F0EEF8]">{isConnected && address ? address : "Not connected"}</span></p>
+        <p className="text-[#9B99B0]">Contract: <span className="text-[#F0EEF8]">{INFT_CONTRACT_ADDRESS}</span></p>
+        <p className="text-[#9B99B0]">Network: <span className="text-[#F0EEF8]">0G Galileo Testnet</span></p>
+        <button type="button" onClick={onDisconnect} className="mt-2 rounded border border-[rgba(239,68,68,0.35)] px-2 py-1 text-[10px] uppercase tracking-[0.06em] text-[#FCA5A5]">
+          Disconnect wallet
+        </button>
+      </div>
+    </section>
   );
 }
 

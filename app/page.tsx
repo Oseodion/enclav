@@ -203,7 +203,7 @@ export default function Home() {
           Autonomous Security Agent · Built on 0G
         </div>
 
-        <h1 className="animate-fade-up-d1 mb-7 max-w-[min(100%,920px)] text-[clamp(36px,12vw,96px)] font-extrabold leading-[0.93] tracking-[-0.04em] md:text-[clamp(40px,10vw,72px)] lg:text-[clamp(48px,8vw,96px)]">
+        <h1 className="animate-fade-up-d1 mb-7 max-w-[min(100%,920px)] text-[clamp(30px,10vw,96px)] font-extrabold leading-[0.93] tracking-[-0.04em] md:text-[clamp(40px,10vw,72px)] lg:text-[clamp(48px,8vw,96px)]">
           Scan your code.
           <br />
           <span className="bg-purple-pink bg-clip-text text-transparent">

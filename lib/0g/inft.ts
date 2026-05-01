@@ -1,7 +1,10 @@
 import { ethers } from "ethers";
+import type { WalletClient } from "viem";
 
-const OG_RPC_URL = process.env.OG_RPC_URL ?? "";
-const INFT_CONTRACT_ADDRESS = process.env.INFT_CONTRACT_ADDRESS ?? "";
+export const INFT_CONTRACT_ADDRESS =
+  process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ??
+  "0xE4B6b9f3628990ae769816c7ddE7c7bB33076b7c";
+export const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
 const CHAINSCAN_BASE_URL = "https://chainscan-galileo.0g.ai";
 
 const ENCLAV_ABI = [
@@ -27,24 +30,26 @@ export type MintCertificateResult = {
   explorerUrl: string;
 };
 
-export async function mintCertificate(
-  walletAddress: string,
+export async function mintFromWallet(
+  walletClient: WalletClient,
   scanData: MintScanData,
+  onTransactionSubmitted?: () => void,
 ): Promise<MintCertificateResult> {
   if (!INFT_CONTRACT_ADDRESS) {
     throw new Error("INFT_CONTRACT_ADDRESS is required to mint certificates.");
   }
-  if (!OG_RPC_URL) {
-    throw new Error("OG_RPC_URL is required to mint certificates.");
+  if (!walletClient) {
+    throw new Error("Connected wallet client is required.");
   }
+  const injectedProvider = (
+    globalThis as { ethereum?: ethers.Eip1193Provider }
+  ).ethereum;
+  if (!injectedProvider) throw new Error("No injected wallet provider found.");
 
-  const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!privateKey) {
-    throw new Error("DEPLOYER_PRIVATE_KEY is required to mint certificates.");
-  }
-
-  const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
-  const signer = new ethers.Wallet(privateKey, provider);
+  const provider = new ethers.BrowserProvider(injectedProvider);
+  await provider.send("eth_requestAccounts", []);
+  const signer = await provider.getSigner();
+  const walletAddress = await signer.getAddress();
   const contract = new ethers.Contract(INFT_CONTRACT_ADDRESS, ENCLAV_ABI, signer);
 
   const tx = await contract.mintCertificate(
@@ -59,6 +64,7 @@ export async function mintCertificate(
     scanData.lowCount,
     scanData.reportHash,
   );
+  onTransactionSubmitted?.();
 
   const receipt = await tx.wait();
   if (!receipt) {
