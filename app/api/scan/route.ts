@@ -17,12 +17,14 @@ type StreamFinding = {
   fix: string;
 };
 
-const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol"];
-const ALLOWED_SCAN_PREFIXES = ["app/", "components/", "lib/", "pages/"];
+const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol", ".go"];
 const EXCLUDED_SCAN_PREFIXES = [
-  "contracts/",
   "contracts/scripts/",
+  ".git/",
   "node_modules/",
+  "dist/",
+  "build/",
+  ".next/",
   "design-templates/",
 ];
 const GITHUB_REPO_URL_PATTERN =
@@ -173,15 +175,8 @@ export async function POST(request: Request) {
 
     if (filePath === "hardhat.config.ts") return false;
 
-    const isExcluded = EXCLUDED_SCAN_PREFIXES.some((prefix) =>
-      filePath.startsWith(prefix),
-    );
+    const isExcluded = EXCLUDED_SCAN_PREFIXES.some((prefix) => filePath.startsWith(prefix));
     if (isExcluded) return false;
-
-    const isAllowedFolder = ALLOWED_SCAN_PREFIXES.some((prefix) =>
-      filePath.startsWith(prefix),
-    );
-    if (!isAllowedFolder) return false;
 
     return CODE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   });

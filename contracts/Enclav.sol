@@ -2,9 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-
-contract Enclav is ERC721, Ownable {
+contract Enclav is ERC721 {
     struct ScanCertificate {
         string repoUrl;
         string scanDate;
@@ -40,7 +38,7 @@ contract Enclav is ERC721, Ownable {
         uint256 mediumCount,
         uint256 lowCount,
         string calldata reportHash
-    ) external onlyOwner returns (uint256 tokenId) {
+    ) external returns (uint256 tokenId) {
         tokenId = ++_nextTokenId;
         _safeMint(recipient, tokenId);
 

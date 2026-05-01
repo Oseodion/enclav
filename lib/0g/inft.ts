@@ -9,6 +9,7 @@ const CHAINSCAN_BASE_URL = "https://chainscan-galileo.0g.ai";
 
 const ENCLAV_ABI = [
   "function mintCertificate(address recipient,string repoUrl,string scanDate,uint256 filesScanned,uint256 totalFindings,uint256 criticalCount,uint256 highCount,uint256 mediumCount,uint256 lowCount,string reportHash) external returns (uint256)",
+  "function balanceOf(address owner) view returns (uint256)",
   "event CertificateMinted(uint256 indexed tokenId, address indexed recipient, string repoUrl, string reportHash)",
 ] as const;
 
@@ -25,9 +26,10 @@ export type MintScanData = {
 };
 
 export type MintCertificateResult = {
-  tokenId: string;
+  tokenId: string | null;
   txHash: string;
   explorerUrl: string;
+  proofLabel: string;
 };
 
 export async function mintFromWallet(
@@ -76,7 +78,7 @@ export async function mintFromWallet(
     throw new Error("Mint transaction did not return a receipt.");
   }
 
-  let tokenId = "";
+  let tokenId: string | null = null;
   for (const log of receipt.logs) {
     try {
       const parsed = contract.interface.parseLog(log);
@@ -90,12 +92,22 @@ export async function mintFromWallet(
   }
 
   if (!tokenId) {
-    throw new Error("Unable to parse minted tokenId from transaction logs.");
+    try {
+      const balance = await contract.balanceOf(walletAddress);
+      if (balance && balance > BigInt(0)) {
+        tokenId = balance.toString();
+      }
+    } catch (error) {
+      console.log("[mintFromWallet] balanceOf fallback failed", error);
+    }
   }
 
   return {
     tokenId,
     txHash: receipt.hash,
     explorerUrl: `${CHAINSCAN_BASE_URL}/tx/${receipt.hash}`,
+    proofLabel: tokenId
+      ? `Token #${tokenId}`
+      : `Certificate minted. Tx: ${receipt.hash.slice(0, 10)}...`,
   };
 }

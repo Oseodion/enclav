@@ -332,15 +332,15 @@ export default function DashboardPage() {
         },
       );
       console.log("[mint] success", result);
-      setMintedTokenId(result.tokenId);
+      setMintedTokenId(result.tokenId ?? null);
       setCertificateExplorerUrl(result.explorerUrl);
       setMintStatus("success");
-      setMintStatusMessage(`Security certificate minted — Token #${result.tokenId}`);
+      setMintStatusMessage(result.proofLabel);
       setScanHistory((prev) => {
         if (prev.length === 0) return prev;
         const [first, ...rest] = prev;
         const next = [
-          { ...first, tokenId: result.tokenId, explorerUrl: result.explorerUrl },
+          { ...first, tokenId: result.tokenId ?? undefined, explorerUrl: result.explorerUrl },
           ...rest,
         ];
         localStorage.setItem(SCAN_HISTORY_KEY, JSON.stringify(next));
@@ -526,11 +526,15 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : null}
-            {scanCompleted && mintedTokenId ? (
+            {scanCompleted && (mintedTokenId || certificateExplorerUrl) ? (
               <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[rgba(16,185,129,0.25)] bg-[rgba(16,185,129,0.08)] px-3 py-2 text-[#6EE7B7]">
                 <div className="flex items-center gap-2 text-xs">
                   <Sparkles className="h-4 w-4" />
-                  <span>Security certificate minted — Token #{mintedTokenId}</span>
+                  <span>
+                    {mintedTokenId
+                      ? `Security certificate minted — Token #${mintedTokenId}`
+                      : mintStatusMessage ?? "Certificate minted"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   {certificateExplorerUrl ? (
