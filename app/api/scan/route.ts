@@ -87,20 +87,18 @@ export async function POST(request: Request) {
   if (!deployerPrivateKey) {
     return new Response(
       JSON.stringify({
-        error: "DEPLOYER_PRIVATE_KEY is required and must be a valid 0x-prefixed 32-byte hex string.",
+        error:
+          "DEPLOYER_PRIVATE_KEY is required and must be a valid 0x-prefixed private key.",
       }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 
-  if (
-    !deployerPrivateKey.startsWith("0x") ||
-    deployerPrivateKey.length !== 66
-  ) {
+  if (!deployerPrivateKey.startsWith("0x") || deployerPrivateKey.length < 60) {
     return new Response(
       JSON.stringify({
         error:
-          "Invalid DEPLOYER_PRIVATE_KEY format. Expected 0x-prefixed 32-byte key (66 characters).",
+          "Invalid DEPLOYER_PRIVATE_KEY format. Expected a 0x-prefixed key with at least 60 characters.",
       }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );

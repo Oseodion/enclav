@@ -40,7 +40,8 @@ export default function DashboardPage() {
   const { address, isConnected } = useWallet();
   const [repoUrl, setRepoUrl] = useState("");
   const [isScanning, setIsScanning] = useState(false);
-  const [currentFile, setCurrentFile] = useState("—");
+  const [scanCompleted, setScanCompleted] = useState(false);
+  const [currentFile, setCurrentFile] = useState("Waiting for repository URL input...");
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanLogs, setScanLogs] = useState<string[]>([
     "Waiting for repository URL input...",
@@ -81,6 +82,7 @@ export default function DashboardPage() {
     setFindings([]);
     setScannedFiles(0);
     setTotalFiles(0);
+    setScanCompleted(false);
     setCurrentFile("Initializing scanner...");
     setScanLogs(["Repository queued. Starting autonomous scan..."]);
     setIsScanning(true);
@@ -167,6 +169,7 @@ export default function DashboardPage() {
           if (event.type === "complete") {
             setTotalFiles(event.totalFiles);
             setCurrentFile("Completed");
+            setScanCompleted(true);
             setScanLogs((prev) => [
               `Scan complete. ${event.totalFindings} findings detected.`,
               ...prev.slice(0, 6),
@@ -281,6 +284,7 @@ export default function DashboardPage() {
               progressPercent={progressPercent}
               logs={scanLogs}
               isScanning={isScanning}
+              scanCompleted={scanCompleted}
             />
             <RightPanelSummary
               scannedFiles={scannedFiles}
@@ -427,6 +431,7 @@ function ScanStatus({
   progressPercent,
   logs,
   isScanning,
+  scanCompleted,
 }: {
   currentFile: string;
   scannedFiles: number;
@@ -434,13 +439,14 @@ function ScanStatus({
   progressPercent: number;
   logs: string[];
   isScanning: boolean;
+  scanCompleted: boolean;
 }) {
   return (
     <section className={`${panelClass} min-h-0`}>
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <h3 className="font-semibold text-[#F0EEF8]">Scan Status</h3>
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
-          {isScanning ? "Running" : "Complete"}
+          {isScanning ? "Running" : scanCompleted ? "Complete" : "Waiting"}
         </span>
       </div>
       <div className="space-y-4 p-4">
@@ -478,7 +484,7 @@ function ScanStatus({
           ))}
         </div>
 
-        {!isScanning ? (
+        {scanCompleted ? (
           <div className="rounded-xl border border-[rgba(16,185,129,0.2)] bg-[rgba(16,185,129,0.08)] p-3 text-xs text-[#6EE7B7]">
             <div className="mb-1 flex items-center gap-1.5 font-semibold">
               <CheckCircle2 className="h-4 w-4" />
