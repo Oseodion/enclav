@@ -587,20 +587,8 @@ function SummaryRow({
 function AmbientGlow() {
   return (
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      <div
-        className="absolute -left-[180px] -top-[220px] h-[600px] w-[600px] rounded-full"
-        style={{
-          background: "radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 65%)",
-          animation: "drift 20s ease-in-out infinite",
-        }}
-      />
-      <div
-        className="absolute -bottom-[220px] -right-[180px] h-[600px] w-[600px] rounded-full"
-        style={{
-          background: "radial-gradient(circle, rgba(236,72,153,0.05) 0%, transparent 65%)",
-          animation: "drift 20s ease-in-out infinite",
-        }}
-      />
+      <div className="absolute -left-[100px] -top-[150px] h-[500px] w-[500px] animate-drift rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.15),transparent_65%)]" />
+      <div className="absolute -bottom-[80px] -right-[60px] h-[350px] w-[350px] animate-drift-slow rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.12),transparent_65%)]" />
     </div>
   );
 }
