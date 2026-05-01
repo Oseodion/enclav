@@ -35,6 +35,11 @@ export async function mintFromWallet(
   scanData: MintScanData,
   onTransactionSubmitted?: () => void,
 ): Promise<MintCertificateResult> {
+  console.log("[mintFromWallet] starting", {
+    hasWalletClient: Boolean(walletClient),
+    contract: INFT_CONTRACT_ADDRESS,
+    repoUrl: scanData.repoUrl,
+  });
   if (!INFT_CONTRACT_ADDRESS) {
     throw new Error("INFT_CONTRACT_ADDRESS is required to mint certificates.");
   }
@@ -50,6 +55,7 @@ export async function mintFromWallet(
   await provider.send("eth_requestAccounts", []);
   const signer = await provider.getSigner();
   const walletAddress = await signer.getAddress();
+  console.log("[mintFromWallet] signer address", walletAddress);
   const contract = new ethers.Contract(INFT_CONTRACT_ADDRESS, ENCLAV_ABI, signer);
 
   const tx = await contract.mintCertificate(
@@ -64,9 +70,11 @@ export async function mintFromWallet(
     scanData.lowCount,
     scanData.reportHash,
   );
+  console.log("[mintFromWallet] tx submitted", tx.hash);
   onTransactionSubmitted?.();
 
   const receipt = await tx.wait();
+  console.log("[mintFromWallet] receipt received", receipt?.hash);
   if (!receipt) {
     throw new Error("Mint transaction did not return a receipt.");
   }

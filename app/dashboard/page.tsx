@@ -299,18 +299,39 @@ export default function DashboardPage() {
   };
 
   const handleMintCertificate = async () => {
-    if (!latestScanData || !walletClient) return;
+    console.log("[mint] click received", {
+      hasLatestScanData: Boolean(latestScanData),
+      hasWalletClient: Boolean(walletClient),
+      isConnected,
+      address,
+      mintStatus,
+    });
+    if (!latestScanData) {
+      console.log("[mint] aborted: missing latestScanData");
+      setMintStatus("error");
+      setMintStatusMessage("Scan data unavailable. Re-run scan before minting.");
+      return;
+    }
+    if (!walletClient) {
+      console.log("[mint] aborted: walletClient unavailable from useWalletClient");
+      setMintStatus("error");
+      setMintStatusMessage("Wallet client unavailable. Reconnect your wallet and try again.");
+      return;
+    }
     try {
       setMintStatus("awaiting_wallet");
       setMintStatusMessage("Waiting for wallet confirmation...");
+      console.log("[mint] calling mintFromWallet");
       const result = await mintFromWallet(
         walletClient,
         latestScanData,
         () => {
+          console.log("[mint] wallet confirmed, tx submitted");
           setMintStatus("minting");
           setMintStatusMessage("Minting certificate...");
         },
       );
+      console.log("[mint] success", result);
       setMintedTokenId(result.tokenId);
       setCertificateExplorerUrl(result.explorerUrl);
       setMintStatus("success");
@@ -326,6 +347,7 @@ export default function DashboardPage() {
         return next;
       });
     } catch (error) {
+      console.log("[mint] error", error);
       const message =
         error instanceof Error ? error.message.toLowerCase() : "Mint failed";
       if (message.includes("user rejected") || message.includes("denied")) {
@@ -458,23 +480,41 @@ export default function DashboardPage() {
               AI-generated findings · always verify with your security team
             </p>
             {scanCompleted && latestScanData && !mintedTokenId ? (
-              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[rgba(167,139,250,0.25)] bg-[rgba(124,58,237,0.08)] px-3 py-2 text-[#D8CEF9]">
-                <div className="flex items-center gap-2 text-xs">
-                  <Sparkles className="h-4 w-4" />
-                  <span>{mintStatusMessage ?? "Scan complete. Mint your security certificate from your wallet."}</span>
+              <div
+                className="mt-3 rounded-xl border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.1)] px-4 py-3 text-[#E6DBFF]"
+                style={{ animation: "borderPulse 2s ease-in-out infinite" }}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-xs">
+                    <ShieldCheck className="h-4 w-4 animate-pulse text-[#A78BFA]" />
+                    <span className="font-medium">
+                      {mintStatusMessage ?? "Scan complete. Mint your security certificate from your wallet."}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-start sm:items-end">
+                    <button
+                      type="button"
+                      onClick={handleMintCertificate}
+                      disabled={
+                        mintStatus === "awaiting_wallet" ||
+                        mintStatus === "minting" ||
+                        !isConnected ||
+                        !walletClient
+                      }
+                      className="rounded-full border border-[rgba(167,139,250,0.55)] bg-[rgba(124,58,237,0.45)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-white shadow-[0_0_18px_rgba(124,58,237,0.5)] transition disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{ animation: "glowBreath 2.4s ease-in-out infinite" }}
+                    >
+                      {mintStatus === "awaiting_wallet"
+                        ? "Waiting for wallet confirmation..."
+                        : mintStatus === "minting"
+                          ? "Minting certificate..."
+                          : "MINT SECURITY CERTIFICATE"}
+                    </button>
+                    <span className="mt-1 font-mono text-[10px] text-[#B6A7E6]">
+                      Sign with your wallet to claim ownership
+                    </span>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleMintCertificate}
-                  disabled={mintStatus === "awaiting_wallet" || mintStatus === "minting" || !isConnected}
-                  className="rounded-full border border-[rgba(167,139,250,0.4)] bg-[rgba(124,58,237,0.35)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {mintStatus === "awaiting_wallet"
-                    ? "Waiting for wallet confirmation..."
-                    : mintStatus === "minting"
-                      ? "Minting certificate..."
-                      : "Mint Security Certificate"}
-                </button>
               </div>
             ) : null}
             {scanCompleted && mintedTokenId ? (
@@ -560,11 +600,33 @@ export default function DashboardPage() {
           iconColor={isConnected ? "bg-[#A78BFA]" : "bg-[#A78BFA]"}
           label="Wallet"
           value={isConnected && address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}
+          fallbackValue="Not connected"
+          deferUntilMounted
         />
         <StatusItem iconColor="bg-[#3B82F6]" label="Storage" value={`${scannedFiles}/${totalFiles}`} />
         <StatusItem iconColor="bg-[#10B981]" label="Inference" value={isScanning ? "Running" : "Idle"} />
         <StatusItem iconColor="bg-[#EF4444]" label="Critical" value={`${findingsSummary.Critical}`} />
       </footer>
+      <style jsx global>{`
+        @keyframes borderPulse {
+          0%, 100% {
+            border-color: rgba(167, 139, 250, 0.35);
+            box-shadow: 0 0 0 rgba(124, 58, 237, 0);
+          }
+          50% {
+            border-color: rgba(167, 139, 250, 0.75);
+            box-shadow: 0 0 20px rgba(124, 58, 237, 0.25);
+          }
+        }
+        @keyframes glowBreath {
+          0%, 100% {
+            box-shadow: 0 0 12px rgba(124, 58, 237, 0.35);
+          }
+          50% {
+            box-shadow: 0 0 26px rgba(124, 58, 237, 0.7);
+          }
+        }
+      `}</style>
     </main>
   );
 }
@@ -992,15 +1054,25 @@ function StatusItem({
   iconColor,
   label,
   value,
+  fallbackValue,
+  deferUntilMounted = false,
 }: {
   iconColor: string;
   label: string;
   value: string;
+  fallbackValue?: string;
+  deferUntilMounted?: boolean;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  const renderedValue =
+    deferUntilMounted && !mounted ? (fallbackValue ?? "Not connected") : value;
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5">
       <span className={`h-1.5 w-1.5 rounded-full ${iconColor}`} />
-      {label}: {value}
+      {label}: {renderedValue}
     </span>
   );
 }
