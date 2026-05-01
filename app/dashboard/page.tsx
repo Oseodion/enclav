@@ -361,7 +361,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="relative flex min-h-screen flex-col overflow-x-hidden bg-black font-geist text-[#F0EEF8]">
+    <main className="relative flex h-screen flex-col overflow-hidden bg-black font-geist text-[#F0EEF8]">
       <AmbientGlow />
       <header className="relative z-10 flex h-[56px] items-center border-b border-white/10 bg-black/80 px-3 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -455,7 +455,7 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="relative z-[1] flex flex-1">
+      <div className="relative z-[1] flex min-h-0 flex-1 overflow-hidden">
         <aside className={`${panelClass} m-3 hidden w-[56px] shrink-0 flex-col items-center gap-1 bg-[rgba(255,255,255,0.02)] py-3 md:flex`}>
           <SidebarIcon icon={Grid2x2} active={activeTab === "scanner"} title="Scanner" onClick={() => setActiveTab("scanner")} />
           <SidebarIcon icon={Code2} active={activeTab === "findings"} title="Findings" onClick={() => setActiveTab("findings")} />
@@ -464,8 +464,8 @@ export default function DashboardPage() {
           <SidebarIcon icon={Settings2} active={activeTab === "settings"} title="Settings" onClick={() => setActiveTab("settings")} />
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col p-3 md:pl-0">
-          <div className={`${panelClass} mb-3 p-3`}>
+        <section className="flex min-w-0 flex-1 flex-col overflow-hidden p-3 md:pl-0">
+          <div className={`${panelClass} sticky top-0 z-10 mb-3 shrink-0 p-3`}>
             <div className="flex flex-col gap-2 md:flex-row">
               <div className="relative flex-1">
                 <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B99B0]" />
@@ -563,7 +563,7 @@ export default function DashboardPage() {
 
           {activeTab === "scanner" ? (
             <div
-              className={`grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1.2fr_0.9fr_280px] ${
+              className={`grid h-full min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[1.2fr_0.9fr_280px] ${
                 isScanning
                   ? "rounded-2xl border border-transparent bg-[linear-gradient(rgba(0,0,0,0.75),rgba(0,0,0,0.75))_padding-box,linear-gradient(120deg,#A78BFA,#7C3AED,#EC4899)_border-box] p-[1px] animate-pulse"
                   : ""
@@ -685,7 +685,10 @@ function LiveScanFeed({
   isScanning: boolean;
 }) {
   return (
-    <section className="relative flex h-[52vh] min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-[''] md:h-auto">
+    <section
+      className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']"
+      style={{ height: "calc(100vh - 280px)" }}
+    >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-2">
           <ScanSearch className="h-4 w-4 text-[#7C3AED]" />
@@ -802,14 +805,17 @@ function ScanStatus({
   scanCompleted: boolean;
 }) {
   return (
-    <section className={`${panelClass} min-h-0`}>
+    <section
+      className={`${panelClass} flex min-h-0 flex-col overflow-hidden`}
+      style={{ height: "calc(100vh - 280px)" }}
+    >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <h3 className="font-semibold text-[#F0EEF8]">Scan Status</h3>
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
           {isScanning ? "Running" : scanCompleted ? "Complete" : "Waiting"}
         </span>
       </div>
-      <div className="space-y-4 p-4">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Current file
@@ -958,7 +964,7 @@ function FindingsTab({
   onFilterChange: (value: SeverityFilter) => void;
 }) {
   return (
-    <section className={`${panelClass} min-h-0 p-4`}>
+    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4`}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-[#F0EEF8]">Findings</h3>
         <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
@@ -1008,7 +1014,7 @@ function FindingsTab({
 
 function HistoryTab({ history }: { history: ScanHistoryEntry[] }) {
   return (
-    <section className={`${panelClass} min-h-0 p-4`}>
+    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4`}>
       <h3 className="mb-3 text-sm font-semibold text-[#F0EEF8]">Scan History</h3>
       {history.length === 0 ? (
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
@@ -1046,7 +1052,7 @@ function SettingsTab({
   onDisconnect: () => void;
 }) {
   return (
-    <section className={`${panelClass} min-h-0 p-4`}>
+    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4`}>
       <h3 className="mb-3 text-sm font-semibold text-[#F0EEF8]">Settings</h3>
       <div className="space-y-2 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3 font-mono text-xs">
         <p className="text-[#9B99B0]">Wallet: <span className="text-[#F0EEF8]">{isConnected && address ? address : "Not connected"}</span></p>
