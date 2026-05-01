@@ -75,11 +75,34 @@ export async function POST(request: Request) {
   const body = (await request.json()) as ScanRequestBody;
   const repoUrl = body.repoUrl?.trim();
   const walletAddress = body.walletAddress?.trim();
+  const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY?.trim();
 
   if (!repoUrl || !walletAddress) {
     return new Response(
       JSON.stringify({ error: "repoUrl and walletAddress are required." }),
       { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (!deployerPrivateKey) {
+    return new Response(
+      JSON.stringify({
+        error: "DEPLOYER_PRIVATE_KEY is required and must be a valid 0x-prefixed 32-byte hex string.",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (
+    !deployerPrivateKey.startsWith("0x") ||
+    deployerPrivateKey.length !== 66
+  ) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Invalid DEPLOYER_PRIVATE_KEY format. Expected 0x-prefixed 32-byte key (66 characters).",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -142,12 +165,7 @@ export async function POST(request: Request) {
 
       try {
         const provider = new ethers.JsonRpcProvider("https://evmrpc-testnet.0g.ai");
-        const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-        if (!privateKey) {
-          throw new Error("DEPLOYER_PRIVATE_KEY is required.");
-        }
-
-        const signer = new ethers.Wallet(privateKey, provider);
+        const signer = new ethers.Wallet(deployerPrivateKey, provider);
         const broker = await initializeComputeAccount(signer);
         const runStorageUploadSequentially = createSequentialTaskRunner();
 
@@ -236,9 +254,8 @@ export async function POST(request: Request) {
       } finally {
         try {
           const provider = new ethers.JsonRpcProvider("https://evmrpc-testnet.0g.ai");
-          const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-          if (privateKey) {
-            const signer = new ethers.Wallet(privateKey, provider);
+          if (deployerPrivateKey) {
+            const signer = new ethers.Wallet(deployerPrivateKey, provider);
             const summaryReport = {
               repoUrl,
               scanDate: new Date().toISOString(),

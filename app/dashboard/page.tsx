@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Code2,
   Database,
+  ExternalLink,
   Grid2x2,
   Link2,
   ScanSearch,
@@ -378,11 +379,6 @@ function FindingCard({ finding }: { finding: Finding }) {
 
         <div className="min-w-0">
           <p className="mb-1 text-[14px] font-medium text-[#F4F2FF]">{finding.description}</p>
-          <p className="mb-2 mt-[10px] text-[12px] leading-[1.6] text-[#9B99B0]">Suggested fix: {finding.fix}</p>
-          <span className="inline-flex items-center gap-1.5 rounded-[4px] border border-[0.5px] border-[rgba(110,231,183,0.45)] bg-[rgba(16,185,129,0.08)] px-2 py-[3px] font-mono text-[10px] text-[#6EE7B7]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
-            TEEML {shortHash(finding.attestationHash)}
-          </span>
         </div>
 
         <div className="flex flex-col items-end gap-1.5 text-right font-mono text-[11px] text-[#9B99B0]">
@@ -413,20 +409,15 @@ function FindingCard({ finding }: { finding: Finding }) {
             href={learnMoreHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#A78BFA] underline-offset-2 hover:underline"
+            className="inline-flex items-center gap-1 text-[11px] text-[#A78BFA] transition hover:underline"
           >
             Learn more
+            <ExternalLink className="h-3 w-3" />
           </a>
         </div>
       </div>
     </article>
   );
-}
-
-function shortHash(value: string) {
-  if (!value) return "—";
-  if (value.length < 12) return value;
-  return `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
 function ScanStatus({
