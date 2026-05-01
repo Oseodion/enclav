@@ -31,8 +31,6 @@ type Finding = {
   line: number;
   description: string;
   fix: string;
-  vulnerableCode?: string;
-  suggestedCode?: string;
   attestationHash: string;
 };
 
@@ -138,8 +136,6 @@ export default function DashboardPage() {
                   line: number;
                   issue: string;
                   fix: string;
-                  vulnerableCode?: string;
-                  suggestedCode?: string;
                 };
                 attestationHash: string;
               }
@@ -164,8 +160,6 @@ export default function DashboardPage() {
                 line: event.finding.line,
                 description: event.finding.issue,
                 fix: event.finding.fix,
-                vulnerableCode: event.finding.vulnerableCode,
-                suggestedCode: event.finding.suggestedCode,
                 attestationHash: event.attestationHash,
               },
             ]);
@@ -347,7 +341,7 @@ function LiveScanFeed({
         </span>
       </div>
 
-      <div className="h-full max-h-[620px] space-y-3 overflow-y-auto p-4 pb-12 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="h-full min-h-0 flex-1 space-y-3 overflow-y-auto p-4 pb-[60px] [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
         {findings.length === 0 ? (
           <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
             No findings yet. Start a scan to stream autonomous security results.
@@ -371,14 +365,15 @@ function FindingCard({ finding }: { finding: Finding }) {
     Medium: "bg-[#E6F1FB] text-[#185FA5]",
     Low: "bg-[#E1F5EE] text-[#0F6E56]",
   };
-  const vulnerableCode =
-    finding.vulnerableCode ?? "// Vulnerable snippet unavailable";
-  const suggestedCode =
-    finding.suggestedCode ?? "// Suggested fix snippet unavailable";
+  const learnMoreHref =
+    finding.severity === "Critical" || finding.severity === "High"
+      ? "https://owasp.org/www-project-top-ten/"
+      : "https://owasp.org/www-community/vulnerabilities/";
 
   const onCopyFix = async () => {
+    const copyPayload = `Issue: ${finding.description}\nFix: ${finding.fix}`;
     try {
-      await navigator.clipboard.writeText(suggestedCode);
+      await navigator.clipboard.writeText(copyPayload);
       setCopiedFix(true);
       setTimeout(() => setCopiedFix(false), 1500);
     } catch {
@@ -421,26 +416,22 @@ function FindingCard({ finding }: { finding: Finding }) {
 
       <div
         className={`overflow-hidden transition-[max-height] duration-300 ease-in-out ${
-          expanded ? "max-h-[600px] pt-4" : "max-h-0"
+          expanded ? "max-h-[320px] pt-4" : "max-h-0"
         }`}
       >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="rounded-md border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.08)] p-3">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#FCA5A5]">
-              Vulnerable
-            </p>
-            <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[#FECACA]">
-              {vulnerableCode}
-            </pre>
-          </div>
-          <div className="rounded-md border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.08)] p-3">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#6EE7B7]">
-              Suggested fix
-            </p>
-            <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[#A7F3D0]">
-              {suggestedCode}
-            </pre>
-          </div>
+        <div className="rounded-md border border-white/10 bg-[rgba(255,255,255,0.03)] p-3">
+          <p className="mb-2 text-[12px] leading-[1.6] text-[#9B99B0]">
+            <span className="font-semibold text-[#F0EEF8]">Fix guidance:</span>{" "}
+            {finding.fix}
+          </p>
+          <a
+            href={learnMoreHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#A78BFA] underline-offset-2 hover:underline"
+          >
+            Learn more
+          </a>
         </div>
         <div className="mt-3">
           <button
@@ -453,7 +444,7 @@ function FindingCard({ finding }: { finding: Finding }) {
           </button>
         </div>
         <p className="mt-2 text-[11px] text-[#6B6980]">
-          AI-generated suggestion - review carefully before applying to your codebase
+          AI-generated suggestion - always review with your security team
         </p>
       </div>
     </article>
