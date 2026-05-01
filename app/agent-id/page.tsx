@@ -19,9 +19,14 @@ import { ethers } from "ethers";
 import { useAccount, useConnect } from "wagmi";
 
 const EXPLORER_BASE = "https://chainscan-galileo.0g.ai";
-const INFT_CONTRACT_ADDRESS =
+const PRIMARY_INFT_CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ??
   "0x3052bed0971c6F21967ed8186d6B3B4D431F632f";
+const LEGACY_INFT_CONTRACT_ADDRESS = "0xE4B6b9f3628990ae769816c7ddE7c7bB33076b7c";
+const INFT_CONTRACT_ADDRESSES = [
+  PRIMARY_INFT_CONTRACT_ADDRESS,
+  LEGACY_INFT_CONTRACT_ADDRESS,
+].filter((address, index, all) => Boolean(address) && all.indexOf(address) === index);
 const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
 const CERTIFICATE_EVENT_ABI = [
   "event CertificateMinted(uint256 indexed tokenId, address indexed recipient, string repoUrl, string reportHash)",
@@ -66,39 +71,57 @@ export default function AgentIdPage() {
       try {
         console.log("[agent-id] loading certificate", {
           address,
-          contract: INFT_CONTRACT_ADDRESS,
+          contracts: INFT_CONTRACT_ADDRESSES,
           rpc: OG_RPC_URL,
         });
         const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
-        const contract = new ethers.Contract(
-          INFT_CONTRACT_ADDRESS,
-          CERTIFICATE_EVENT_ABI,
-          provider,
-        );
 
         const iface = new ethers.Interface(CERTIFICATE_EVENT_ABI);
         const eventFragment = iface.getEvent("CertificateMinted");
         if (!eventFragment) {
           throw new Error("CertificateMinted event not found in ABI");
         }
-        const filter = contract.filters.CertificateMinted(null, address);
-        const logs = await contract.queryFilter(filter, 0, "latest");
-        console.log("[agent-id] certificate events found", {
-          count: logs.length,
-          latestTx: logs.at(-1)?.transactionHash ?? null,
-        });
+        const allLogs: Array<{ log: ethers.Log; contractAddress: string }> = [];
+        for (const contractAddress of INFT_CONTRACT_ADDRESSES) {
+          const contract = new ethers.Contract(
+            contractAddress,
+            CERTIFICATE_EVENT_ABI,
+            provider,
+          );
+          const filter = contract.filters.CertificateMinted(null, address);
+          const logs = await contract.queryFilter(filter, 0, "latest");
+          console.log("[agent-id] certificate events found", {
+            contractAddress,
+            count: logs.length,
+            latestTx: logs.at(-1)?.transactionHash ?? null,
+          });
+          for (const log of logs) {
+            allLogs.push({
+              log: log as unknown as ethers.Log,
+              contractAddress,
+            });
+          }
+        }
 
-        if (logs.length === 0) {
+        if (allLogs.length === 0) {
           setCertificate(null);
           return;
         }
 
-        const latestLog = logs[logs.length - 1];
+        allLogs.sort((a, b) => Number(a.log.blockNumber - b.log.blockNumber));
+        const latest = allLogs[allLogs.length - 1];
+        const latestLog = latest.log;
+        const activeContractAddress = latest.contractAddress;
         const parsed = iface.parseLog({
-          topics: latestLog.topics as string[],
+          topics: latestLog.topics,
           data: latestLog.data,
         });
         const tokenId = parsed?.args?.tokenId?.toString() ?? "0";
+        const contract = new ethers.Contract(
+          activeContractAddress,
+          CERTIFICATE_EVENT_ABI,
+          provider,
+        );
         const cert = await contract.getCertificate(tokenId);
 
         setCertificate({
@@ -141,7 +164,7 @@ export default function AgentIdPage() {
   const onChainData = useMemo(() => {
     if (certificate) {
       return {
-        contract: INFT_CONTRACT_ADDRESS,
+        contract: PRIMARY_INFT_CONTRACT_ADDRESS,
         tokenId: certificate.tokenId,
         owner: certificate.owner,
         standard: "ERC-7857",
@@ -151,7 +174,7 @@ export default function AgentIdPage() {
     }
 
     return {
-      contract: INFT_CONTRACT_ADDRESS,
+      contract: PRIMARY_INFT_CONTRACT_ADDRESS,
       tokenId: "Not minted",
       owner: isConnected && address ? address : "Connect wallet",
       standard: "ERC-7857",
@@ -160,7 +183,7 @@ export default function AgentIdPage() {
     };
   }, [address, certificate, formattedScanDate, isConnected]);
 
-  const contractExplorerHref = `${EXPLORER_BASE}/address/${INFT_CONTRACT_ADDRESS}`;
+  const contractExplorerHref = `${EXPLORER_BASE}/address/${PRIMARY_INFT_CONTRACT_ADDRESS}`;
   const txExplorerHref = certificate?.txHash
     ? `${EXPLORER_BASE}/tx/${certificate.txHash}`
     : null;
