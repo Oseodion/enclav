@@ -361,7 +361,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="relative flex h-screen flex-col overflow-hidden bg-black font-geist text-[#F0EEF8]">
+    <main className="relative flex min-h-screen flex-col overflow-x-hidden bg-black font-geist text-[#F0EEF8]">
       <AmbientGlow />
       <header className="relative z-10 flex h-[56px] items-center border-b border-white/10 bg-black/80 px-3 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -418,11 +418,13 @@ export default function DashboardPage() {
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <div className="hidden items-center gap-1.5 rounded-full border border-[rgba(16,185,129,0.2)] bg-[rgba(16,185,129,0.08)] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-[#6EE7B7] sm:flex">
+          <div className="flex items-center gap-1.5 rounded-full border border-[rgba(16,185,129,0.2)] bg-[rgba(16,185,129,0.08)] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[#6EE7B7] sm:px-2.5 sm:py-1 sm:text-[10px]">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#6EE7B7]" />
-            TEE Active
+            TEE
           </div>
-          <WalletConnect />
+          <div className="hidden md:block">
+            <WalletConnect />
+          </div>
           <button
             type="button"
             className="md:hidden"
@@ -433,19 +435,27 @@ export default function DashboardPage() {
           </button>
         </div>
       </header>
+      <div className="relative z-20 border-b border-white/10 bg-black/95 px-3 py-2 md:hidden">
+        <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button type="button" onClick={() => setActiveTab("scanner")} className={`rounded-md border px-3 py-2 text-xs ${activeTab === "scanner" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Scanner</button>
+          <button type="button" onClick={() => setActiveTab("findings")} className={`rounded-md border px-3 py-2 text-xs ${activeTab === "findings" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Findings</button>
+          <button type="button" onClick={() => setActiveTab("history")} className={`rounded-md border px-3 py-2 text-xs ${activeTab === "history" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>History</button>
+          <button type="button" onClick={() => setActiveTab("settings")} className={`rounded-md border px-3 py-2 text-xs ${activeTab === "settings" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Settings</button>
+          <Link href="/agent-id" className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">Certificate</Link>
+        </div>
+      </div>
       {mobileMenuOpen ? (
-        <div className="relative z-20 border-b border-white/10 bg-black/95 px-4 py-2 md:hidden">
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => { setActiveTab("scanner"); setMobileMenuOpen(false); }} className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">Scanner</button>
-            <button type="button" onClick={() => { setActiveTab("findings"); setMobileMenuOpen(false); }} className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">Findings</button>
-            <button type="button" onClick={() => { setActiveTab("history"); setMobileMenuOpen(false); }} className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">History</button>
-            <button type="button" onClick={() => { setActiveTab("settings"); setMobileMenuOpen(false); }} className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">Settings</button>
-            <Link href="/agent-id" className="col-span-2 rounded-md border border-white/10 px-3 py-2 text-center text-xs text-[#F0EEF8]">Certificate</Link>
+        <div className="relative z-20 border-b border-white/10 bg-black/95 px-3 py-2 md:hidden">
+          <div className="flex items-center justify-between gap-2">
+            <WalletConnect />
+            <Link href="/agent-id" className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">
+              Open Certificate
+            </Link>
           </div>
         </div>
       ) : null}
 
-      <div className="relative z-[1] flex min-h-0 flex-1">
+      <div className="relative z-[1] flex flex-1">
         <aside className={`${panelClass} m-3 hidden w-[56px] shrink-0 flex-col items-center gap-1 bg-[rgba(255,255,255,0.02)] py-3 md:flex`}>
           <SidebarIcon icon={Grid2x2} active={activeTab === "scanner"} title="Scanner" onClick={() => setActiveTab("scanner")} />
           <SidebarIcon icon={Code2} active={activeTab === "findings"} title="Findings" onClick={() => setActiveTab("findings")} />
@@ -469,7 +479,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={startScan}
-                className="rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)]"
+                className="w-full rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] md:w-auto"
               >
                 Start Scan
               </button>
@@ -596,15 +606,21 @@ export default function DashboardPage() {
 
       <footer className={`${panelClass} relative z-[5] m-3 mt-0 flex h-[30px] items-center gap-4 overflow-x-auto rounded-xl bg-[rgba(255,255,255,0.02)] px-4 font-mono text-[10px] text-[#9B99B0]`}>
         <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value="0G Galileo" />
-        <StatusItem
-          iconColor={isConnected ? "bg-[#A78BFA]" : "bg-[#A78BFA]"}
-          label="Wallet"
-          value={isConnected && address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}
-          fallbackValue="Not connected"
-          deferUntilMounted
-        />
-        <StatusItem iconColor="bg-[#3B82F6]" label="Storage" value={`${scannedFiles}/${totalFiles}`} />
-        <StatusItem iconColor="bg-[#10B981]" label="Inference" value={isScanning ? "Running" : "Idle"} />
+        <span className="hidden sm:inline-flex">
+          <StatusItem
+            iconColor={isConnected ? "bg-[#A78BFA]" : "bg-[#A78BFA]"}
+            label="Wallet"
+            value={isConnected && address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}
+            fallbackValue="Not connected"
+            deferUntilMounted
+          />
+        </span>
+        <span className="hidden sm:inline-flex">
+          <StatusItem iconColor="bg-[#3B82F6]" label="Storage" value={`${scannedFiles}/${totalFiles}`} />
+        </span>
+        <span className="hidden sm:inline-flex">
+          <StatusItem iconColor="bg-[#10B981]" label="Inference" value={isScanning ? "Running" : "Idle"} />
+        </span>
         <StatusItem iconColor="bg-[#EF4444]" label="Critical" value={`${findingsSummary.Critical}`} />
       </footer>
       <style jsx global>{`
