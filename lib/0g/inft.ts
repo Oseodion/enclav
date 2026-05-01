@@ -31,7 +31,7 @@ export type MintCertificateResult = {
 };
 
 export async function mintFromWallet(
-  walletClient: WalletClient,
+  walletClient: WalletClient | null | undefined,
   scanData: MintScanData,
   onTransactionSubmitted?: () => void,
 ): Promise<MintCertificateResult> {
@@ -42,9 +42,6 @@ export async function mintFromWallet(
   });
   if (!INFT_CONTRACT_ADDRESS) {
     throw new Error("INFT_CONTRACT_ADDRESS is required to mint certificates.");
-  }
-  if (!walletClient) {
-    throw new Error("Connected wallet client is required.");
   }
   const injectedProvider = (
     globalThis as { ethereum?: ethers.Eip1193Provider }

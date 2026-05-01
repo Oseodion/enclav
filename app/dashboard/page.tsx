@@ -312,10 +312,10 @@ export default function DashboardPage() {
       setMintStatusMessage("Scan data unavailable. Re-run scan before minting.");
       return;
     }
-    if (!walletClient) {
-      console.log("[mint] aborted: walletClient unavailable from useWalletClient");
+    if (!(globalThis as { ethereum?: unknown }).ethereum) {
+      console.log("[mint] aborted: no injected wallet provider");
       setMintStatus("error");
-      setMintStatusMessage("Wallet client unavailable. Reconnect your wallet and try again.");
+      setMintStatusMessage("No wallet provider found. Open with MetaMask or a compatible wallet.");
       return;
     }
     try {
@@ -508,8 +508,7 @@ export default function DashboardPage() {
                       disabled={
                         mintStatus === "awaiting_wallet" ||
                         mintStatus === "minting" ||
-                        !isConnected ||
-                        !walletClient
+                        !isConnected
                       }
                       className="rounded-full border border-[rgba(167,139,250,0.55)] bg-[rgba(124,58,237,0.45)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-white shadow-[0_0_18px_rgba(124,58,237,0.5)] transition disabled:cursor-not-allowed disabled:opacity-60"
                       style={{ animation: "glowBreath 2.4s ease-in-out infinite" }}
@@ -682,7 +681,7 @@ function LiveScanFeed({
   isScanning: boolean;
 }) {
   return (
-    <section className="relative min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']">
+    <section className="relative flex h-[52vh] min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-[''] md:h-auto">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-2">
           <ScanSearch className="h-4 w-4 text-[#7C3AED]" />
@@ -693,7 +692,7 @@ function LiveScanFeed({
         </span>
       </div>
 
-      <div className="h-full min-h-0 flex-1 space-y-[12px] overflow-y-auto p-5 pb-[60px] [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="min-h-0 flex-1 space-y-[12px] overflow-y-auto p-5 pb-[60px] [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
         {notices.map((notice) => (
           <div
             key={notice.id}
