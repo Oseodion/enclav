@@ -85,6 +85,11 @@ export async function POST(request: Request) {
   const repoUrl = body.repoUrl?.trim();
   const walletAddress = body.walletAddress?.trim();
   const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY?.trim();
+  const githubToken = process.env.GITHUB_TOKEN?.trim();
+  const githubHeaders: HeadersInit = {
+    Accept: "application/vnd.github.v3+json",
+    ...(githubToken ? { Authorization: `token ${githubToken}` } : {}),
+  };
 
   if (!repoUrl || !walletAddress) {
     return new Response(
@@ -131,19 +136,25 @@ export async function POST(request: Request) {
   const { owner, repo } = parsedRepo;
   const treeRes = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
-    { headers: { Accept: "application/vnd.github+json" } },
+    { headers: githubHeaders },
   );
 
   if (treeRes.status === 404) {
     return new Response(
-      JSON.stringify({ error: "GitHub repository not found." }),
+      JSON.stringify({
+        error:
+          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded — try again in a few minutes.",
+      }),
       { status: 404, headers: { "Content-Type": "application/json" } },
     );
   }
 
   if (treeRes.status === 403) {
     return new Response(
-      JSON.stringify({ error: "Repository is private or GitHub API access is limited." }),
+      JSON.stringify({
+        error:
+          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded — try again in a few minutes.",
+      }),
       { status: 403, headers: { "Content-Type": "application/json" } },
     );
   }
@@ -207,7 +218,7 @@ export async function POST(request: Request) {
           streamChunk(controller, { type: "file", filename: filePath });
 
           const blobRes = await fetch(fileUrl, {
-            headers: { Accept: "application/vnd.github+json" },
+            headers: githubHeaders,
           });
           if (!blobRes.ok) return;
 
