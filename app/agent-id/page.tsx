@@ -21,11 +21,14 @@ import { useAccount, useConnect } from "wagmi";
 const EXPLORER_BASE = "https://chainscan-galileo.0g.ai";
 const PRIMARY_INFT_CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ??
-  "0x3052bed0971c6F21967ed8186d6B3B4D431F632f";
-const LEGACY_INFT_CONTRACT_ADDRESS = "0xE4B6b9f3628990ae769816c7ddE7c7bB33076b7c";
+  "0x8E2225136CaAf9aD28dDBF86e9280DB326AB2464";
+const LEGACY_INFT_CONTRACT_ADDRESSES = [
+  "0x3052bed0971c6F21967ed8186d6B3B4D431F632f",
+  "0xE4B6b9f3628990ae769816c7ddE7c7bB33076b7c",
+];
 const INFT_CONTRACT_ADDRESSES = [
   PRIMARY_INFT_CONTRACT_ADDRESS,
-  LEGACY_INFT_CONTRACT_ADDRESS,
+  ...LEGACY_INFT_CONTRACT_ADDRESSES,
 ].filter((address, index, all) => Boolean(address) && all.indexOf(address) === index);
 const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
 const CERTIFICATE_EVENT_ABI = [

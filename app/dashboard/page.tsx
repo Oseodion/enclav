@@ -88,6 +88,7 @@ export default function DashboardPage() {
   const [scannedFiles, setScannedFiles] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
   const [mintedTokenId, setMintedTokenId] = useState<string | null>(null);
+  const [hasMinted, setHasMinted] = useState(false);
   const [certificateExplorerUrl, setCertificateExplorerUrl] = useState<string | null>(null);
   const [mintStatus, setMintStatus] = useState<
     "idle" | "awaiting_wallet" | "minting" | "success" | "cancelled" | "error"
@@ -133,6 +134,7 @@ export default function DashboardPage() {
       setMintStatus((current) => {
         if (current !== "minting") return current;
         setMintStatusMessage("Certificate minted — check explorer for details");
+        setHasMinted(true);
         return "success";
       });
     }, 35_000);
@@ -197,6 +199,7 @@ export default function DashboardPage() {
     setTotalFiles(0);
     setScanCompleted(false);
     setMintedTokenId(null);
+    setHasMinted(false);
     setCertificateExplorerUrl(null);
     setMintStatus("idle");
     setMintStatusMessage(null);
@@ -412,10 +415,14 @@ export default function DashboardPage() {
       if (message.includes("user rejected") || message.includes("denied")) {
         setMintStatus("cancelled");
         setMintStatusMessage("Certificate minting cancelled");
-        return;
+      } else {
+        setMintStatus("error");
+        setMintStatusMessage(
+          error instanceof Error ? error.message : "Certificate minting failed",
+        );
       }
-      setMintStatus("error");
-      setMintStatusMessage("Certificate minting failed");
+    } finally {
+      setHasMinted(true);
     }
   };
   const handleTabChange = (tab: ActiveTab) => {
@@ -571,7 +578,7 @@ export default function DashboardPage() {
               Supports public GitHub repositories only · Results may vary by codebase ·
               AI-generated findings · always verify with your security team
             </p>
-            {scanCompleted && latestScanData && !mintedTokenId ? (
+            {scanCompleted && latestScanData && !hasMinted ? (
               <div
                 className="mt-3 rounded-xl border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.1)] px-4 py-3 text-[#E6DBFF]"
                 style={{ animation: "borderPulse 2s ease-in-out infinite" }}
@@ -608,18 +615,34 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : null}
-            {scanCompleted && (mintedTokenId || certificateExplorerUrl) ? (
-              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-[rgba(16,185,129,0.25)] bg-[rgba(16,185,129,0.08)] px-3 py-2 text-[#6EE7B7]">
+            {scanCompleted && latestScanData && hasMinted ? (
+              <div
+                className={`mt-3 flex flex-col gap-2 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between ${
+                  mintStatus === "success"
+                    ? "border-[rgba(16,185,129,0.25)] bg-[rgba(16,185,129,0.08)] text-[#6EE7B7]"
+                    : mintStatus === "cancelled"
+                      ? "border-white/10 bg-white/5 text-[#9B99B0]"
+                      : "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-[#FCA5A5]"
+                }`}
+              >
                 <div className="flex items-center gap-2 text-xs">
-                  <Sparkles className="h-4 w-4" />
+                  {mintStatus === "success" ? (
+                    <Sparkles className="h-4 w-4 shrink-0" />
+                  ) : mintStatus === "cancelled" ? (
+                    <Info className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <TriangleAlert className="h-4 w-4 shrink-0" />
+                  )}
                   <span>
-                    {mintedTokenId
-                      ? `Security certificate minted — Token #${mintedTokenId}`
-                      : mintStatusMessage ?? "Certificate minted"}
+                    {mintStatus === "success"
+                      ? mintedTokenId
+                        ? `Security certificate minted — Token #${mintedTokenId}`
+                        : mintStatusMessage ?? "Certificate minted"
+                      : (mintStatusMessage ?? "Mint attempt finished.")}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  {certificateExplorerUrl ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  {mintStatus === "success" && certificateExplorerUrl ? (
                     <a
                       href={certificateExplorerUrl}
                       target="_blank"
@@ -629,13 +652,19 @@ export default function DashboardPage() {
                       Explorer
                     </a>
                   ) : null}
-                  <Link
-                    href="/agent-id"
-                    onClick={guardNavigation}
-                    className="rounded-full border border-[rgba(167,139,250,0.4)] bg-[rgba(124,58,237,0.35)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white"
-                  >
-                    View Certificate
-                  </Link>
+                  {mintStatus === "success" ? (
+                    <Link
+                      href={
+                        mintedTokenId
+                          ? `/agent-id?tokenId=${encodeURIComponent(mintedTokenId)}`
+                          : "/agent-id"
+                      }
+                      onClick={guardNavigation}
+                      className="rounded-full border border-[rgba(167,139,250,0.4)] bg-[rgba(124,58,237,0.35)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white"
+                    >
+                      View Certificate
+                    </Link>
+                  ) : null}
                 </div>
               </div>
             ) : null}

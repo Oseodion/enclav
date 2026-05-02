@@ -1,19 +1,16 @@
-import { ethers } from "ethers";
+import { ethers, type InterfaceAbi } from "ethers";
 import type { WalletClient } from "viem";
+import EnclavAbi from "./enclav-abi.json";
 
 export const INFT_CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ??
-  "0xE4B6b9f3628990ae769816c7ddE7c7bB33076b7c";
+  "0x8E2225136CaAf9aD28dDBF86e9280DB326AB2464";
 export const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
 const CHAINSCAN_BASE_URL = "https://chainscan-galileo.0g.ai";
 const OG_GALILEO_CHAIN_ID = 16602;
 const OG_GALILEO_CHAIN_ID_HEX = "0x40da";
 
-const ENCLAV_ABI = [
-  "function mintCertificate(address recipient,string repoUrl,string scanDate,uint256 filesScanned,uint256 totalFindings,uint256 criticalCount,uint256 highCount,uint256 mediumCount,uint256 lowCount,string reportHash) external returns (uint256)",
-  "function balanceOf(address owner) view returns (uint256)",
-  "event CertificateMinted(uint256 indexed tokenId, address indexed recipient, string repoUrl, string reportHash)",
-] as const;
+const ENCLAV_ABI = EnclavAbi as InterfaceAbi;
 
 export type MintScanData = {
   repoUrl: string;
@@ -39,8 +36,8 @@ export async function mintFromWallet(
   scanData: MintScanData,
   onTransactionSubmitted?: (txHash: string) => void,
 ): Promise<MintCertificateResult> {
+  void walletClient;
   console.log("[mintFromWallet] starting", {
-    hasWalletClient: Boolean(walletClient),
     contract: INFT_CONTRACT_ADDRESS,
     repoUrl: scanData.repoUrl,
   });
@@ -52,7 +49,6 @@ export async function mintFromWallet(
   ).ethereum;
   if (!injectedProvider) throw new Error("No injected wallet provider found.");
 
-  // Ensure wallet is connected to 0G Galileo before minting.
   const currentChainHex = (await injectedProvider.request({
     method: "eth_chainId",
   })) as string;
@@ -101,7 +97,7 @@ export async function mintFromWallet(
   console.log("[mintFromWallet] signer address", walletAddress);
   const contract = new ethers.Contract(INFT_CONTRACT_ADDRESS, ENCLAV_ABI, signer);
 
-  const tx = await contract.mintCertificate(
+  const mintArgs = [
     walletAddress,
     scanData.repoUrl,
     scanData.scanDate,
@@ -112,41 +108,84 @@ export async function mintFromWallet(
     scanData.mediumCount,
     scanData.lowCount,
     scanData.reportHash,
-  );
+  ] as const;
+
+  let gasLimit: bigint | undefined;
+  try {
+    const gasEstimate = await contract.mintCertificate.estimateGas(...mintArgs);
+    gasLimit = (gasEstimate * BigInt(135)) / BigInt(100) + BigInt(25_000);
+  } catch {
+    gasLimit = BigInt(1_800_000);
+  }
+
+  const tx = await contract.mintCertificate(...mintArgs, { gasLimit });
   console.log("[mintFromWallet] tx submitted", tx.hash);
   onTransactionSubmitted?.(tx.hash);
 
-  const receipt = await Promise.race([
-    tx.wait(),
-    new Promise<null>((resolve) => {
-      setTimeout(() => resolve(null), 30_000);
-    }),
-  ]);
+  let receipt =
+    (await Promise.race([
+      tx.wait(),
+      new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), 30_000);
+      }),
+    ])) ?? null;
+
+  if (!receipt) {
+    receipt =
+      (await provider.getTransactionReceipt(tx.hash).catch(() => null)) ?? null;
+  }
+
   console.log("[mintFromWallet] receipt received", receipt?.hash);
 
   let tokenId: string | null = null;
+  const iface = contract.interface;
+
   if (receipt) {
     for (const log of receipt.logs) {
       try {
-        const parsed = contract.interface.parseLog(log);
+        const parsed = iface.parseLog({
+          topics: log.topics as string[],
+          data: log.data,
+        });
         if (parsed?.name === "CertificateMinted") {
-          tokenId = parsed.args.tokenId.toString();
-          break;
+          const id = parsed.args.tokenId ?? parsed.args[0];
+          tokenId =
+            typeof id === "bigint"
+              ? id.toString()
+              : id !== undefined && id !== null
+                ? String(id)
+                : null;
+          if (tokenId) break;
         }
       } catch {
         continue;
       }
     }
-  }
 
-  if (!tokenId) {
-    try {
-      const balance = await contract.balanceOf(walletAddress);
-      if (balance && balance > BigInt(0)) {
-        tokenId = balance.toString();
+    if (!tokenId) {
+      for (const log of receipt.logs) {
+        try {
+          const parsed = iface.parseLog({
+            topics: log.topics as string[],
+            data: log.data,
+          });
+          if (parsed?.name === "Transfer") {
+            const from = (parsed.args.from ?? parsed.args[0]) as string;
+            const id = parsed.args.tokenId ?? parsed.args[2];
+            if (from?.toLowerCase() === ethers.ZeroAddress.toLowerCase()) {
+              tokenId =
+                typeof id === "bigint"
+                  ? id.toString()
+                  : id !== undefined && id !== null
+                    ? String(id)
+                    : null;
+              if (tokenId) break;
+            }
+          }
+        } catch {
+          continue;
+        }
       }
-    } catch (error) {
-      console.log("[mintFromWallet] balanceOf fallback failed", error);
     }
   }
 
