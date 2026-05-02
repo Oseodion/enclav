@@ -852,7 +852,7 @@ function ScanStatus({
           {isScanning ? "Running" : scanCompleted ? "Complete" : "Waiting"}
         </span>
       </div>
-      <div className="space-y-4 p-4">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Current file
@@ -915,7 +915,7 @@ function RightPanelSummary({
   mintedTokenId: string | null;
 }) {
   return (
-    <aside className={`${panelClass} hidden min-h-0 flex-col xl:flex`}>
+    <aside className={`${panelClass} hidden h-full min-h-0 flex-col overflow-y-auto xl:flex [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent`}>
       <div className="border-b border-white/10 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
@@ -1002,6 +1002,7 @@ function FindingsTab({
   severityFilter: SeverityFilter;
   onFilterChange: (value: SeverityFilter) => void;
 }) {
+  const [expandedFixId, setExpandedFixId] = useState<string | null>(null);
   return (
     <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4`}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -1035,18 +1036,44 @@ function FindingsTab({
         <div className="space-y-3">
           {findings.map((finding, index) => (
             <div key={`${finding.file}-${finding.line}-${index}`} className="rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
+              {(() => {
+                const fixId = `${finding.file}:${finding.line}:${index}`;
+                const isExpanded = expandedFixId === fixId;
+                return (
+                  <>
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="rounded bg-[rgba(124,58,237,0.2)] px-2 py-0.5 font-mono text-[10px] uppercase text-[#E9E4FF]">
                   {finding.severity}
                 </span>
-                <button type="button" className="rounded border border-[rgba(167,139,250,0.4)] px-2 py-1 font-mono text-[10px] uppercase text-[#E9E4FF]">
-                  View Fix
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedFixId((prev) =>
+                      prev === fixId
+                        ? null
+                        : fixId,
+                    )
+                  }
+                  className="rounded border border-[rgba(167,139,250,0.4)] px-2 py-1 font-mono text-[10px] uppercase text-[#E9E4FF]"
+                >
+                  {isExpanded ? "Hide Fix" : "View Fix"}
                 </button>
               </div>
               <p className="text-sm text-[#F4F2FF]">{finding.description}</p>
               <p className="font-mono text-[11px] text-[#9B99B0]">
                 {finding.file}:{finding.line}
               </p>
+              {isExpanded ? (
+                <div className="mt-2 rounded-md border border-white/10 bg-[rgba(255,255,255,0.03)] p-2.5">
+                  <p className="text-[12px] text-[#9B99B0]">
+                    <span className="font-semibold text-[#F0EEF8]">Fix guidance:</span>{" "}
+                    {finding.fix}
+                  </p>
+                </div>
+              ) : null}
+                  </>
+                );
+              })()}
             </div>
           ))}
         </div>
