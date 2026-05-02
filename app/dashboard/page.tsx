@@ -506,7 +506,15 @@ export default function DashboardPage() {
         <div className="relative z-20 border-b border-white/10 bg-black/95 px-3 py-2 md:hidden">
           <div className="flex items-center justify-between gap-2">
             <WalletConnect />
-            <Link href="/agent-id" className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">
+            <Link
+              href="/agent-id"
+              onClick={guardNavigation}
+              className={`rounded-md border px-3 py-2 text-xs ${
+                scanLocked
+                  ? "cursor-not-allowed border-white/5 text-[#4A475C]"
+                  : "border-white/10 text-[#F0EEF8]"
+              }`}
+            >
               Open Certificate
             </Link>
           </div>
@@ -549,11 +557,6 @@ export default function DashboardPage() {
               Supports public GitHub repositories only · Results may vary by codebase ·
               AI-generated findings · always verify with your security team
             </p>
-            {isScanning ? (
-              <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.06em] text-[#A78BFA]">
-                Scan in progress — navigation is temporarily locked
-              </p>
-            ) : null}
             {scanCompleted && latestScanData && !mintedTokenId ? (
               <div
                 className="mt-3 rounded-xl border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.1)] px-4 py-3 text-[#E6DBFF]"
@@ -948,9 +951,15 @@ function RightPanelSummary({
       <div className="border-b border-white/10 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
-          <Link href="/agent-id" className="rounded border border-[rgba(167,139,250,0.25)] bg-[rgba(139,92,246,0.1)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#A78BFA]">
-            View INFT
-          </Link>
+          <span
+            className={`rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] ${
+              mintedTokenId
+                ? "border-[rgba(167,139,250,0.25)] bg-[rgba(139,92,246,0.1)] text-[#A78BFA]"
+                : "border-white/10 bg-white/5 text-[#4A475C]"
+            }`}
+          >
+            {mintedTokenId ? `Token #${mintedTokenId}` : "Not minted"}
+          </span>
         </div>
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
           <ShieldCheck className="mb-2 h-5 w-5 text-[#A78BFA]" />
