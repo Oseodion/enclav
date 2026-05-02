@@ -49,11 +49,15 @@ type CertificateData = {
 };
 
 type CopyTarget = "contract" | "owner" | null;
+const SCAN_HISTORY_KEY = "enclav-scan-history-v1";
+const getWalletHistoryKey = (walletAddress?: string) =>
+  walletAddress ? `${SCAN_HISTORY_KEY}:${walletAddress.toLowerCase()}` : null;
 
 export default function AgentIdPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [copied, setCopied] = useState<CopyTarget>(null);
   const [certificate, setCertificate] = useState<CertificateData | null>(null);
+  const [storedTxHash, setStoredTxHash] = useState<string | null>(null);
   const [isLoadingCertificate, setIsLoadingCertificate] = useState(false);
   const [hasFetchedCertificate, setHasFetchedCertificate] = useState(false);
   const { address, isConnected } = useAccount();
@@ -150,6 +154,27 @@ export default function AgentIdPage() {
     void loadCertificate();
   }, [address, isConnected]);
 
+  useEffect(() => {
+    if (!isConnected || !address) {
+      setStoredTxHash(null);
+      return;
+    }
+    try {
+      const key = getWalletHistoryKey(address);
+      if (!key) return;
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        setStoredTxHash(null);
+        return;
+      }
+      const parsed = JSON.parse(raw) as Array<{ txHash?: string | null }>;
+      const latestWithTx = parsed.find((item) => !!item.txHash);
+      setStoredTxHash(latestWithTx?.txHash ?? null);
+    } catch {
+      setStoredTxHash(null);
+    }
+  }, [address, isConnected]);
+
   const formattedScanDate = certificate?.scanDate
     ? `${new Date(certificate.scanDate).toLocaleDateString("en-US", {
         month: "short",
@@ -184,8 +209,8 @@ export default function AgentIdPage() {
   }, [address, certificate, formattedScanDate, isConnected]);
 
   const contractExplorerHref = `${EXPLORER_BASE}/address/${PRIMARY_INFT_CONTRACT_ADDRESS}`;
-  const txExplorerHref = certificate?.txHash
-    ? `${EXPLORER_BASE}/tx/${certificate.txHash}`
+  const txExplorerHref = certificate?.txHash ?? storedTxHash
+    ? `${EXPLORER_BASE}/tx/${certificate?.txHash ?? storedTxHash}`
     : null;
   const hasCertificate = Boolean(certificate);
   const dynamicCapabilityTags = hasCertificate

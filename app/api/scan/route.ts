@@ -1,8 +1,6 @@
 import { ethers } from "ethers";
-import {
-  initializeComputeAccount,
-  scanFileForVulnerabilities,
-} from "@/lib/0g/compute";
+import { initializeComputeAccount } from "@/lib/0g/compute";
+import { runSecurityScan } from "@/lib/openclaw/agent";
 import { uploadFile } from "@/lib/0g/storage";
 
 type ScanRequestBody = {
@@ -233,10 +231,17 @@ export async function POST(request: Request) {
               ),
             );
             const result = await withTimeout(
-              scanFileForVulnerabilities(broker, filePath, decodedContent),
+              runSecurityScan(
+                repoUrl,
+                [{ path: filePath, content: decodedContent }],
+                { broker },
+              ).then((items) => items[0]),
               COMPUTE_SCAN_TIMEOUT_MS,
               `Compute scan for ${filePath}`,
             );
+            if (!result) {
+              throw new Error("OpenClaw scan returned no result.");
+            }
 
             for (const finding of result.findings) {
               totalFindings += 1;

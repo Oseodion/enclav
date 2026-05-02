@@ -56,6 +56,7 @@ type ScanHistoryEntry = {
   reportHash: string;
   findings: Finding[];
   tokenId?: string | null;
+  txHash?: string | null;
   explorerUrl?: string | null;
 };
 
@@ -374,7 +375,12 @@ export default function DashboardPage() {
         if (prev.length === 0) return prev;
         const [first, ...rest] = prev;
         const next = [
-          { ...first, tokenId: result.tokenId ?? undefined, explorerUrl: result.explorerUrl },
+          {
+            ...first,
+            tokenId: result.tokenId ?? undefined,
+            txHash: result.txHash,
+            explorerUrl: result.explorerUrl,
+          },
           ...rest,
         ];
         const walletHistoryKey = getWalletHistoryKey(address);
