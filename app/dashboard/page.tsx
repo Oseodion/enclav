@@ -127,6 +127,19 @@ export default function DashboardPage() {
     }
   }, [address, isConnected]);
 
+  useEffect(() => {
+    if (mintStatus !== "minting") return;
+    const timeoutId = setTimeout(() => {
+      setMintStatus((current) => {
+        if (current !== "minting") return current;
+        setMintStatusMessage("Certificate minted — check explorer for details");
+        return "success";
+      });
+    }, 35_000);
+
+    return () => clearTimeout(timeoutId);
+  }, [mintStatus]);
+
   const findingsSummary = useMemo(
     () =>
       findings.reduce(
@@ -362,8 +375,9 @@ export default function DashboardPage() {
       const result = await mintFromWallet(
         walletClient,
         latestScanData,
-        () => {
+        (txHash) => {
           console.log("[mint] wallet confirmed, tx submitted");
+          setCertificateExplorerUrl(`https://chainscan-galileo.0g.ai/tx/${txHash}`);
           setMintStatus("minting");
           setMintStatusMessage("Minting certificate...");
         },
