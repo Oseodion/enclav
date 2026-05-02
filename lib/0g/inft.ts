@@ -33,6 +33,11 @@ export type MintCertificateResult = {
   proofLabel: string;
 };
 
+export type MintFromWalletOptions = {
+  /** From wagmi `useChainId()` — used with `eth_chainId` to detect Galileo reliably. */
+  wagmiChainId?: number;
+};
+
 function extractMintFailureMessage(error: unknown): string {
   if (typeof error === "object" && error !== null) {
     const o = error as {
@@ -60,16 +65,82 @@ function getWalletRpcErrorCode(error: unknown): number | undefined {
 }
 
 /**
+ * Normalizes `eth_chainId` responses (hex string, plain hex, decimal string, or number).
+ */
+async function readWalletChainIdFromProvider(injectedProvider: ethers.Eip1193Provider): Promise<{
+  rawRpcValue: unknown;
+  normalizedHex: string;
+  decimal: number;
+}> {
+  const rawRpcValue = await injectedProvider.request({ method: "eth_chainId" });
+  let normalizedHex: string;
+
+  if (typeof rawRpcValue === "string") {
+    const t = rawRpcValue.trim();
+    if (/^0x[0-9a-fA-F]+$/i.test(t)) {
+      normalizedHex = `0x${t.slice(2).toLowerCase()}`;
+    } else if (/^[0-9a-fA-F]+$/i.test(t) && /[a-fA-F]/.test(t)) {
+      normalizedHex = `0x${t.toLowerCase()}`;
+    } else if (/^\d+$/.test(t)) {
+      normalizedHex = `0x${BigInt(t).toString(16)}`;
+    } else {
+      normalizedHex = "0x0";
+    }
+  } else if (typeof rawRpcValue === "number" && Number.isFinite(rawRpcValue)) {
+    normalizedHex = `0x${BigInt(Math.trunc(rawRpcValue)).toString(16)}`;
+  } else {
+    normalizedHex = "0x0";
+  }
+
+  let decimal: number;
+  try {
+    decimal = Number(BigInt(normalizedHex));
+  } catch {
+    decimal = Number.NaN;
+  }
+
+  console.log("[mintFromWallet] eth_chainId raw rpc:", rawRpcValue, "normalized:", normalizedHex, "parsed decimal:", decimal);
+
+  return { rawRpcValue, normalizedHex, decimal };
+}
+
+function isGalileoChain(ethDecimal: number, wagmiChainId?: number): boolean {
+  const ethOk = ethDecimal === OG_GALILEO_CHAIN_ID;
+  const wagmiOk =
+    typeof wagmiChainId === "number" &&
+    Number.isFinite(wagmiChainId) &&
+    wagmiChainId === OG_GALILEO_CHAIN_ID;
+  return ethOk || wagmiOk;
+}
+
+/**
  * Forces the injected wallet onto 0G Galileo (16602) before any mint RPC.
  */
-async function ensureWalletOnGalileo(injectedProvider: ethers.Eip1193Provider): Promise<void> {
-  const readChain = async () =>
-    Number.parseInt(
-      (await injectedProvider.request({ method: "eth_chainId" })) as string,
-      16,
-    );
+async function ensureWalletOnGalileo(
+  injectedProvider: ethers.Eip1193Provider,
+  wagmiChainId?: number,
+): Promise<void> {
+  const snap = await readWalletChainIdFromProvider(injectedProvider);
+  console.log("[ensureWalletOnGalileo] chain snapshot", {
+    ethChainIdHex: snap.normalizedHex,
+    ethChainIdDecimal: snap.decimal,
+    wagmiChainId,
+    expected: OG_GALILEO_CHAIN_ID,
+  });
 
-  if ((await readChain()) === OG_GALILEO_CHAIN_ID) return;
+  if (isGalileoChain(snap.decimal, wagmiChainId)) {
+    if (
+      typeof wagmiChainId === "number" &&
+      Number.isFinite(wagmiChainId) &&
+      snap.decimal !== wagmiChainId
+    ) {
+      console.warn("[ensureWalletOnGalileo] eth_chainId decimal vs wagmi useChainId differ", {
+        eth_chainId_decimal: snap.decimal,
+        wagmiChainId,
+      });
+    }
+    return;
+  }
 
   try {
     await injectedProvider.request({
@@ -108,9 +179,10 @@ async function ensureWalletOnGalileo(injectedProvider: ethers.Eip1193Provider): 
     }
   }
 
-  if ((await readChain()) !== OG_GALILEO_CHAIN_ID) {
+  const after = await readWalletChainIdFromProvider(injectedProvider);
+  if (after.decimal !== OG_GALILEO_CHAIN_ID) {
     throw new Error(
-      `Wallet must be on 0G Galileo testnet (chain ID ${OG_GALILEO_CHAIN_ID}) to mint. Current chain does not match.`,
+      `Wallet must be on 0G Galileo testnet (chain ID ${OG_GALILEO_CHAIN_ID}) to mint. eth_chainId is ${after.normalizedHex} (decimal ${after.decimal}).`,
     );
   }
 }
@@ -119,11 +191,14 @@ export async function mintFromWallet(
   walletClient: WalletClient | null | undefined,
   scanData: MintScanData,
   onTransactionSubmitted?: (txHash: string) => void,
+  options?: MintFromWalletOptions,
 ): Promise<MintCertificateResult> {
   void walletClient;
+  const wagmiChainId = options?.wagmiChainId;
   console.log("[mintFromWallet] starting", {
     contract: INFT_CONTRACT_ADDRESS,
     repoUrl: scanData.repoUrl,
+    wagmiChainId,
   });
   if (!INFT_CONTRACT_ADDRESS) {
     throw new Error("INFT_CONTRACT_ADDRESS is required to mint certificates.");
@@ -133,17 +208,16 @@ export async function mintFromWallet(
   ).ethereum;
   if (!injectedProvider) throw new Error("No injected wallet provider found.");
 
-  await ensureWalletOnGalileo(injectedProvider);
+  await ensureWalletOnGalileo(injectedProvider, wagmiChainId);
 
   const provider = new ethers.BrowserProvider(injectedProvider);
   await provider.send("eth_requestAccounts", []);
   const signer = await provider.getSigner();
   const walletAddress = await signer.getAddress();
 
-  const chainIdHex = (await injectedProvider.request({
-    method: "eth_chainId",
-  })) as string;
-  const chainIdDec = Number.parseInt(chainIdHex, 16);
+  const chainSnap = await readWalletChainIdFromProvider(injectedProvider);
+  const chainIdHex = chainSnap.normalizedHex;
+  const chainIdDec = chainSnap.decimal;
 
   const codeHex = (await injectedProvider.request({
     method: "eth_getCode",
@@ -155,6 +229,7 @@ export async function mintFromWallet(
     contractAddress: INFT_CONTRACT_ADDRESS,
     walletChainIdHex: chainIdHex,
     walletChainIdDecimal: chainIdDec,
+    wagmiChainId,
     signerAddress: walletAddress,
     ethGetCodeLengthChars: typeof codeHex === "string" ? codeHex.length : 0,
     contractBytecodePresent: hasContractBytecode,
