@@ -21,7 +21,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { WalletConnect } from "@/components/ui/WalletConnect";
 import { INFT_CONTRACT_ADDRESS, mintFromWallet, type MintScanData } from "@/lib/0g/inft";
 import { useWallet } from "@/lib/wallet";
@@ -93,6 +93,7 @@ export default function DashboardPage() {
     "idle" | "awaiting_wallet" | "minting" | "success" | "cancelled" | "error"
   >("idle");
   const [mintStatusMessage, setMintStatusMessage] = useState<string | null>(null);
+  const scanLocked = isScanning;
 
   useEffect(() => {
     if (!isConnected || !address) {
@@ -166,6 +167,7 @@ export default function DashboardPage() {
   };
 
   const startScan = async () => {
+    if (isScanning) return;
     const trimmedRepoUrl = repoUrl.trim();
     if (!trimmedRepoUrl) return;
     if (!isConnected || !address) {
@@ -402,6 +404,14 @@ export default function DashboardPage() {
       setMintStatusMessage("Certificate minting failed");
     }
   };
+  const handleTabChange = (tab: ActiveTab) => {
+    if (scanLocked) return;
+    setActiveTab(tab);
+  };
+  const guardNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!scanLocked) return;
+    event.preventDefault();
+  };
 
   return (
     <main className="relative flex h-screen flex-col overflow-hidden bg-black font-geist text-[#F0EEF8]">
@@ -439,7 +449,12 @@ export default function DashboardPage() {
               <Link
                 key={item.label}
                 href={item.href ?? "/agent-id"}
-                className="h-full border-b-2 border-transparent px-4 font-mono text-[11px] uppercase tracking-[0.08em] text-[#9B99B0] hover:text-[#F0EEF8]"
+                onClick={guardNavigation}
+                className={`h-full border-b-2 border-transparent px-4 font-mono text-[11px] uppercase tracking-[0.08em] ${
+                  scanLocked
+                    ? "cursor-not-allowed text-[#4A475C]"
+                    : "text-[#9B99B0] hover:text-[#F0EEF8]"
+                }`}
               >
                 <span className="inline-flex h-full items-center">{item.label}</span>
               </Link>
@@ -447,7 +462,7 @@ export default function DashboardPage() {
               <button
                 key={item.label}
                 type="button"
-                onClick={() => setActiveTab(item.key)}
+                onClick={() => handleTabChange(item.key)}
                 className={`h-full border-b-2 px-4 font-mono text-[11px] uppercase tracking-[0.08em] ${
                   activeTab === item.key
                     ? "border-[#7C3AED] bg-[rgba(124,58,237,0.12)] text-[#F0EEF8]"
@@ -480,11 +495,11 @@ export default function DashboardPage() {
       </header>
       <div className="relative z-20 border-b border-white/10 bg-black/95 px-3 py-2 md:hidden">
         <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <button type="button" onClick={() => setActiveTab("scanner")} className={`rounded-md border px-3 py-2 text-xs ${activeTab === "scanner" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Scanner</button>
-          <button type="button" onClick={() => setActiveTab("findings")} className={`rounded-md border px-3 py-2 text-xs ${activeTab === "findings" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Findings</button>
-          <button type="button" onClick={() => setActiveTab("history")} className={`rounded-md border px-3 py-2 text-xs ${activeTab === "history" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>History</button>
-          <button type="button" onClick={() => setActiveTab("settings")} className={`rounded-md border px-3 py-2 text-xs ${activeTab === "settings" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Settings</button>
-          <Link href="/agent-id" className="rounded-md border border-white/10 px-3 py-2 text-xs text-[#F0EEF8]">Certificate</Link>
+          <button type="button" disabled={scanLocked} onClick={() => handleTabChange("scanner")} className={`rounded-md border px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${activeTab === "scanner" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Scanner</button>
+          <button type="button" disabled={scanLocked} onClick={() => handleTabChange("findings")} className={`rounded-md border px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${activeTab === "findings" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Findings</button>
+          <button type="button" disabled={scanLocked} onClick={() => handleTabChange("history")} className={`rounded-md border px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${activeTab === "history" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>History</button>
+          <button type="button" disabled={scanLocked} onClick={() => handleTabChange("settings")} className={`rounded-md border px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${activeTab === "settings" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Settings</button>
+          <Link onClick={guardNavigation} href="/agent-id" className={`rounded-md border px-3 py-2 text-xs ${scanLocked ? "cursor-not-allowed border-white/5 text-[#4A475C]" : "border-white/10 text-[#F0EEF8]"}`}>Certificate</Link>
         </div>
       </div>
       {mobileMenuOpen ? (
@@ -500,11 +515,11 @@ export default function DashboardPage() {
 
       <div className="relative z-[1] flex min-h-0 flex-1 overflow-hidden">
         <aside className={`${panelClass} m-3 hidden w-[56px] shrink-0 flex-col items-center gap-1 bg-[rgba(255,255,255,0.02)] py-3 md:flex`}>
-          <SidebarIcon icon={Grid2x2} active={activeTab === "scanner"} title="Scanner" onClick={() => setActiveTab("scanner")} />
-          <SidebarIcon icon={Code2} active={activeTab === "findings"} title="Findings" onClick={() => setActiveTab("findings")} />
-          <SidebarIcon icon={History} active={activeTab === "history"} title="History" onClick={() => setActiveTab("history")} />
+          <SidebarIcon icon={Grid2x2} active={activeTab === "scanner"} title="Scanner" onClick={() => handleTabChange("scanner")} />
+          <SidebarIcon icon={Code2} active={activeTab === "findings"} title="Findings" onClick={() => handleTabChange("findings")} />
+          <SidebarIcon icon={History} active={activeTab === "history"} title="History" onClick={() => handleTabChange("history")} />
           <div className="my-1 h-px w-6 bg-[#2E2C3E]" />
-          <SidebarIcon icon={Settings2} active={activeTab === "settings"} title="Settings" onClick={() => setActiveTab("settings")} />
+          <SidebarIcon icon={Settings2} active={activeTab === "settings"} title="Settings" onClick={() => handleTabChange("settings")} />
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden p-3 md:pl-0">
@@ -515,16 +530,18 @@ export default function DashboardPage() {
                 <input
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
+                  disabled={isScanning}
                   placeholder="Paste GitHub repo URL to begin scan..."
-                  className="w-full rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-2 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40"
+                  className="w-full rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-2 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40 disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
               <button
                 type="button"
                 onClick={startScan}
-                className="w-full rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] md:w-auto"
+                disabled={isScanning}
+                className="w-full rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
               >
-                Start Scan
+                {isScanning ? "Scanning..." : "Start Scan"}
               </button>
             </div>
             <p className="mt-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-[var(--text-3)]">
@@ -532,6 +549,11 @@ export default function DashboardPage() {
               Supports public GitHub repositories only · Results may vary by codebase ·
               AI-generated findings · always verify with your security team
             </p>
+            {isScanning ? (
+              <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.06em] text-[#A78BFA]">
+                Scan in progress — navigation is temporarily locked
+              </p>
+            ) : null}
             {scanCompleted && latestScanData && !mintedTokenId ? (
               <div
                 className="mt-3 rounded-xl border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.1)] px-4 py-3 text-[#E6DBFF]"
@@ -592,6 +614,7 @@ export default function DashboardPage() {
                   ) : null}
                   <Link
                     href="/agent-id"
+                    onClick={guardNavigation}
                     className="rounded-full border border-[rgba(167,139,250,0.4)] bg-[rgba(124,58,237,0.35)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white"
                   >
                     View Certificate
