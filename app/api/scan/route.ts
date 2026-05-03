@@ -45,6 +45,17 @@ const EXCLUDED_SCAN_PREFIXES = [
   ".next/",
   "design-templates/",
 ];
+/** Exact paths (lowercase) with no security relevance for typical audits. */
+const EXCLUDED_SCAN_EXACT_PATHS = new Set(
+  [
+    "app/layout.tsx",
+    "app/globals.css",
+    "postcss.config.mjs",
+    "next.config.mjs",
+    "tsconfig.json",
+    "next-env.d.ts",
+  ].map((p) => p.toLowerCase()),
+);
 const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
@@ -240,6 +251,8 @@ export async function POST(request: Request) {
     if (isEnvFile) return false;
 
     if (filePath === "hardhat.config.ts") return false;
+
+    if (EXCLUDED_SCAN_EXACT_PATHS.has(filePath)) return false;
 
     const isExcluded = EXCLUDED_SCAN_PREFIXES.some((prefix) => filePath.startsWith(prefix));
     if (isExcluded) return false;

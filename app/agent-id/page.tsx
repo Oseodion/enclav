@@ -13,7 +13,8 @@ import {
   SendHorizontal,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import { WalletConnect } from "@/components/ui/WalletConnect";
 import { ethers } from "ethers";
 import { useAccount, useConnect } from "wagmi";
@@ -31,9 +32,10 @@ const INFT_CONTRACT_ADDRESSES = [
   ...LEGACY_INFT_CONTRACT_ADDRESSES,
 ].filter((address, index, all) => Boolean(address) && all.indexOf(address) === index);
 const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
-const CERTIFICATE_EVENT_ABI = [
+const INFT_READ_ABI = [
   "event CertificateMinted(uint256 indexed tokenId, address indexed recipient, string repoUrl, string reportHash)",
   "function getCertificate(uint256 tokenId) view returns ((string repoUrl,string scanDate,uint256 filesScanned,uint256 totalFindings,uint256 criticalCount,uint256 highCount,uint256 mediumCount,uint256 lowCount,string reportHash))",
+  "function ownerOf(uint256 tokenId) view returns (address)",
 ] as const;
 
 type CertificateData = {
@@ -57,80 +59,107 @@ const getWalletHistoryKey = (walletAddress?: string) =>
   walletAddress ? `${SCAN_HISTORY_KEY}:${walletAddress.toLowerCase()}` : null;
 
 export default function AgentIdPage() {
+  return (
+    <Suspense fallback={<AgentIdPageSkeleton />}>
+      <AgentIdPageContent />
+    </Suspense>
+  );
+}
+
+function AgentIdPageContent() {
+  const searchParams = useSearchParams();
+  const tokenIdParam = searchParams.get("tokenId")?.trim() ?? null;
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [copied, setCopied] = useState<CopyTarget>(null);
   const [certificate, setCertificate] = useState<CertificateData | null>(null);
   const [storedTxHash, setStoredTxHash] = useState<string | null>(null);
-  const [isLoadingCertificate, setIsLoadingCertificate] = useState(false);
+  const [isLoadingCertificate, setIsLoadingCertificate] = useState(() => Boolean(tokenIdParam));
   const [hasFetchedCertificate, setHasFetchedCertificate] = useState(false);
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
 
   useEffect(() => {
-    async function loadCertificate() {
-      if (!isConnected || !address) {
-        setCertificate(null);
-        setHasFetchedCertificate(false);
+    let cancelled = false;
+
+    async function loadCertificateByTokenId(tokenId: string) {
+      const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
+      const tokenBn = BigInt(tokenId);
+      for (const contractAddress of INFT_CONTRACT_ADDRESSES) {
+        try {
+          const c = new ethers.Contract(contractAddress, INFT_READ_ABI, provider);
+          await c.ownerOf(tokenId);
+          const cert = await c.getCertificate(tokenId);
+          const owner = (await c.ownerOf(tokenId)) as string;
+          let txHash = "";
+          try {
+            const filter = c.filters.CertificateMinted(tokenBn, null);
+            const mintLogs = await c.queryFilter(filter, 0, "latest");
+            const last = mintLogs.at(-1);
+            if (last && "transactionHash" in last) {
+              txHash = (last as ethers.EventLog).transactionHash;
+            }
+          } catch {
+            /* optional */
+          }
+          if (cancelled) return;
+          setCertificate({
+            tokenId,
+            owner: ethers.getAddress(owner),
+            repoUrl: cert.repoUrl,
+            scanDate: cert.scanDate,
+            filesScanned: Number(cert.filesScanned),
+            totalFindings: Number(cert.totalFindings),
+            criticalCount: Number(cert.criticalCount),
+            highCount: Number(cert.highCount),
+            mediumCount: Number(cert.mediumCount),
+            lowCount: Number(cert.lowCount),
+            reportHash: cert.reportHash,
+            txHash,
+          });
+          return;
+        } catch {
+          /* try next contract */
+        }
+      }
+      if (!cancelled) setCertificate(null);
+    }
+
+    async function loadCertificateFromWallet() {
+      if (!address) return;
+      const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
+      const iface = new ethers.Interface(INFT_READ_ABI);
+      const allLogs: Array<{ log: ethers.Log; contractAddress: string }> = [];
+      for (const contractAddress of INFT_CONTRACT_ADDRESSES) {
+        const contract = new ethers.Contract(contractAddress, INFT_READ_ABI, provider);
+        const filter = contract.filters.CertificateMinted(null, address);
+        const logs = await contract.queryFilter(filter, 0, "latest");
+        for (const log of logs) {
+          allLogs.push({
+            log: log as unknown as ethers.Log,
+            contractAddress,
+          });
+        }
+      }
+
+      if (allLogs.length === 0) {
+        if (!cancelled) setCertificate(null);
         return;
       }
 
-      setIsLoadingCertificate(true);
-      try {
-        console.log("[agent-id] loading certificate", {
-          address,
-          contracts: INFT_CONTRACT_ADDRESSES,
-          rpc: OG_RPC_URL,
-        });
-        const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
+      allLogs.sort((a, b) => Number(a.log.blockNumber - b.log.blockNumber));
+      const latest = allLogs[allLogs.length - 1];
+      const latestLog = latest.log;
+      const activeContractAddress = latest.contractAddress;
+      const parsed = iface.parseLog({
+        topics: latestLog.topics,
+        data: latestLog.data,
+      });
+      const tokenId = parsed?.args?.tokenId?.toString() ?? "0";
+      const contract = new ethers.Contract(activeContractAddress, INFT_READ_ABI, provider);
+      const cert = await contract.getCertificate(tokenId);
 
-        const iface = new ethers.Interface(CERTIFICATE_EVENT_ABI);
-        const eventFragment = iface.getEvent("CertificateMinted");
-        if (!eventFragment) {
-          throw new Error("CertificateMinted event not found in ABI");
-        }
-        const allLogs: Array<{ log: ethers.Log; contractAddress: string }> = [];
-        for (const contractAddress of INFT_CONTRACT_ADDRESSES) {
-          const contract = new ethers.Contract(
-            contractAddress,
-            CERTIFICATE_EVENT_ABI,
-            provider,
-          );
-          const filter = contract.filters.CertificateMinted(null, address);
-          const logs = await contract.queryFilter(filter, 0, "latest");
-          console.log("[agent-id] certificate events found", {
-            contractAddress,
-            count: logs.length,
-            latestTx: logs.at(-1)?.transactionHash ?? null,
-          });
-          for (const log of logs) {
-            allLogs.push({
-              log: log as unknown as ethers.Log,
-              contractAddress,
-            });
-          }
-        }
-
-        if (allLogs.length === 0) {
-          setCertificate(null);
-          return;
-        }
-
-        allLogs.sort((a, b) => Number(a.log.blockNumber - b.log.blockNumber));
-        const latest = allLogs[allLogs.length - 1];
-        const latestLog = latest.log;
-        const activeContractAddress = latest.contractAddress;
-        const parsed = iface.parseLog({
-          topics: latestLog.topics,
-          data: latestLog.data,
-        });
-        const tokenId = parsed?.args?.tokenId?.toString() ?? "0";
-        const contract = new ethers.Contract(
-          activeContractAddress,
-          CERTIFICATE_EVENT_ABI,
-          provider,
-        );
-        const cert = await contract.getCertificate(tokenId);
-
+      if (!cancelled) {
         setCertificate({
           tokenId,
           owner: address,
@@ -145,17 +174,56 @@ export default function AgentIdPage() {
           reportHash: cert.reportHash,
           txHash: latestLog.transactionHash,
         });
-      } catch (error) {
-        console.log("[agent-id] certificate load failed", error);
-        setCertificate(null);
-      } finally {
-        setIsLoadingCertificate(false);
-        setHasFetchedCertificate(true);
       }
     }
 
-    void loadCertificate();
-  }, [address, isConnected]);
+    async function run() {
+      if (tokenIdParam) {
+        setIsLoadingCertificate(true);
+        setHasFetchedCertificate(false);
+        try {
+          await loadCertificateByTokenId(tokenIdParam);
+        } catch (error) {
+          console.log("[agent-id] tokenId load failed", error);
+          if (!cancelled) setCertificate(null);
+        } finally {
+          if (!cancelled) {
+            setIsLoadingCertificate(false);
+            setHasFetchedCertificate(true);
+          }
+        }
+        return;
+      }
+
+      if (!isConnected || !address) {
+        if (!cancelled) {
+          setCertificate(null);
+          setIsLoadingCertificate(false);
+          setHasFetchedCertificate(true);
+        }
+        return;
+      }
+
+      setIsLoadingCertificate(true);
+      setHasFetchedCertificate(false);
+      try {
+        await loadCertificateFromWallet();
+      } catch (error) {
+        console.log("[agent-id] certificate load failed", error);
+        if (!cancelled) setCertificate(null);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCertificate(false);
+          setHasFetchedCertificate(true);
+        }
+      }
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [tokenIdParam, isConnected, address]);
 
   useEffect(() => {
     if (!isConnected || !address) {
@@ -318,12 +386,20 @@ export default function AgentIdPage() {
             </div>
 
             <div className="p-5">
-              <h2 className="mb-1 text-xl font-extrabold tracking-tight">
-                Enclav Security Cert #{hasCertificate ? certificate?.tokenId : "Not minted"}
-              </h2>
-              <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.08em] text-purple-bright">
-                Enclav Security Certificates - 0G Chain
-              </p>
+              {isLoadingCertificate ? (
+                <div className="mb-1 h-8 w-[min(100%,280px)] max-w-full animate-pulse rounded-md bg-white/10" />
+              ) : (
+                <h2 className="mb-1 text-xl font-extrabold tracking-tight">
+                  Enclav Security Cert #{hasCertificate ? certificate?.tokenId : "Not minted"}
+                </h2>
+              )}
+              {isLoadingCertificate ? (
+                <div className="mb-4 h-3 w-48 animate-pulse rounded bg-white/10" />
+              ) : (
+                <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.08em] text-purple-bright">
+                  Enclav Security Certificates - 0G Chain
+                </p>
+              )}
               <div className="mb-4 grid grid-cols-2 gap-2">
                 {isLoadingCertificate ? (
                   <>
@@ -390,7 +466,9 @@ export default function AgentIdPage() {
             {hasFetchedCertificate && !isLoadingCertificate && !hasCertificate ? (
               <section className="glass rounded-[14px] border border-purple-bright/20 p-5">
                 <p className="mb-3 text-sm text-text-2">
-                  No certificate yet - run a scan to mint your first
+                  {tokenIdParam
+                    ? `No certificate found for token #${tokenIdParam} on this network.`
+                    : "No certificate yet - run a scan to mint your first"}
                 </p>
                 <Link
                   href="/dashboard"
@@ -414,62 +492,72 @@ export default function AgentIdPage() {
                 </a>
               </div>
 
-              <ChainRow
-                label="Contract"
-                value={onChainData.contract}
-                canCopy
-                copied={copied === "contract"}
-                onCopy={() => copyValue("contract", onChainData.contract)}
-                truncateValue
-              />
-              <ChainRow label="Token ID" value={onChainData.tokenId} muted={!hasCertificate} />
-              <ChainRow
-                label="Owner"
-                value={onChainData.owner}
-                canCopy={Boolean(isConnected && address)}
-                copied={copied === "owner"}
-                onCopy={() => copyValue("owner", onChainData.owner)}
-                truncateValue
-                actionButton={
-                  !isConnected ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const first = connectors.find((c) => c.ready) ?? connectors[0];
-                        if (first) connect({ connector: first });
-                      }}
-                      className="font-mono text-[11px] text-[#A78BFA] hover:underline"
-                    >
-                      Connect wallet
-                    </button>
-                  ) : undefined
-                }
-              />
-              <ChainRow label="Standard" value={onChainData.standard} />
-              <ChainRow label="Minted" value={onChainData.minted} />
-              <ChainRow
-                label="Report Hash"
-                value={
-                  certificate?.reportHash && hasCertificate
-                    ? certificate.reportHash
-                    : "Run a scan to generate your certificate"
-                }
-                muted={!hasCertificate}
-                canCopy={Boolean(hasCertificate && certificate?.reportHash)}
-                copied={copied === "hash"}
-                onCopy={() => {
-                  if (certificate?.reportHash) void copyValue("hash", certificate.reportHash);
-                }}
-                truncateValue
-              />
-              <ChainRow label="Transfers" value={onChainData.transfers} last />
+              {isLoadingCertificate ? (
+                <OnChainDetailsSkeleton />
+              ) : (
+                <>
+                  <ChainRow
+                    label="Contract"
+                    value={onChainData.contract}
+                    canCopy
+                    copied={copied === "contract"}
+                    onCopy={() => copyValue("contract", onChainData.contract)}
+                    truncateValue
+                  />
+                  <ChainRow label="Token ID" value={onChainData.tokenId} muted={!hasCertificate} />
+                  <ChainRow
+                    label="Owner"
+                    value={onChainData.owner}
+                    canCopy={Boolean(certificate?.owner && hasCertificate)}
+                    copied={copied === "owner"}
+                    onCopy={() => {
+                      if (certificate?.owner) void copyValue("owner", certificate.owner);
+                    }}
+                    truncateValue
+                    actionButton={
+                      !isConnected ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const first = connectors.find((c) => c.ready) ?? connectors[0];
+                            if (first) connect({ connector: first });
+                          }}
+                          className="font-mono text-[11px] text-[#A78BFA] hover:underline"
+                        >
+                          Connect wallet
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                  <ChainRow label="Standard" value={onChainData.standard} />
+                  <ChainRow label="Minted" value={onChainData.minted} />
+                  <ChainRow
+                    label="Report Hash"
+                    value={
+                      certificate?.reportHash && hasCertificate
+                        ? certificate.reportHash
+                        : "Run a scan to generate your certificate"
+                    }
+                    muted={!hasCertificate}
+                    canCopy={Boolean(hasCertificate && certificate?.reportHash)}
+                    copied={copied === "hash"}
+                    onCopy={() => {
+                      if (certificate?.reportHash) void copyValue("hash", certificate.reportHash);
+                    }}
+                    truncateValue
+                  />
+                  <ChainRow label="Transfers" value={onChainData.transfers} last />
+                </>
+              )}
             </section>
 
             <section className="glass rounded-[14px] p-5">
               <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
                 Scan Attestation Log
               </p>
-              {hasCertificate ? (
+              {isLoadingCertificate ? (
+                <TimelineSkeleton />
+              ) : hasCertificate ? (
                 <>
                   <TimelineEntry title="TEE attestation verified" meta="Intel TDX - Scan enclave verified" color="bg-teal shadow-[0_0_7px_#10B981]" />
                   <TimelineEntry title="Autonomous scan completed" meta="All files scanned - Findings aggregated" color="bg-purple shadow-[0_0_7px_#7C3AED]" />
@@ -488,11 +576,22 @@ export default function AgentIdPage() {
               <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-text-3">
                 Vulnerability types detected
               </p>
-              <div className="flex flex-wrap gap-1.5">
-                {dynamicCapabilityTags.map((tag) => (
-                  <CapabilityTag key={tag.label} label={tag.label} tone={tag.tone} />
-                ))}
-              </div>
+              {isLoadingCertificate ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {[0, 1, 2, 3].map((i) => (
+                    <span
+                      key={i}
+                      className="h-7 w-20 animate-pulse rounded-full border border-white/[0.06] bg-white/[0.06]"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {dynamicCapabilityTags.map((tag) => (
+                    <CapabilityTag key={tag.label} label={tag.label} tone={tag.tone} />
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         </div>
@@ -631,5 +730,100 @@ function CapabilityTag({
     <span className={`rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] ${styles}`}>
       {label}
     </span>
+  );
+}
+
+function OnChainDetailsSkeleton() {
+  return (
+    <>
+      {["Contract", "Token ID", "Owner", "Standard", "Minted", "Report Hash", "Transfers"].map((label, i, arr) => (
+        <div
+          key={label}
+          className={`flex min-w-0 flex-col gap-1.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${
+            i < arr.length - 1 ? "border-b border-white/[0.04]" : ""
+          }`}
+        >
+          <span className="shrink-0 font-mono text-[11px] text-text-3">{label}</span>
+          <div className="h-3 min-w-0 flex-1 max-w-[min(100%,14rem)] animate-pulse rounded bg-white/10 sm:max-w-[18rem]" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function TimelineSkeleton() {
+  return (
+    <>
+      {[0, 1, 2, 3].map((i, idx, arr) => (
+        <div key={i} className={`flex gap-3 py-2.5 ${idx < arr.length - 1 ? "border-b border-white/[0.04]" : ""}`}>
+          <div className="flex flex-col items-center">
+            <span className="mt-[3px] h-[9px] w-[9px] animate-pulse rounded-full bg-white/15" />
+            {idx < arr.length - 1 ? <span className="mt-1 block w-px flex-1 bg-white/[0.05]" /> : null}
+          </div>
+          <div className="min-w-0 flex-1 space-y-1.5 pb-0.5">
+            <div className="h-4 w-48 max-w-full animate-pulse rounded bg-white/10" />
+            <div className="h-3 w-full max-w-[20rem] animate-pulse rounded bg-white/[0.07]" />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function AgentIdPageSkeleton() {
+  return (
+    <main className="relative min-h-screen overflow-x-hidden bg-black font-geist text-text-1">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div className="absolute left-1/2 top-[-150px] h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.12),transparent_65%)]" />
+      </div>
+      <nav className="glass-blur-nav sticky top-0 z-50 flex h-[52px] items-center border-b border-[var(--border)] bg-black/80 px-4 md:px-10">
+        <div className="h-8 w-32 animate-pulse rounded-md bg-white/10" />
+      </nav>
+      <section className="relative z-[1] mx-auto min-w-0 max-w-[1100px] px-4 pb-20 pt-12 md:px-10">
+        <div className="mb-2 h-3 w-40 animate-pulse rounded bg-white/10" />
+        <div className="mb-2 h-10 w-72 max-w-full animate-pulse rounded-lg bg-white/10" />
+        <div className="mb-10 h-3 w-56 animate-pulse rounded bg-white/[0.07]" />
+        <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+          <article className="min-h-[420px] overflow-hidden rounded-[20px] border border-purple-bright/20 bg-purple/5">
+            <div className="h-[260px] animate-pulse bg-white/[0.04]" />
+            <div className="space-y-3 p-5">
+              <div className="h-8 w-56 animate-pulse rounded bg-white/10" />
+              <div className="h-3 w-40 animate-pulse rounded bg-white/[0.07]" />
+              <div className="grid grid-cols-2 gap-2">
+                <SkeletonStat />
+                <SkeletonStat />
+                <SkeletonStat />
+                <SkeletonStat />
+              </div>
+              <div className="flex gap-2">
+                <div className="h-10 flex-1 animate-pulse rounded-lg bg-white/10" />
+                <div className="h-10 flex-1 animate-pulse rounded-lg bg-white/10" />
+              </div>
+            </div>
+          </article>
+          <div className="flex min-w-0 flex-col gap-4">
+            <section className="glass rounded-[14px] p-5">
+              <div className="mb-3 h-3 w-28 animate-pulse rounded bg-white/10" />
+              <OnChainDetailsSkeleton />
+            </section>
+            <section className="glass rounded-[14px] p-5">
+              <div className="mb-3 h-3 w-36 animate-pulse rounded bg-white/10" />
+              <TimelineSkeleton />
+            </section>
+            <section className="glass rounded-[14px] p-5">
+              <div className="mb-3 h-3 w-40 animate-pulse rounded bg-white/10" />
+              <div className="flex flex-wrap gap-1.5">
+                {[0, 1, 2, 3].map((i) => (
+                  <span
+                    key={i}
+                    className="h-7 w-20 animate-pulse rounded-full border border-white/[0.06] bg-white/[0.06]"
+                  />
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

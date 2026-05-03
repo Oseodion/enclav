@@ -3,7 +3,6 @@
 import Link from "next/link";
 import {
   Activity,
-  ArrowRightLeft,
   Check,
   CheckCircle2,
   Coins,
@@ -86,7 +85,9 @@ function scansRemainingCount(balanceWei: bigint): bigint {
   return balanceWei / SCAN_CREDIT_COST_WEI;
 }
 
-function AddScanCreditsPanel({
+function CreditsDepositModal({
+  open,
+  onClose,
   balanceLabel,
   balanceWei,
   depositOg,
@@ -96,6 +97,8 @@ function AddScanCreditsPanel({
   scanCostLabel,
   errorMessage,
 }: {
+  open: boolean;
+  onClose: () => void;
   balanceLabel: string;
   balanceWei: bigint | null;
   depositOg: string;
@@ -105,17 +108,95 @@ function AddScanCreditsPanel({
   scanCostLabel: string;
   errorMessage: string | null;
 }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 p-4 pb-8 backdrop-blur-sm sm:items-center sm:pb-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="credits-modal-title"
+      onClick={() => onClose()}
+    >
+      <div
+        className="max-h-[min(90dvh,640px)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-[#0c0a12] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.65)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h2 id="credits-modal-title" className="font-geist text-lg font-semibold text-[#F0EEF8]">
+            Add scan credits
+          </h2>
+          <button
+            type="button"
+            onClick={() => onClose()}
+            className="rounded-lg border border-white/10 p-1.5 text-[#9B99B0] transition hover:bg-white/5 hover:text-[#F0EEF8]"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-white/[0.06] bg-[rgba(255,255,255,0.02)] px-3 py-2">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5A5768]" strokeWidth={1.5} aria-hidden />
+          <p className="font-mono text-[10px] leading-relaxed text-[#6B6880]">
+            Scan: {COST_LABEL_SCAN_OG} OG · Mint: ~{COST_LABEL_MINT_GAS_OG} OG · Credits refundable · Supports public
+            GitHub repos
+          </p>
+        </div>
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-white/[0.06] bg-[rgba(255,255,255,0.02)] px-3 py-2">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5A5768]" strokeWidth={1.5} aria-hidden />
+          <p className="font-mono text-[10px] leading-relaxed text-[#6B6880]">
+            AI-assisted findings · Always verify with your security team
+          </p>
+        </div>
+        <AddScanCreditsPanel
+          balanceLabel={balanceLabel}
+          balanceWei={balanceWei}
+          depositOg={depositOg}
+          onDepositOgChange={onDepositOgChange}
+          onDeposit={onDeposit}
+          depositBusy={depositBusy}
+          scanCostLabel={scanCostLabel}
+          errorMessage={errorMessage}
+          hideOuterTitle
+        />
+      </div>
+    </div>
+  );
+}
+
+function AddScanCreditsPanel({
+  balanceLabel,
+  balanceWei,
+  depositOg,
+  onDepositOgChange,
+  onDeposit,
+  depositBusy,
+  scanCostLabel,
+  errorMessage,
+  hideOuterTitle = false,
+}: {
+  balanceLabel: string;
+  balanceWei: bigint | null;
+  depositOg: string;
+  onDepositOgChange: (value: string) => void;
+  onDeposit: () => void;
+  depositBusy: boolean;
+  scanCostLabel: string;
+  errorMessage: string | null;
+  hideOuterTitle?: boolean;
+}) {
   const scansRemaining =
     balanceWei !== null ? scansRemainingCount(balanceWei).toString() : "—";
 
   return (
     <div className="rounded-xl border border-[rgba(167,139,250,0.35)] bg-[rgba(124,58,237,0.08)] p-4 md:p-3">
-      <div className="mb-3 flex items-center gap-2">
-        <Coins className="h-4 w-4 text-[#A78BFA]" strokeWidth={1.5} aria-hidden />
-        <h3 className="font-geist text-sm font-semibold tracking-tight text-[#F0EEF8]">
-          Add scan credits
-        </h3>
-      </div>
+      {hideOuterTitle ? null : (
+        <div className="mb-3 flex items-center gap-2">
+          <Coins className="h-4 w-4 text-[#A78BFA]" strokeWidth={1.5} aria-hidden />
+          <h3 className="font-geist text-sm font-semibold tracking-tight text-[#F0EEF8]">
+            Add scan credits
+          </h3>
+        </div>
+      )}
       <ul className="mb-3 space-y-1 font-mono text-[10px] leading-relaxed text-[#6B6880]">
         <li>1 scan = {COST_LABEL_SCAN_OG} OG</li>
         <li>Suggested: 0.5 OG covers ~10 scans</li>
@@ -208,6 +289,7 @@ export default function DashboardPage() {
   const [depositCreditsOg, setDepositCreditsOg] = useState("0.1");
   const [depositBusy, setDepositBusy] = useState(false);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
+  const [creditsModalOpen, setCreditsModalOpen] = useState(false);
 
   const refreshCredits = useCallback(async () => {
     if (!address || !isConnected) {
@@ -304,7 +386,7 @@ export default function DashboardPage() {
   const progressPercent =
     totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
 
-  const showCreditsGate =
+  const needsCreditsDeposit =
     isConnected &&
     creditsContractConfigured &&
     !creditsLoading &&
@@ -313,9 +395,7 @@ export default function DashboardPage() {
   const creditsReadFailed =
     isConnected && creditsContractConfigured && !creditsLoading && creditsError !== null;
   const showScanInputRow =
-    !isConnected ||
-    !creditsContractConfigured ||
-    (!creditsLoading && !showCreditsGate && !creditsReadFailed);
+    !isConnected || !creditsContractConfigured || !creditsReadFailed;
 
   const handleDepositCredits = async () => {
     if (!walletClient) {
@@ -333,6 +413,7 @@ export default function DashboardPage() {
       }
       await depositCredits(walletClient, wei, { wagmiChainId: chainId });
       await refreshCredits();
+      setCreditsModalOpen(false);
     } catch (e) {
       setCreditsActionError(e instanceof Error ? e.message : "Deposit failed.");
     } finally {
@@ -713,6 +794,17 @@ export default function DashboardPage() {
 
   return (
     <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-hidden bg-black font-geist text-[#F0EEF8]">
+      {isScanning ? (
+        <div
+          role="status"
+          className="sticky top-0 z-[60] flex shrink-0 items-center gap-2 border-b border-[rgba(245,158,11,0.35)] bg-[rgba(120,53,15,0.45)] px-4 py-2 backdrop-blur-md sm:px-5"
+        >
+          <TriangleAlert className="h-4 w-4 shrink-0 text-[#FBBF24]" strokeWidth={2} aria-hidden />
+          <p className="min-w-0 font-mono text-[10px] leading-snug text-[#FDE68A] sm:text-[11px]">
+            Scan in progress — do not navigate away or the scan will stop
+          </p>
+        </div>
+      ) : null}
       <AmbientGlow />
       <header className="relative z-10 flex min-h-[56px] shrink-0 items-center border-b border-white/10 bg-black/80 px-4 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -835,9 +927,6 @@ export default function DashboardPage() {
       <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-4 pb-6 md:p-3 md:pb-3">
           <div className={`${panelClass} sticky top-0 z-10 mb-4 max-w-full shrink-0 overflow-hidden p-4 md:mb-3 md:p-3`}>
-            {isConnected && creditsContractConfigured && creditsLoading ? (
-              <p className="mb-3 font-mono text-[11px] text-[#9B99B0]">Loading scan credit balance…</p>
-            ) : null}
             {isConnected && creditsContractConfigured && creditsReadFailed ? (
               <div className="mb-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] p-3">
                 <p className="font-mono text-[11px] text-[#FCA5A5]">{creditsError}</p>
@@ -855,60 +944,61 @@ export default function DashboardPage() {
                 Scan credits contract is not configured (set NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS).
               </p>
             ) : null}
-            {showCreditsGate ? (
-              <AddScanCreditsPanel
-                balanceLabel={scanCreditsWei !== null ? formatOgFromWei(scanCreditsWei) : "0"}
-                balanceWei={scanCreditsWei}
-                depositOg={depositCreditsOg}
-                onDepositOgChange={setDepositCreditsOg}
-                onDeposit={() => void handleDepositCredits()}
-                depositBusy={depositBusy}
-                scanCostLabel={formatOgFromWei(SCAN_CREDIT_COST_WEI)}
-                errorMessage={creditsActionError}
-              />
-            ) : null}
             {showScanInputRow ? (
-              <div className="flex flex-col gap-3 md:flex-row md:gap-2">
-                <div className="relative flex-1">
-                  <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B99B0]" />
-                  <input
-                    value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
-                    disabled={isScanning}
-                    placeholder="Paste GitHub repo URL to begin scan..."
-                    className="w-full min-h-[48px] min-w-0 rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-3 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40 disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:py-2"
-                  />
+              <>
+                <div className="flex flex-col gap-3 md:flex-row md:gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B99B0]" />
+                    <input
+                      value={repoUrl}
+                      onChange={(e) => setRepoUrl(e.target.value)}
+                      disabled={isScanning}
+                      placeholder="Paste GitHub repo URL to begin scan..."
+                      className="w-full min-h-[48px] min-w-0 rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-3 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40 disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:py-2"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void startScan()}
+                    disabled={
+                      isScanning ||
+                      creditsReadFailed ||
+                      (Boolean(isConnected && creditsContractConfigured && creditsLoading)) ||
+                      (needsCreditsDeposit && creditsContractConfigured && isConnected)
+                    }
+                    className="w-full min-h-[48px] shrink-0 rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2.5 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:w-auto md:py-2"
+                  >
+                    {isScanning ? "Scanning..." : "Start Scan"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void startScan()}
-                  disabled={isScanning || creditsReadFailed}
-                  className="w-full min-h-[48px] rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2.5 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:w-auto md:py-2"
-                >
-                  {isScanning ? "Scanning..." : "Start Scan"}
-                </button>
-              </div>
+                {isConnected && creditsContractConfigured && creditsLoading ? (
+                  <p className="mt-2 truncate font-mono text-[10px] text-[#6B6880] sm:text-[11px]">
+                    Loading credit balance…
+                  </p>
+                ) : needsCreditsDeposit ? (
+                  <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
+                    <p className="min-w-0 truncate font-mono text-[10px] text-[#6B6880] sm:text-[11px]">
+                      No credits — add OG to scan
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreditsActionError(null);
+                        setCreditsModalOpen(true);
+                      }}
+                      className="shrink-0 rounded-full border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.25)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-[#E9E4FF] transition hover:bg-[rgba(124,58,237,0.4)]"
+                    >
+                      Add Credits
+                    </button>
+                  </div>
+                ) : (
+                  <p className="mt-2 font-mono text-[10px] leading-snug text-[#6B6880] sm:text-[11px]">
+                    Scan: {COST_LABEL_SCAN_OG} OG · Mint: ~{COST_LABEL_MINT_GAS_OG} OG · Credits refundable · Supports
+                    public GitHub repos
+                  </p>
+                )}
+              </>
             ) : null}
-            {showScanInputRow ? (
-              <div className="mt-2 flex items-start gap-2 rounded-lg border border-white/[0.06] bg-[rgba(255,255,255,0.02)] px-3 py-2">
-                <Info
-                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5A5768]"
-                  strokeWidth={1.5}
-                  aria-hidden
-                />
-                <p className="font-mono text-[10px] leading-relaxed text-[#6B6880] sm:text-[11px]">
-                  Scan cost: ~{COST_LABEL_SCAN_OG} OG · Certificate mint: ~{COST_LABEL_MINT_GAS_OG} OG gas ·
-                  Credits are refundable
-                </p>
-              </div>
-            ) : null}
-            <p className="mt-3 flex items-start justify-center gap-2 overflow-hidden px-1 text-center font-mono text-[11px] leading-relaxed text-[var(--text-3)] sm:mt-2 sm:items-center">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#6B6880] sm:mt-0" />
-              <span className="break-words text-left sm:text-center">
-                Supports public GitHub repositories only - Results may vary by codebase - AI-generated
-                findings - always verify with your security team
-              </span>
-            </p>
             {scanCompleted && latestScanData && !hasMinted ? (
               <div
                 className="mt-3 rounded-xl border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.1)] px-4 py-3 text-[#E6DBFF]"
@@ -1112,6 +1202,18 @@ export default function DashboardPage() {
           </span>
         ) : null}
       </footer>
+      <CreditsDepositModal
+        open={creditsModalOpen}
+        onClose={() => setCreditsModalOpen(false)}
+        balanceLabel={scanCreditsWei !== null ? formatOgFromWei(scanCreditsWei) : "0"}
+        balanceWei={scanCreditsWei}
+        depositOg={depositCreditsOg}
+        onDepositOgChange={setDepositCreditsOg}
+        onDeposit={() => void handleDepositCredits()}
+        depositBusy={depositBusy}
+        scanCostLabel={formatOgFromWei(SCAN_CREDIT_COST_WEI)}
+        errorMessage={creditsActionError}
+      />
       <style jsx global>{`
         @keyframes borderPulse {
           0%, 100% {
@@ -1177,6 +1279,13 @@ function LiveScanFeed({
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
           {isScanning ? "Scanning" : "Ready"}
         </span>
+      </div>
+
+      <div className="flex shrink-0 items-start gap-2 border-b border-white/[0.06] px-4 py-2 sm:px-5">
+        <Info className="mt-0.5 h-3 w-3 shrink-0 text-[#5A5768]" strokeWidth={1.5} aria-hidden />
+        <p className="font-mono text-[10px] leading-snug text-[#6B6880]">
+          AI-assisted findings · Always verify with your security team
+        </p>
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-16 sm:p-5 sm:pb-[60px] [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
@@ -1695,6 +1804,11 @@ function HistoryTab({
               >
                 <p className="break-words font-semibold text-[#F4F2FF]">{extractRepoDisplayName(item.repoUrl)}</p>
                 <p className="mt-1 break-words font-mono text-[11px] text-[#9B99B0]">{formatScanDate(item.scanDate)}</p>
+                {olderScan ? (
+                  <p className="mt-0.5 truncate font-mono text-[10px] text-[#6B6880]" title="Fingerprint-based diff vs previous scan">
+                    vs previous scan: {fixedFindings.length} no longer detected · {newFindings.length} new
+                  </p>
+                ) : null}
                 <p className="mt-2 break-words font-mono text-xs text-[#C4BDD9]">
                   {item.filesScanned} files scanned - {breakdown}
                 </p>
@@ -1712,44 +1826,6 @@ function HistoryTab({
                     </span>
                   )}
                 </div>
-                {olderScan ? (
-                  <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/35 p-3">
-                    <p className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[#A78BFA]">
-                      <ArrowRightLeft className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} aria-hidden />
-                      Scan comparison (vs {formatScanDate(olderScan.scanDate)})
-                    </p>
-                    <p className="mb-1 font-mono text-[11px] text-[#6EE7B7]">
-                      Likely fixed ({fixedFindings.length})
-                    </p>
-                    {fixedFindings.length === 0 ? (
-                      <p className="mb-3 font-mono text-[10px] text-[#6B6880]">None detected vs prior fingerprint set.</p>
-                    ) : (
-                      <ul className="mb-3 max-h-24 space-y-1 overflow-y-auto font-mono text-[10px] text-[#9B99B0] [scrollbar-width:thin]">
-                        {fixedFindings.slice(0, 8).map((f) => (
-                          <li key={findingFingerprint(f)} className="truncate" title={f.description}>
-                            {f.severity} {f.file}:{f.line} — {f.description.slice(0, 72)}
-                            {f.description.length > 72 ? "…" : ""}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <p className="mb-1 font-mono text-[11px] text-[#FCA5A5]">
-                      New since last scan ({newFindings.length})
-                    </p>
-                    {newFindings.length === 0 ? (
-                      <p className="font-mono text-[10px] text-[#6B6880]">No new fingerprinted issues vs prior scan.</p>
-                    ) : (
-                      <ul className="max-h-24 space-y-1 overflow-y-auto font-mono text-[10px] text-[#C4BDD9] [scrollbar-width:thin]">
-                        {newFindings.slice(0, 8).map((f) => (
-                          <li key={findingFingerprint(f)} className="truncate" title={f.description}>
-                            {f.severity} {f.file}:{f.line} — {f.description.slice(0, 72)}
-                            {f.description.length > 72 ? "…" : ""}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ) : null}
               </div>
             );
           })}
