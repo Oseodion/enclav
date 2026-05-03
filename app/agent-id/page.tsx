@@ -51,7 +51,7 @@ type CertificateData = {
   txHash: string;
 };
 
-type CopyTarget = "contract" | "owner" | null;
+type CopyTarget = "contract" | "owner" | "hash" | null;
 const SCAN_HISTORY_KEY = "enclav-scan-history-v1";
 const getWalletHistoryKey = (walletAddress?: string) =>
   walletAddress ? `${SCAN_HISTORY_KEY}:${walletAddress.toLowerCase()}` : null;
@@ -287,7 +287,7 @@ export default function AgentIdPage() {
         </div>
       ) : null}
 
-      <section className="relative z-[1] mx-auto max-w-[1100px] px-4 pb-20 pt-12 md:px-10">
+      <section className="relative z-[1] mx-auto min-w-0 max-w-[1100px] px-4 pb-20 pt-12 md:px-10">
         <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright">
           Verifiable Security Proof
         </p>
@@ -298,8 +298,8 @@ export default function AgentIdPage() {
           ERC-7857 - 0G Chain Galileo - Issued after autonomous scan
         </p>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[400px_1fr]">
-          <article className="relative overflow-hidden rounded-[20px] border border-purple-bright/25 bg-purple/10 backdrop-blur-[30px]">
+        <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+          <article className="relative min-w-0 overflow-hidden rounded-[20px] border border-purple-bright/25 bg-purple/10 backdrop-blur-[30px]">
             <div className="absolute inset-x-0 top-0 h-[1.5px] bg-[linear-gradient(90deg,#7C3AED,#EC4899,#7C3AED)] bg-[length:200%_100%] animate-shimmer" />
             <div className="absolute right-4 top-4 animate-float opacity-70">
               <Orbit className="h-7 w-7 text-purple-bright" />
@@ -386,7 +386,7 @@ export default function AgentIdPage() {
             </div>
           </article>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-4">
             {hasFetchedCertificate && !isLoadingCertificate && !hasCertificate ? (
               <section className="glass rounded-[14px] border border-purple-bright/20 p-5">
                 <p className="mb-3 text-sm text-text-2">
@@ -420,6 +420,7 @@ export default function AgentIdPage() {
                 canCopy
                 copied={copied === "contract"}
                 onCopy={() => copyValue("contract", onChainData.contract)}
+                truncateValue
               />
               <ChainRow label="Token ID" value={onChainData.tokenId} muted={!hasCertificate} />
               <ChainRow
@@ -428,6 +429,7 @@ export default function AgentIdPage() {
                 canCopy={Boolean(isConnected && address)}
                 copied={copied === "owner"}
                 onCopy={() => copyValue("owner", onChainData.owner)}
+                truncateValue
                 actionButton={
                   !isConnected ? (
                     <button
@@ -447,8 +449,18 @@ export default function AgentIdPage() {
               <ChainRow label="Minted" value={onChainData.minted} />
               <ChainRow
                 label="Report Hash"
-                value={certificate?.reportHash || "Run a scan to generate your certificate"}
+                value={
+                  certificate?.reportHash && hasCertificate
+                    ? certificate.reportHash
+                    : "Run a scan to generate your certificate"
+                }
                 muted={!hasCertificate}
+                canCopy={Boolean(hasCertificate && certificate?.reportHash)}
+                copied={copied === "hash"}
+                onCopy={() => {
+                  if (certificate?.reportHash) void copyValue("hash", certificate.reportHash);
+                }}
+                truncateValue
               />
               <ChainRow label="Transfers" value={onChainData.transfers} last />
             </section>
@@ -503,7 +515,7 @@ function NftStat({
       <p className="mb-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-text-3">
         {label}
       </p>
-      <p className={`font-mono text-xs ${accent ?? "text-text-1"}`}>{value}</p>
+      <p className={`break-words font-mono text-xs ${accent ?? "text-text-1"}`}>{value}</p>
     </div>
   );
 }
@@ -517,6 +529,7 @@ function ChainRow({
   actionButton,
   muted = false,
   last = false,
+  truncateValue = false,
 }: {
   label: string;
   value: string;
@@ -526,22 +539,30 @@ function ChainRow({
   actionButton?: ReactNode;
   muted?: boolean;
   last?: boolean;
+  truncateValue?: boolean;
 }) {
   return (
-    <div className={`flex items-center justify-between py-2.5 ${last ? "" : "border-b border-white/[0.04]"}`}>
-      <span className="font-mono text-[11px] text-text-3">{label}</span>
+    <div
+      className={`flex min-w-0 flex-col gap-1.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${last ? "" : "border-b border-white/[0.04]"}`}
+    >
+      <span className="shrink-0 font-mono text-[11px] text-text-3">{label}</span>
       <span
-        className={`flex items-center gap-1.5 font-mono text-[11px] ${
+        className={`flex min-w-0 items-center justify-end gap-1.5 font-mono text-[11px] ${
           muted ? "text-[#2E2C3E]" : "text-text-1"
         }`}
       >
-        {value}
+        <span
+          className={`min-w-0 text-right ${truncateValue ? "truncate" : "break-all sm:break-normal"}`}
+          title={truncateValue ? value : undefined}
+        >
+          {value}
+        </span>
         {actionButton}
         {canCopy ? (
           <button
             type="button"
             onClick={onCopy}
-            className="flex h-[18px] w-[18px] items-center justify-center rounded border border-[var(--border)] opacity-60 transition hover:border-purple-bright/30 hover:opacity-100"
+            className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border border-[var(--border)] opacity-60 transition hover:border-purple-bright/30 hover:opacity-100"
             aria-label={`Copy ${label}`}
           >
             {copied ? (

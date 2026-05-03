@@ -100,4 +100,48 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+
+  .enclav-flow-track-h {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(124, 58, 237, 0.35) 50%,
+      transparent
+    );
+  }
+
+  .enclav-flow-track-v {
+    background: linear-gradient(
+      180deg,
+      transparent,
+      rgba(124, 58, 237, 0.35) 50%,
+      transparent
+    );
+  }
+
+  .enclav-flow-dot-h {
+    animation: enclav-flow-h 2.4s ease-in-out infinite alternate;
+  }
+
+  .enclav-flow-dot-v {
+    animation: enclav-flow-v 2.4s ease-in-out infinite alternate;
+  }
+
+  @keyframes enclav-flow-h {
+    0% {
+      left: 0;
+    }
+    100% {
+      left: calc(100% - 10px);
+    }
+  }
+
+  @keyframes enclav-flow-v {
+    0% {
+      top: 0;
+    }
+    100% {
+      top: calc(100% - 10px);
+    }
+  }
 }

@@ -3,8 +3,10 @@
 import {
   Activity,
   AlertTriangle,
+  Award,
   Clock,
   Database,
+  Link2,
   Lock,
   Menu,
   Zap,
@@ -12,14 +14,39 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import type { LucideIcon } from "lucide-react";
 
 const DOCS_URL = "https://docs.0g.ai";
+
+const FLOW_STEPS: { icon: LucideIcon; title: string; description: string }[] = [
+  {
+    icon: Link2,
+    title: "Connect Repo",
+    description: "Paste any public GitHub repository URL",
+  },
+  {
+    icon: Database,
+    title: "0G Storage",
+    description: "Files uploaded to decentralized storage",
+  },
+  {
+    icon: Shield,
+    title: "TeeML Scan",
+    description: "AI scans inside Intel TDX hardware enclave",
+  },
+  {
+    icon: Award,
+    title: "INFT Minted",
+    description: "Security certificate minted on 0G Chain",
+  },
+];
 
 export default function Home() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -291,13 +318,69 @@ export default function Home() {
         ))}
       </div>
 
+      {/* How it works — animated flow */}
+      <section
+        id="how-it-works"
+        className="relative z-[1] overflow-hidden border-y border-[var(--border)] bg-[rgba(0,0,0,0.35)] px-6 py-14 backdrop-blur-[24px] md:px-12 md:py-20"
+      >
+        <div className="mx-auto max-w-[1200px]">
+          <div className="mb-10 text-center md:mb-14">
+            <div className="mb-3 flex items-center justify-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright">
+              <span className="h-px w-8 bg-gradient-to-r from-transparent to-purple-bright" />
+              How it works
+              <span className="h-px w-8 bg-gradient-to-l from-transparent to-purple-bright" />
+            </div>
+            <h2 className="text-balance text-[clamp(24px,4vw,40px)] font-extrabold leading-[1.1] tracking-[-0.03em] text-text-1">
+              From repository to verifiable certificate
+            </h2>
+          </div>
+
+          <div className="hidden md:flex md:items-center md:justify-between md:gap-2">
+            {FLOW_STEPS.map((step, index) => (
+              <Fragment key={step.title}>
+                <HowItWorksStep
+                  icon={step.icon}
+                  title={step.title}
+                  description={step.description}
+                />
+                {index < FLOW_STEPS.length - 1 ? (
+                  <div className="relative mx-1 h-[3px] min-w-[2rem] flex-1">
+                    <div className="enclav-flow-track-h absolute inset-0 rounded-full" />
+                    <div className="enclav-flow-dot-h absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-purple-bright shadow-[0_0_14px_rgba(167,139,250,0.85)]" />
+                  </div>
+                ) : null}
+              </Fragment>
+            ))}
+          </div>
+
+          <div className="flex flex-col items-center md:hidden">
+            {FLOW_STEPS.map((step, index) => (
+              <Fragment key={step.title}>
+                <HowItWorksStep
+                  icon={step.icon}
+                  title={step.title}
+                  description={step.description}
+                  compact
+                />
+                {index < FLOW_STEPS.length - 1 ? (
+                  <div className="relative my-3 h-14 w-[3px] shrink-0">
+                    <div className="enclav-flow-track-v absolute inset-0 rounded-full" />
+                    <div className="enclav-flow-dot-v absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-purple-bright shadow-[0_0_14px_rgba(167,139,250,0.85)]" />
+                  </div>
+                ) : null}
+              </Fragment>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <div
-        id="how-it-works"
+        id="platform"
         className="relative z-[1] mx-auto max-w-[1200px] px-6 py-[60px] md:px-12 md:py-[100px]"
       >
         <div className="mb-4 flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.12em] text-purple-bright before:h-px before:w-3 before:bg-purple-bright">
-          How it works
+          Platform
         </div>
         <h2 className="mb-14 max-w-[560px] text-[clamp(28px,4vw,48px)] font-extrabold leading-[1.05] tracking-[-0.03em] md:mb-[60px]">
           Autonomous security from repo to certificate
@@ -389,6 +472,33 @@ export default function Home() {
           ))}
         </div>
       </footer>
+    </div>
+  );
+}
+
+function HowItWorksStep({
+  icon: Icon,
+  title,
+  description,
+  compact = false,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`glass-heavy relative flex min-w-0 flex-col items-center overflow-hidden rounded-2xl border border-[var(--border)] px-4 py-6 text-center ${
+        compact ? "w-full" : "min-w-[140px] flex-1 basis-0"
+      }`}
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-purple/25 bg-[rgba(139,92,246,0.12)]">
+        <Icon className="h-6 w-6 text-purple-bright" strokeWidth={1.6} />
+      </div>
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.1em] text-purple-bright">{title}</p>
+      <p className="max-w-[240px] text-[13px] leading-relaxed text-text-2">{description}</p>
     </div>
   );
 }

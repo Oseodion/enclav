@@ -5,11 +5,8 @@ import {
   Activity,
   Check,
   CheckCircle2,
-  Clock,
   Copy,
-  Database,
   ExternalLink,
-  HelpCircle,
   Info,
   Link2,
   Menu,
@@ -77,8 +74,6 @@ export default function DashboardPage() {
   const { disconnect } = useDisconnect();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("scanner");
-  type SidebarPanel = "none" | "summary" | "recent" | "storage";
-  const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>("none");
   const [contractCopied, setContractCopied] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
   const [isScanning, setIsScanning] = useState(false);
@@ -169,48 +164,6 @@ export default function DashboardPage() {
       ),
     [findings],
   );
-
-  const lastScanSeverityCounts = useMemo(() => {
-    if (findings.length > 0) return findingsSummary;
-    const h = scanHistory[0];
-    if (h) {
-      return {
-        Critical: h.criticalCount,
-        High: h.highCount,
-        Medium: h.mediumCount,
-        Low: h.lowCount,
-      } as Record<FindingSeverity, number>;
-    }
-    return {
-      Critical: 0,
-      High: 0,
-      Medium: 0,
-      Low: 0,
-    } as Record<FindingSeverity, number>;
-  }, [findings, findingsSummary, scanHistory]);
-
-  const lastScanMeta = useMemo(() => {
-    if (latestScanData) {
-      return { repoUrl: latestScanData.repoUrl, scanDate: latestScanData.scanDate };
-    }
-    const h = scanHistory[0];
-    if (h) return { repoUrl: h.repoUrl, scanDate: h.scanDate };
-    return null;
-  }, [latestScanData, scanHistory]);
-
-  const recentRepoUrls = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const entry of scanHistory) {
-      const u = entry.repoUrl;
-      if (!seen.has(u)) {
-        seen.add(u);
-        out.push(u);
-        if (out.length >= 3) break;
-      }
-    }
-    return out;
-  }, [scanHistory]);
 
   const progressPercent =
     totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
@@ -555,7 +508,7 @@ export default function DashboardPage() {
         </div>
       </header>
       <div className="relative z-20 border-b border-white/10 bg-black/95 px-4 py-3 md:hidden">
-        <div className="flex items-center gap-2.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex max-w-full items-center gap-2.5 overflow-x-auto overflow-y-hidden whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button type="button" disabled={scanLocked} onClick={() => handleTabChange("scanner")} className={`min-h-[44px] shrink-0 rounded-lg border px-4 py-2.5 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${activeTab === "scanner" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Scanner</button>
           <button type="button" disabled={scanLocked} onClick={() => handleTabChange("findings")} className={`min-h-[44px] shrink-0 rounded-lg border px-4 py-2.5 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${activeTab === "findings" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>Findings</button>
           <button type="button" disabled={scanLocked} onClick={() => handleTabChange("history")} className={`min-h-[44px] shrink-0 rounded-lg border px-4 py-2.5 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${activeTab === "history" ? "border-[rgba(124,58,237,0.55)] bg-[rgba(124,58,237,0.24)] text-[#F0EEF8]" : "border-white/10 text-[#9B99B0]"}`}>History</button>
@@ -582,153 +535,9 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="relative z-[1] flex min-h-0 flex-1 overflow-hidden">
-        {sidebarPanel !== "none" ? (
-          <button
-            type="button"
-            aria-label="Close quick panel"
-            className="fixed inset-0 z-[85] bg-black/45 md:block"
-            onClick={() => setSidebarPanel("none")}
-          />
-        ) : null}
-
-        <aside
-          className={`${panelClass} relative z-[88] m-3 hidden w-[56px] shrink-0 flex-col items-center gap-1.5 bg-[rgba(255,255,255,0.02)] py-3 md:flex`}
-        >
-          <SidebarQuickIcon
-            icon={Shield}
-            label="Last scan summary - findings count per severity"
-            active={sidebarPanel === "summary"}
-            onClick={() => setSidebarPanel((p) => (p === "summary" ? "none" : "summary"))}
-          />
-          <SidebarQuickIcon
-            icon={Clock}
-            label="Recently scanned repos (last 3)"
-            active={sidebarPanel === "recent"}
-            onClick={() => setSidebarPanel((p) => (p === "recent" ? "none" : "recent"))}
-          />
-          <SidebarQuickIcon
-            icon={Database}
-            label="0G Storage usage and scan snapshot stats"
-            active={sidebarPanel === "storage"}
-            onClick={() => setSidebarPanel((p) => (p === "storage" ? "none" : "storage"))}
-          />
-          <div className="my-1 h-px w-6 bg-[#2E2C3E]" />
-          <button
-            type="button"
-            title="Built on 0G Infrastructure - TeeML - OpenClaw"
-            aria-label="Built on 0G Infrastructure - TeeML - OpenClaw"
-            className="flex h-[36px] w-[36px] items-center justify-center rounded-lg text-[#9B99B0] transition hover:bg-white/5 hover:text-[#A78BFA]"
-          >
-            <HelpCircle className="h-4 w-4" strokeWidth={1.6} />
-          </button>
-        </aside>
-
-        {sidebarPanel === "summary" ? (
-          <div
-            className={`${panelClass} fixed left-3 top-[120px] z-[90] w-[min(300px,calc(100vw-1.5rem))] border border-white/15 p-4 shadow-2xl md:left-[72px] md:top-[88px]`}
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-label="Last scan summary"
-          >
-            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[#9B99B0]">
-              Last scan summary
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] px-3 py-2">
-                <p className="font-mono text-[10px] uppercase text-[#FCA5A5]">Critical</p>
-                <p className="font-mono text-xl text-[#F0EEF8]">{lastScanSeverityCounts.Critical}</p>
-              </div>
-              <div className="rounded-lg border border-[rgba(249,115,22,0.25)] bg-[rgba(249,115,22,0.08)] px-3 py-2">
-                <p className="font-mono text-[10px] uppercase text-[#FDBA74]">High</p>
-                <p className="font-mono text-xl text-[#F0EEF8]">{lastScanSeverityCounts.High}</p>
-              </div>
-              <div className="rounded-lg border border-[rgba(234,179,8,0.25)] bg-[rgba(234,179,8,0.08)] px-3 py-2">
-                <p className="font-mono text-[10px] uppercase text-[#FDE68A]">Medium</p>
-                <p className="font-mono text-xl text-[#F0EEF8]">{lastScanSeverityCounts.Medium}</p>
-              </div>
-              <div className="rounded-lg border border-[rgba(59,130,246,0.25)] bg-[rgba(59,130,246,0.08)] px-3 py-2">
-                <p className="font-mono text-[10px] uppercase text-[#93C5FD]">Low</p>
-                <p className="font-mono text-xl text-[#F0EEF8]">{lastScanSeverityCounts.Low}</p>
-              </div>
-            </div>
-            {lastScanMeta ? (
-              <p className="mt-3 truncate font-mono text-[10px] text-[#6B6880]" title={lastScanMeta.repoUrl}>
-                {extractRepoDisplayName(lastScanMeta.repoUrl)}
-              </p>
-            ) : (
-              <p className="mt-3 font-mono text-[10px] text-[#6B6880]">No scan data yet</p>
-            )}
-          </div>
-        ) : null}
-
-        {sidebarPanel === "recent" ? (
-          <div
-            className={`${panelClass} fixed left-3 top-[120px] z-[90] w-[min(300px,calc(100vw-1.5rem))] border border-white/15 p-4 shadow-2xl md:left-[72px] md:top-[88px]`}
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-label="Recently scanned repositories"
-          >
-            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[#9B99B0]">
-              Recent repos
-            </p>
-            {recentRepoUrls.length === 0 ? (
-              <p className="font-mono text-xs text-[#6B6880]">No completed scans in history yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {recentRepoUrls.map((url) => (
-                  <li
-                    key={url}
-                    className="truncate rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-3 py-2 font-mono text-[11px] text-[#E9E4FF]"
-                    title={url}
-                  >
-                    {extractRepoDisplayName(url)}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ) : null}
-
-        {sidebarPanel === "storage" ? (
-          <div
-            className={`${panelClass} fixed left-3 top-[120px] z-[90] w-[min(320px,calc(100vw-1.5rem))] border border-white/15 p-4 shadow-2xl md:left-[72px] md:top-[88px]`}
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-label="0G Storage snapshot"
-          >
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[#9B99B0]">
-              0G Storage - scan snapshot
-            </p>
-            <p className="mb-3 text-xs leading-relaxed text-[#9B99B0]">
-              Repository chunks and the aggregated findings report are uploaded to 0G Storage during each
-              scan (serial uploads per file plus a JSON summary).
-            </p>
-            <div className="space-y-2 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3 font-mono text-[11px]">
-              <div className="flex justify-between gap-2 text-[#9B99B0]">
-                <span>Files processed (session)</span>
-                <span className="text-[#F0EEF8]">
-                  {scannedFiles}/{totalFiles || "-"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-2 text-[#9B99B0]">
-                <span>Summary report hash</span>
-                <span className="max-w-[140px] truncate text-[#A78BFA]" title={latestScanData?.reportHash ?? ""}>
-                  {latestScanData?.reportHash
-                    ? `${latestScanData.reportHash.slice(0, 10)}…${latestScanData.reportHash.slice(-8)}`
-                    : "-"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-2 text-[#9B99B0]">
-                <span>Findings in report</span>
-                <span className="text-[#F0EEF8]">{latestScanData?.totalFindings ?? "-"}</span>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <section className="flex min-w-0 flex-1 flex-col overflow-hidden px-4 py-4 pb-6 md:p-3 md:pb-3 md:pl-0">
-          <div className={`${panelClass} sticky top-0 z-10 mb-4 shrink-0 p-4 md:mb-3 md:p-3`}>
+      <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-4 pb-6 md:p-3 md:pb-3">
+          <div className={`${panelClass} sticky top-0 z-10 mb-4 max-w-full shrink-0 overflow-hidden p-4 md:mb-3 md:p-3`}>
             <div className="flex flex-col gap-3 md:flex-row md:gap-2">
               <div className="relative flex-1">
                 <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B99B0]" />
@@ -737,7 +546,7 @@ export default function DashboardPage() {
                   onChange={(e) => setRepoUrl(e.target.value)}
                   disabled={isScanning}
                   placeholder="Paste GitHub repo URL to begin scan..."
-                  className="w-full min-h-[48px] rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-3 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40 disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:py-2"
+                  className="w-full min-h-[48px] min-w-0 rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-3 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40 disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:py-2"
                 />
               </div>
               <button
@@ -749,9 +558,9 @@ export default function DashboardPage() {
                 {isScanning ? "Scanning..." : "Start Scan"}
               </button>
             </div>
-            <p className="mt-3 flex items-start justify-center gap-2 px-1 text-center font-mono text-[11px] leading-relaxed text-[var(--text-3)] sm:mt-2 sm:items-center">
+            <p className="mt-3 flex items-start justify-center gap-2 overflow-hidden px-1 text-center font-mono text-[11px] leading-relaxed text-[var(--text-3)] sm:mt-2 sm:items-center">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#6B6880] sm:mt-0" />
-              <span className="text-left sm:text-center">
+              <span className="break-words text-left sm:text-center">
                 Supports public GitHub repositories only - Results may vary by codebase - AI-generated
                 findings - always verify with your security team
               </span>
@@ -764,7 +573,7 @@ export default function DashboardPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2 text-xs">
                     <ShieldCheck className="h-4 w-4 animate-pulse text-[#A78BFA]" />
-                    <span className="font-medium">
+                    <span className="break-words font-medium">
                       {mintStatusMessage ?? "Scan complete. Mint your security certificate from your wallet."}
                     </span>
                   </div>
@@ -811,7 +620,7 @@ export default function DashboardPage() {
                   ) : (
                     <TriangleAlert className="h-4 w-4 shrink-0" />
                   )}
-                  <span>
+                  <span className="min-w-0 break-words">
                     {mintStatus === "success"
                       ? mintedTokenId
                         ? `Security certificate minted - Token #${mintedTokenId}`
@@ -847,7 +656,7 @@ export default function DashboardPage() {
               </div>
             ) : null}
             {scanError ? (
-              <p className="mt-2 font-mono text-[11px] text-[#EF4444]">{scanError}</p>
+              <p className="mt-2 break-words font-mono text-[11px] text-[#EF4444]">{scanError}</p>
             ) : null}
           </div>
 
@@ -861,6 +670,7 @@ export default function DashboardPage() {
             >
               <LiveScanFeed findings={findings} notices={scanNotices} isScanning={isScanning} />
               <ScanStatus
+                className="max-md:hidden"
                 currentFile={currentFile}
                 scannedFiles={scannedFiles}
                 totalFiles={totalFiles}
@@ -909,9 +719,9 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <footer className={`${panelClass} relative z-[5] mx-4 mb-4 mt-0 flex min-h-[44px] shrink-0 flex-wrap items-center gap-x-4 gap-y-2 overflow-x-auto rounded-xl bg-[rgba(255,255,255,0.02)] px-4 py-3 font-mono text-[10px] text-[#9B99B0] md:mx-3 md:mb-3 md:py-2`}>
+      <footer className={`${panelClass} relative z-[5] mx-4 mb-4 mt-0 flex min-h-[44px] max-w-[calc(100vw-2rem)] shrink-0 flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden rounded-xl bg-[rgba(255,255,255,0.02)] px-4 py-3 font-mono text-[10px] text-[#9B99B0] md:mx-3 md:mb-3 md:max-w-none md:py-2`}>
         <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value="0G Galileo" />
-        <span className="hidden sm:inline-flex">
+        <span className="hidden md:inline-flex">
           <StatusItem
             iconColor={isConnected ? "bg-[#A78BFA]" : "bg-[#A78BFA]"}
             label="Wallet"
@@ -920,10 +730,10 @@ export default function DashboardPage() {
             deferUntilMounted
           />
         </span>
-        <span className="hidden sm:inline-flex">
+        <span className="hidden md:inline-flex">
           <StatusItem iconColor="bg-[#3B82F6]" label="Storage" value={`${scannedFiles}/${totalFiles}`} />
         </span>
-        <span className="hidden sm:inline-flex">
+        <span className="hidden md:inline-flex">
           <StatusItem iconColor="bg-[#10B981]" label="Inference" value={isScanning ? "Running" : "Idle"} />
         </span>
         <StatusItem iconColor="bg-[#EF4444]" label="Critical" value={`${findingsSummary.Critical}`} />
@@ -949,34 +759,6 @@ export default function DashboardPage() {
         }
       `}</style>
     </main>
-  );
-}
-
-function SidebarQuickIcon({
-  icon: Icon,
-  label,
-  active = false,
-  onClick,
-}: {
-  icon: typeof Shield;
-  label: string;
-  active?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className={`flex h-[36px] w-[36px] items-center justify-center rounded-lg transition ${
-        active
-          ? "bg-[rgba(124,58,237,0.22)] text-[#A78BFA]"
-          : "text-[#9B99B0] hover:bg-white/5 hover:text-[#E9E4FF]"
-      }`}
-    >
-      <Icon className="h-4 w-4" strokeWidth={1.6} />
-    </button>
   );
 }
 
@@ -1012,7 +794,7 @@ function LiveScanFeed({
   isScanning: boolean;
 }) {
   return (
-    <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']">
+    <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5 sm:px-5">
         <div className="flex items-center gap-2">
           <ScanSearch className="h-4 w-4 text-[#7C3AED]" />
@@ -1027,7 +809,7 @@ function LiveScanFeed({
         {notices.map((notice) => (
           <div
             key={notice.id}
-            className="rounded-md border border-white/5 bg-[rgba(255,255,255,0.02)] px-3 py-2 font-mono text-[10px] text-[#2E2C3E]"
+            className="break-words rounded-md border border-white/5 bg-[rgba(255,255,255,0.02)] px-3 py-2 font-mono text-[10px] text-[#2E2C3E]"
             title={
               notice.message.includes("timed out")
                 ? "Storage uploads may timeout on testnet - this does not affect scan results"
@@ -1065,33 +847,47 @@ function FindingCard({ finding }: { finding: Finding }) {
       : "https://owasp.org/www-community/vulnerabilities/";
 
   return (
-    <article className="rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-4 py-4 shadow-[0_8px_20px_rgba(12,10,24,0.35)] sm:px-5 sm:py-4">
-      <div className="flex flex-col gap-3 md:grid md:grid-cols-[72px_1fr_auto] md:items-start md:gap-3">
-        <div className="flex items-start justify-between gap-3 md:block md:w-[72px]">
+    <article className="max-w-full overflow-hidden rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-4 py-4 shadow-[0_8px_20px_rgba(12,10,24,0.35)] sm:px-5 sm:py-4">
+      <div className="hidden gap-3 md:grid md:grid-cols-[72px_1fr_auto] md:items-start">
+        <div className="w-[72px]">
           <span className={`inline-flex rounded-[4px] px-2 py-[3px] font-mono text-[10px] uppercase tracking-[0.06em] ${badgeStyles[finding.severity]}`}>
             {finding.severity}
-          </span>
-          <span className="truncate font-mono text-[11px] text-[#9B99B0] md:hidden" title={`${finding.file}:${finding.line}`}>
-            {finding.file}:{finding.line}
           </span>
         </div>
 
         <div className="min-w-0">
-          <p className="text-[14px] font-medium leading-relaxed text-[#F4F2FF]">{finding.description}</p>
+          <p className="break-words text-[14px] font-medium leading-relaxed text-[#F4F2FF]">{finding.description}</p>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] pt-3 font-mono text-[11px] text-[#9B99B0] md:flex-col md:items-end md:justify-start md:border-t-0 md:pt-0 md:text-right">
-          <span className="hidden max-w-full truncate md:inline" title={`${finding.file}:${finding.line}`}>
+        <div className="flex flex-col items-end gap-1.5 font-mono text-[11px] text-[#9B99B0] md:text-right">
+          <span className="max-w-full truncate" title={`${finding.file}:${finding.line}`}>
             {finding.file}:{finding.line}
           </span>
           <button
             type="button"
             onClick={() => setExpanded((prev) => !prev)}
-            className="ml-auto rounded-[6px] border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-3 py-1.5 text-[10px] text-[#E9E4FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] hover:text-white md:ml-0 md:px-2 md:py-[3px]"
+            className="rounded-[6px] border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-2 py-[3px] text-[10px] text-[#E9E4FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] hover:text-white"
           >
             View Fix
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-3 md:hidden">
+        <span className={`w-fit rounded-[4px] px-2 py-[3px] font-mono text-[10px] uppercase tracking-[0.06em] ${badgeStyles[finding.severity]}`}>
+          {finding.severity}
+        </span>
+        <p className="break-words text-[14px] font-medium leading-relaxed text-[#F4F2FF]">{finding.description}</p>
+        <p className="break-all font-mono text-[11px] leading-snug text-[#9B99B0]" title={`${finding.file}:${finding.line}`}>
+          {finding.file}:{finding.line}
+        </p>
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          className="w-fit rounded-[6px] border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-3 py-1.5 text-[10px] text-[#E9E4FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] hover:text-white"
+        >
+          View Fix
+        </button>
       </div>
 
       <div
@@ -1100,7 +896,7 @@ function FindingCard({ finding }: { finding: Finding }) {
         }`}
       >
         <div className="rounded-md border border-white/10 bg-[rgba(255,255,255,0.03)] p-3">
-          <p className="mb-2 text-[12px] leading-[1.6] text-[#9B99B0]">
+          <p className="mb-2 break-words text-[12px] leading-[1.6] text-[#9B99B0]">
             <span className="font-semibold text-[#F0EEF8]">Fix guidance:</span>{" "}
             {finding.fix}
           </p>
@@ -1120,6 +916,7 @@ function FindingCard({ finding }: { finding: Finding }) {
 }
 
 function ScanStatus({
+  className,
   currentFile,
   scannedFiles,
   totalFiles,
@@ -1128,6 +925,7 @@ function ScanStatus({
   isScanning,
   scanCompleted,
 }: {
+  className?: string;
   currentFile: string;
   scannedFiles: number;
   totalFiles: number;
@@ -1137,7 +935,7 @@ function ScanStatus({
   scanCompleted: boolean;
 }) {
   return (
-    <section className={`${panelClass} flex h-full min-h-0 flex-col overflow-hidden`}>
+    <section className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-hidden ${className ?? ""}`}>
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5 sm:px-5">
         <h3 className="text-[15px] font-semibold text-[#F0EEF8] sm:text-base">Scan Status</h3>
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
@@ -1149,7 +947,7 @@ function ScanStatus({
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Current file
           </p>
-          <p className="font-mono text-xs text-[#F0EEF8]">{currentFile}</p>
+          <p className="break-words font-mono text-xs text-[#F0EEF8]">{currentFile}</p>
         </div>
 
         <div>
@@ -1172,9 +970,9 @@ function ScanStatus({
             Live events
           </p>
           {logs.map((log, index) => (
-            <div key={`${log}-${index}`} className="flex items-start gap-2 text-xs text-[#9B99B0]">
+            <div key={`${log}-${index}`} className="flex min-w-0 items-start gap-2 text-xs text-[#9B99B0]">
               <Timer className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A78BFA]" />
-              {log}
+              <span className="min-w-0 break-words">{log}</span>
             </div>
           ))}
         </div>
@@ -1207,7 +1005,7 @@ function RightPanelSummary({
   mintedTokenId: string | null;
 }) {
   return (
-    <aside className={`${panelClass} hidden h-full min-h-0 flex-col overflow-y-auto xl:flex [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent`}>
+    <aside className={`${panelClass} hidden h-full min-h-0 min-w-0 flex-col overflow-y-auto xl:flex [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent`}>
       <div className="border-b border-white/10 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
@@ -1339,10 +1137,10 @@ function FindingsTab({
   const scanWhen = latestScanData?.scanDate ? formatScanDate(latestScanData.scanDate) : "";
 
   return (
-    <section className={`${panelClass} flex h-full min-h-0 flex-col overflow-hidden`}>
-      <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
-        <div className="mb-8 md:mb-6">
-          <h2 className="font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:text-3xl">
+    <section className={`${panelClass} flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden`}>
+      <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden p-5 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+        <div className="mb-8 min-w-0 max-w-full md:mb-6">
+          <h2 className="break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:text-3xl">
             Security Findings
           </h2>
           {latestScanData ? (
@@ -1450,8 +1248,8 @@ function HistoryTab({
   canView: boolean;
 }) {
   return (
-    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-5 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
-      <h2 className="mb-8 font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Scan history</h2>
+    <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-5 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
+      <h2 className="mb-8 break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Scan history</h2>
       {!canView ? (
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 text-sm text-[#9B99B0]">
           Connect your wallet to view scan history.
@@ -1479,9 +1277,9 @@ function HistoryTab({
                 key={item.id}
                 className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-5 transition hover:border-[rgba(167,139,250,0.35)] hover:bg-[rgba(124,58,237,0.06)] md:p-4"
               >
-                <p className="font-semibold text-[#F4F2FF]">{extractRepoDisplayName(item.repoUrl)}</p>
-                <p className="mt-1 font-mono text-[11px] text-[#9B99B0]">{formatScanDate(item.scanDate)}</p>
-                <p className="mt-2 font-mono text-xs text-[#C4BDD9]">
+                <p className="break-words font-semibold text-[#F4F2FF]">{extractRepoDisplayName(item.repoUrl)}</p>
+                <p className="mt-1 break-words font-mono text-[11px] text-[#9B99B0]">{formatScanDate(item.scanDate)}</p>
+                <p className="mt-2 break-words font-mono text-xs text-[#C4BDD9]">
                   {item.filesScanned} files scanned - {breakdown}
                 </p>
                 <div className="mt-3">
@@ -1523,8 +1321,8 @@ function SettingsTab({
   const explorerContractUrl = `${CHAINSCAN_GALILEO}/address/${INFT_CONTRACT_ADDRESS}`;
 
   return (
-    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-5 md:p-6`}>
-      <h2 className="mb-8 font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Settings</h2>
+    <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-5 md:p-6`}>
+      <h2 className="mb-8 break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Settings</h2>
 
       <div className="mb-8 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-5 md:mb-6 md:p-4">
         <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#9B99B0]">Network</h3>
@@ -1620,9 +1418,11 @@ function StatusItem({
   const renderedValue =
     deferUntilMounted && !mounted ? (fallbackValue ?? "Not connected") : value;
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5">
-      <span className={`h-1.5 w-1.5 rounded-full ${iconColor}`} />
-      {label}: {renderedValue}
+    <span className="inline-flex max-w-[min(100%,11rem)] min-w-0 shrink items-center gap-1.5 overflow-hidden md:max-w-none">
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${iconColor}`} />
+      <span className="min-w-0 truncate font-mono">
+        {label}: {renderedValue}
+      </span>
     </span>
   );
 }
