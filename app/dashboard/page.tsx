@@ -5,6 +5,7 @@ import {
   Activity,
   Check,
   CheckCircle2,
+  ChevronRight,
   Coins,
   Copy,
   ExternalLink,
@@ -967,11 +968,11 @@ export default function DashboardPage() {
             {showScanInputRow ? (
               <>
                 <div
-                  className={`rounded-2xl p-[1px] transition-[box-shadow] duration-300 ${
+                  className={
                     isScanning
-                      ? "animate-shimmer [background:linear-gradient(120deg,rgba(167,139,250,0.55),rgba(124,58,237,0.38),rgba(236,72,153,0.42),rgba(167,139,250,0.55))] bg-[length:200%_200%]"
-                      : ""
-                  }`}
+                      ? "rounded-2xl p-[1px] animate-shimmer [background:linear-gradient(120deg,rgba(167,139,250,0.55),rgba(124,58,237,0.38),rgba(236,72,153,0.42),rgba(167,139,250,0.55))] bg-[length:200%_200%]"
+                      : "rounded-2xl border border-white/[0.09]"
+                  }
                 >
                   <div
                     className={`rounded-2xl bg-[rgba(6,4,12,0.92)] p-1.5 md:p-1 ${
@@ -1308,32 +1309,84 @@ function formatScanDate(iso: string): string {
   }
 }
 
-/** e.g. "May 3, 2026 at 9:35 PM" */
-function formatHistoryScanDate(iso: string): string {
+/** e.g. "May 3, 2026 · 9:35 PM · 21 files scanned" */
+function formatHistoryCardMeta(iso: string, filesScanned: number): string {
   try {
     const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString("en-US", {
+    if (Number.isNaN(d.getTime())) return `${iso} · ${filesScanned} files scanned`;
+    const datePart = d.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
+    });
+    const timePart = d.toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
     });
+    return `${datePart} · ${timePart} · ${filesScanned} files scanned`;
   } catch {
-    return iso;
+    return `${iso} · ${filesScanned} files scanned`;
   }
 }
 
-function formatHistorySummaryLine(item: ScanHistoryEntry): string {
-  const parts: string[] = [`${item.filesScanned} files`];
-  if (item.criticalCount > 0) parts.push(`${item.criticalCount} Critical`);
-  if (item.highCount > 0) parts.push(`${item.highCount} High`);
-  if (item.mediumCount > 0) parts.push(`${item.mediumCount} Medium`);
-  if (item.lowCount > 0) parts.push(`${item.lowCount} Low`);
-  if (parts.length === 1) parts.push("no findings");
-  return parts.join(" · ");
+function HistorySeverityBadges({ item }: { item: ScanHistoryEntry }) {
+  const hasAnyFinding =
+    item.criticalCount > 0 ||
+    item.highCount > 0 ||
+    item.mediumCount > 0 ||
+    item.lowCount > 0;
+
+  if (!hasAnyFinding) {
+    return (
+      <span className="inline-flex rounded-full border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.12)] px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] text-[#6EE7B7]">
+        No issues found
+      </span>
+    );
+  }
+
+  const pills: { label: string; count: number; className: string }[] = [];
+  if (item.criticalCount > 0) {
+    pills.push({
+      label: "Critical",
+      count: item.criticalCount,
+      className: "border-[rgba(248,113,113,0.4)] bg-[rgba(239,68,68,0.15)] text-[#FCA5A5]",
+    });
+  }
+  if (item.highCount > 0) {
+    pills.push({
+      label: "High",
+      count: item.highCount,
+      className: "border-[rgba(251,146,60,0.45)] bg-[rgba(249,115,22,0.14)] text-[#FDBA74]",
+    });
+  }
+  if (item.mediumCount > 0) {
+    pills.push({
+      label: "Medium",
+      count: item.mediumCount,
+      className: "border-[rgba(250,204,21,0.35)] bg-[rgba(234,179,8,0.12)] text-[#FDE68A]",
+    });
+  }
+  if (item.lowCount > 0) {
+    pills.push({
+      label: "Low",
+      count: item.lowCount,
+      className: "border-[rgba(96,165,250,0.4)] bg-[rgba(59,130,246,0.14)] text-[#93C5FD]",
+    });
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {pills.map((p) => (
+        <span
+          key={p.label}
+          className={`inline-flex rounded-full border px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] ${p.className}`}
+        >
+          {p.label} {p.count}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function LiveScanFeed({
@@ -1799,11 +1852,6 @@ function FindingsTab({
   );
 }
 
-function findingFingerprint(f: Finding): string {
-  const text = f.description.slice(0, 160).replace(/\s+/g, " ").trim();
-  return `${f.file}|${f.line}|${f.severity}|${text}`;
-}
-
 function HistoryTab({
   history,
   canView,
@@ -1813,21 +1861,13 @@ function HistoryTab({
   canView: boolean;
   onGoToScanner: () => void;
 }) {
-  const sortedByRepo = useMemo(() => {
-    const map = new Map<string, ScanHistoryEntry[]>();
-    for (const h of history) {
-      const k = normalizeRepoUrlForMemory(h.repoUrl);
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(h);
-    }
-    for (const arr of map.values()) {
-      arr.sort(
-        (a, b) =>
-          new Date(b.scanDate).getTime() - new Date(a.scanDate).getTime(),
-      );
-    }
-    return map;
-  }, [history]);
+  const sortedHistory = useMemo(
+    () =>
+      [...history].sort(
+        (a, b) => new Date(b.scanDate).getTime() - new Date(a.scanDate).getTime(),
+      ),
+    [history],
+  );
 
   return (
     <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-5 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
@@ -1850,59 +1890,40 @@ function HistoryTab({
         </div>
       ) : (
         <div className="space-y-3">
-          {history.map((item) => {
-            const repoKey = normalizeRepoUrlForMemory(item.repoUrl);
-            const branch = sortedByRepo.get(repoKey) ?? [];
-            const branchIdx = branch.findIndex((x) => x.id === item.id);
-            const olderScan =
-              branchIdx >= 0 && branchIdx < branch.length - 1
-                ? branch[branchIdx + 1]
-                : null;
-
-            const prevKeys = olderScan
-              ? new Set(olderScan.findings.map((f) => findingFingerprint(f)))
-              : null;
-            const currKeys = new Set(item.findings.map((f) => findingFingerprint(f)));
-            const fixedFindings =
-              olderScan && prevKeys
-                ? olderScan.findings.filter((f) => !currKeys.has(findingFingerprint(f)))
-                : [];
-            const newFindings =
-              olderScan && prevKeys
-                ? item.findings.filter((f) => !prevKeys.has(findingFingerprint(f)))
-                : [];
+          {sortedHistory.map((item) => {
+            const certHref = item.tokenId?.trim()
+              ? `/agent-id?tokenId=${encodeURIComponent(item.tokenId.trim())}`
+              : "/agent-id";
 
             return (
               <div
                 key={item.id}
-                className="flex flex-col gap-2 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 transition hover:border-[rgba(167,139,250,0.35)] md:flex-row md:items-start md:justify-between md:gap-3 md:p-3.5"
+                className="flex flex-col gap-3 rounded-2xl border border-white/[0.09] bg-[rgba(255,255,255,0.03)] p-4 transition hover:border-[rgba(167,139,250,0.28)] hover:bg-[rgba(124,58,237,0.06)] md:flex-row md:items-start md:justify-between md:gap-5 md:p-4"
               >
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p className="truncate font-semibold text-[#F4F2FF]">{extractRepoDisplayName(item.repoUrl)}</p>
-                  <p className="truncate font-mono text-[11px] text-[#9B99B0]">{formatHistoryScanDate(item.scanDate)}</p>
-                  <p className="truncate font-mono text-[11px]" title="Fingerprint-based diff vs previous scan">
-                    <span className="text-[#C4BDD9]">{formatHistorySummaryLine(item)}</span>
-                    {olderScan ? (
-                      <span className="text-[#9D8BCF]">
-                        {" "}
-                        · vs previous: {fixedFindings.length} no longer detected · {newFindings.length} new
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="truncate font-geist text-[15px] font-semibold tracking-tight text-[#F4F2FF]">
+                    {extractRepoDisplayName(item.repoUrl)}
+                  </p>
+                  <p className="font-mono text-[11px] leading-relaxed text-[#9B99B0]">
+                    {formatHistoryCardMeta(item.scanDate, item.filesScanned)}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <HistorySeverityBadges item={item} />
+                    {item.tokenId?.trim() ? (
+                      <span className="inline-flex rounded-full border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.2)] px-2.5 py-0.5 font-mono text-[10px] tracking-tight text-[#DDD6FE]">
+                        Token #{item.tokenId.trim()} · ENCLAV
                       </span>
                     ) : null}
-                  </p>
+                  </div>
                 </div>
-                <div className="shrink-0 md:pt-0.5">
-                  {item.tokenId ? (
-                    <Link
-                      href={`/agent-id?tokenId=${encodeURIComponent(item.tokenId)}`}
-                      className="inline-flex w-full justify-center rounded-full border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.25)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#E9E4FF] transition hover:bg-[rgba(124,58,237,0.4)] md:w-auto"
-                    >
-                      View Certificate
-                    </Link>
-                  ) : (
-                    <span className="font-mono text-[10px] text-[#4A475C]" title="Mint a certificate after scan to link">
-                      No certificate
-                    </span>
-                  )}
+                <div className="flex shrink-0 md:items-start md:pt-0.5">
+                  <Link
+                    href={certHref}
+                    className="inline-flex w-full items-center justify-center gap-0.5 rounded-full border border-[rgba(167,139,250,0.4)] bg-[rgba(124,58,237,0.18)] px-4 py-2 font-mono text-[11px] text-[#E9E4FF] transition hover:bg-[rgba(124,58,237,0.32)] md:w-auto"
+                  >
+                    View Certificate
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                  </Link>
                 </div>
               </div>
             );
