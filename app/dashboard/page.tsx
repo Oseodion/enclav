@@ -896,7 +896,7 @@ export default function DashboardPage() {
               {creditsLoading
                 ? "…"
                 : scanCreditsWei !== null
-                  ? `${formatOgFromWei(scanCreditsWei)} OG`
+                  ? `${formatOgFromWei(scanCreditsWei, 2)} OG`
                   : "—"}
             </div>
           ) : null}
@@ -1219,37 +1219,11 @@ export default function DashboardPage() {
 
       <footer className={`${panelClass} relative z-[5] mx-4 mb-4 mt-0 flex min-h-[44px] max-w-[calc(100vw-2rem)] shrink-0 flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden rounded-xl bg-[rgba(255,255,255,0.02)] px-4 py-3 font-mono text-[10px] text-[#9B99B0] md:mx-3 md:mb-3 md:max-w-none md:py-2`}>
         <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value="0G Galileo" />
-        <span className="hidden md:inline-flex">
-          <StatusItem
-            iconColor={isConnected ? "bg-[#A78BFA]" : "bg-[#A78BFA]"}
-            label="Wallet"
-            value={isConnected && address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}
-            fallbackValue="Not connected"
-            deferUntilMounted
-          />
-        </span>
-        <span className="hidden md:inline-flex">
-          <StatusItem iconColor="bg-[#3B82F6]" label="Storage" value={`${scannedFiles}/${totalFiles}`} />
-        </span>
-        <span className="hidden md:inline-flex">
-          <StatusItem iconColor="bg-[#10B981]" label="Inference" value={isScanning ? "Running" : "Idle"} />
-        </span>
-        <StatusItem iconColor="bg-[#EF4444]" label="Critical" value={`${findingsSummary.Critical}`} />
-        {isConnected && creditsContractConfigured ? (
-          <span className="inline-flex min-w-0 max-w-[min(100%,14rem)] shrink md:max-w-none">
-            <StatusItem
-              iconColor="bg-[#F59E0B]"
-              label="Credits"
-              value={
-                creditsLoading
-                  ? "…"
-                  : scanCreditsWei !== null
-                    ? `${formatOgFromWei(scanCreditsWei)} OG`
-                    : "—"
-              }
-            />
-          </span>
-        ) : null}
+        <StatusItem
+          iconColor={isScanning ? "bg-[#10B981]" : "bg-[#6B7280]"}
+          label="Inference"
+          value={isScanning ? "Running" : "Idle"}
+        />
       </footer>
       <CreditsDepositModal
         open={creditsModalOpen}

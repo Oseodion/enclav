@@ -13,7 +13,7 @@ import {
   parseRepoMemoryJson,
   type EnclavRepoMemoryV1,
 } from "@/lib/0g/memory";
-import { runSecurityScan } from "@/lib/openclaw/agent";
+import { deduplicateFindingsByFileLineIssue, runSecurityScan } from "@/lib/openclaw/agent";
 import { downloadTextByRootHash, uploadFile } from "@/lib/0g/storage";
 
 type ScanRequestBody = {
@@ -54,6 +54,15 @@ const EXCLUDED_SCAN_EXACT_PATHS = new Set(
     "next.config.mjs",
     "tsconfig.json",
     "next-env.d.ts",
+    "lib/0g/compute.ts",
+    "lib/0g/storage.ts",
+    "lib/0g/inft.ts",
+    "lib/0g/credits.ts",
+    "lib/0g/memory.ts",
+    "lib/openclaw/agent.ts",
+    "lib/openclaw/skills/0g-deploy.ts",
+    "lib/wagmi.ts",
+    "lib/wallet.ts",
   ].map((p) => p.toLowerCase()),
 );
 const GITHUB_REPO_URL_PATTERN =
@@ -349,7 +358,8 @@ export async function POST(request: Request) {
               throw new Error("OpenClaw scan returned no result.");
             }
 
-            for (const finding of result.findings) {
+            const uniqueForFile = deduplicateFindingsByFileLineIssue(result.findings);
+            for (const finding of uniqueForFile) {
               totalFindings += 1;
               aggregatedFindings.push({
                 ...finding,
@@ -374,11 +384,14 @@ export async function POST(request: Request) {
           }
         };
 
-        for (let i = 0; i < files.length; i++) {
+        const SCAN_BATCH_SIZE = 2;
+        const SCAN_BATCH_DELAY_MS = 6000;
+        for (let i = 0; i < files.length; i += SCAN_BATCH_SIZE) {
           if (i > 0) {
-            await sleep(8000);
+            await sleep(SCAN_BATCH_DELAY_MS);
           }
-          await scanSingleFile(files[i]!);
+          const batch = files.slice(i, i + SCAN_BATCH_SIZE);
+          await Promise.all(batch.map((f) => scanSingleFile(f)));
         }
       } catch (error) {
         const message =

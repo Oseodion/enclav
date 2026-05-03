@@ -22,6 +22,22 @@ type RunSecurityScanOptions = {
   memoryContext?: string;
 };
 
+/** Same file + line + issue text → keep first only (model sometimes repeats). */
+export function deduplicateFindingsByFileLineIssue<T extends { file: string; line: number; issue: string }>(
+  findings: T[],
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const f of findings) {
+    const title = f.issue.replace(/\s+/g, " ").trim();
+    const key = `${f.file}|${f.line}|${title}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(f);
+  }
+  return out;
+}
+
 function getRuntimeConfig() {
   return {
     privateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",
@@ -56,9 +72,10 @@ export async function runSecurityScan(
     const scan = await scanFileForVulnerabilities(broker, file.path, file.content, {
       memoryContext,
     });
+    const findings = deduplicateFindingsByFileLineIssue(scan.findings);
     results.push({
       file: file.path,
-      findings: scan.findings,
+      findings,
       attestationHash: scan.attestationHash,
     });
   }
