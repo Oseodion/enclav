@@ -148,7 +148,7 @@ export async function POST(request: Request) {
     return new Response(
       JSON.stringify({
         error:
-          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded — try again in a few minutes.",
+          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded - try again in a few minutes.",
       }),
       { status: 404, headers: { "Content-Type": "application/json" } },
     );
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
     return new Response(
       JSON.stringify({
         error:
-          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded — try again in a few minutes.",
+          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded - try again in a few minutes.",
       }),
       { status: 403, headers: { "Content-Type": "application/json" } },
     );

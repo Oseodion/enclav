@@ -34,7 +34,7 @@ export type MintCertificateResult = {
 };
 
 export type MintFromWalletOptions = {
-  /** From wagmi `useChainId()` — used with `eth_chainId` to detect Galileo reliably. */
+  /** From wagmi `useChainId()` - used with `eth_chainId` to detect Galileo reliably. */
   wagmiChainId?: number;
 };
 

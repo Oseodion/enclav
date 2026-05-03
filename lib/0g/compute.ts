@@ -274,7 +274,7 @@ export async function scanFileForVulnerabilities(
     return { findings, attestationHash };
   } catch (error) {
     console.error("0G compute file scan failed", { filename, error });
-    throw new Error("Scan failed for this file — continuing");
+    throw new Error("Scan failed for this file - continuing");
   }
 }
 
