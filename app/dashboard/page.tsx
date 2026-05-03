@@ -258,6 +258,7 @@ export default function DashboardPage() {
   const [contractCopied, setContractCopied] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
   const [isScanning, setIsScanning] = useState(false);
+  const [scanNoticeDismissed, setScanNoticeDismissed] = useState(false);
   const [scanCompleted, setScanCompleted] = useState(false);
   const [currentFile, setCurrentFile] = useState("Waiting for repository URL input...");
   const [scanError, setScanError] = useState<string | null>(null);
@@ -269,6 +270,12 @@ export default function DashboardPage() {
   useEffect(() => {
     findingsRef.current = findings;
   }, [findings]);
+
+  useEffect(() => {
+    if (!isScanning) {
+      setScanNoticeDismissed(false);
+    }
+  }, [isScanning]);
   const [scanNotices, setScanNotices] = useState<ScanNotice[]>([]);
   const [latestScanData, setLatestScanData] = useState<MintScanData | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
@@ -825,11 +832,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <main
-      className={`relative flex min-h-dvh h-[100dvh] flex-col overflow-hidden bg-black font-geist text-[#F0EEF8] ${
-        isScanning ? "pb-40" : "pb-28"
-      }`}
-    >
+    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-hidden bg-black pb-28 font-geist text-[#F0EEF8]">
       <AmbientGlow />
       <header className="relative z-10 flex min-h-[56px] shrink-0 items-center border-b border-white/10 bg-black/80 px-4 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -1221,27 +1224,44 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-[15] flex flex-col items-stretch justify-end gap-2 px-4 pb-4 pt-0 md:px-3 md:pb-3">
-        {isScanning ? (
-          <div
-            className="pointer-events-auto mx-auto flex w-full max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl border border-[rgba(234,179,8,0.35)] bg-[rgba(234,179,8,0.16)] px-3 py-2.5 font-mono text-[11px] leading-snug text-[#FDE68A] shadow-[0_-8px_24px_rgba(0,0,0,0.35)] md:max-w-none"
-            role="status"
-            aria-live="polite"
+      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-[15] px-4 pb-4 md:px-3 md:pb-3">
+        <div className="pointer-events-none relative mx-auto w-full max-w-[calc(100vw-2rem)] md:max-w-none">
+          {isScanning && !scanNoticeDismissed ? (
+            <div
+              className="pointer-events-auto absolute bottom-full left-1/2 z-[20] mb-2 w-[min(100%,24rem)] -translate-x-1/2"
+              role="dialog"
+              aria-labelledby="scan-notice-title"
+              aria-live="polite"
+            >
+              <div className="scan-notice-enter relative rounded-2xl border border-[rgba(234,179,8,0.45)] bg-[rgba(35,28,10,0.97)] px-3.5 py-3 pr-11 font-mono text-[11px] leading-snug text-[#FDE68A] shadow-[0_8px_40px_rgba(0,0,0,0.55)] backdrop-blur-md">
+                <button
+                  type="button"
+                  onClick={() => setScanNoticeDismissed(true)}
+                  className="absolute right-2 top-2 rounded-lg p-1 text-[#FDE68A]/75 transition hover:bg-white/10 hover:text-[#FDE68A]"
+                  aria-label="Dismiss scan notice"
+                >
+                  <X className="h-4 w-4" strokeWidth={2} />
+                </button>
+                <div className="flex gap-2.5">
+                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#FBBF24]" strokeWidth={2} aria-hidden />
+                  <p id="scan-notice-title" className="min-w-0 text-balance">
+                    Scan in progress — do not navigate away or the scan will stop
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <footer
+            className={`${panelClass} pointer-events-auto relative z-[5] mx-auto flex min-h-[44px] w-full flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden rounded-xl bg-[rgba(255,255,255,0.02)] px-4 py-3 font-mono text-[10px] text-[#9B99B0] md:py-2`}
           >
-            <TriangleAlert className="h-4 w-4 shrink-0 text-[#FBBF24]" strokeWidth={2} aria-hidden />
-            <span>Scan in progress — do not navigate away or the scan will stop</span>
-          </div>
-        ) : null}
-        <footer
-          className={`${panelClass} pointer-events-auto relative z-[5] mx-auto mb-0 mt-0 flex min-h-[44px] w-full max-w-[calc(100vw-2rem)] shrink-0 flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden rounded-xl bg-[rgba(255,255,255,0.02)] px-4 py-3 font-mono text-[10px] text-[#9B99B0] md:max-w-none md:py-2`}
-        >
-          <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value="0G Galileo" />
-          <StatusItem
-            iconColor={isScanning ? "bg-[#10B981]" : "bg-[#6B7280]"}
-            label="Inference"
-            value={isScanning ? "Running" : "Idle"}
-          />
-        </footer>
+            <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value="0G Galileo" />
+            <StatusItem
+              iconColor={isScanning ? "bg-[#10B981]" : "bg-[#6B7280]"}
+              label="Inference"
+              value={isScanning ? "Running" : "Idle"}
+            />
+          </footer>
+        </div>
       </div>
       <CreditsDepositModal
         open={creditsModalOpen}
@@ -1273,6 +1293,19 @@ export default function DashboardPage() {
           50% {
             box-shadow: 0 0 26px rgba(124, 58, 237, 0.7);
           }
+        }
+        @keyframes scanNoticeSlideUp {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .scan-notice-enter {
+          animation: scanNoticeSlideUp 0.22s ease-out both;
         }
       `}</style>
     </main>
