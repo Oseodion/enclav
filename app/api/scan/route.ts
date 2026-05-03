@@ -1,6 +1,12 @@
 import { ethers } from "ethers";
 import { initializeComputeAccount } from "@/lib/0g/compute";
 import {
+  deductCreditsFromServer,
+  getCreditsBalance,
+  getCreditsContractAddress,
+  SCAN_CREDIT_COST_WEI,
+} from "@/lib/0g/credits";
+import {
   buildLongContextMemoryPrompt,
   enclavMemoryObjectKey,
   hashRepoUrl,
@@ -137,6 +143,43 @@ export async function POST(request: Request) {
       }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
+  }
+
+  const creditsContract = getCreditsContractAddress();
+  if (!creditsContract) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Credits contract is not configured. Set CREDITS_CONTRACT_ADDRESS or NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS.",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (!ethers.isAddress(walletAddress)) {
+    return new Response(JSON.stringify({ error: "Invalid walletAddress." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    const creditBalance = await getCreditsBalance(walletAddress);
+    if (creditBalance < SCAN_CREDIT_COST_WEI) {
+      return new Response(
+        JSON.stringify({
+          error: "Insufficient scan credits — add credits to continue",
+        }),
+        { status: 402, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to read scan credit balance.";
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const parsedRepo = parseRepoUrl(repoUrl);
@@ -378,6 +421,23 @@ export async function POST(request: Request) {
           const message =
             error instanceof Error ? error.message : "Failed to store summary report.";
           streamChunk(controller, { type: "error", message });
+        }
+
+        if (files.length > 0 && deployerPrivateKey) {
+          try {
+            await deductCreditsFromServer(
+              walletAddress,
+              SCAN_CREDIT_COST_WEI,
+              deployerPrivateKey,
+            );
+          } catch (billingError) {
+            const billingMessage =
+              billingError instanceof Error ? billingError.message : "Credit deduction failed.";
+            streamChunk(controller, {
+              type: "error",
+              message: `Billing: ${billingMessage}`,
+            });
+          }
         }
 
         const severityCounts = aggregatedFindings.reduce(

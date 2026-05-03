@@ -118,7 +118,7 @@ function isGalileoChain(ethDecimal: number, wagmiChainId?: number): boolean {
 /**
  * Forces the injected wallet onto 0G Galileo (16602) before any mint RPC.
  */
-async function ensureWalletOnGalileo(
+export async function ensureWalletOnGalileo(
   injectedProvider: ethers.Eip1193Provider,
   wagmiChainId?: number,
 ): Promise<void> {
