@@ -4,7 +4,7 @@ import { ensureWalletOnGalileo, OG_RPC_URL } from "@/lib/0g/inft";
 
 /** Galileo EnclavCredits deployment (override with env in production). */
 const DEFAULT_CREDITS_CONTRACT_GALILEO =
-  "0x55bB5c0dC4636657BbCbe0701E6134553e3d8F15";
+  "0x502f013010F0229199dFb937C5c783337C5De3EE";
 
 /** Resolved credits contract (server may set CREDITS_CONTRACT_ADDRESS; client needs NEXT_PUBLIC_*). */
 export function getCreditsContractAddress(): string {
