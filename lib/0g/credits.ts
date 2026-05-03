@@ -8,11 +8,15 @@ const DEFAULT_CREDITS_CONTRACT_GALILEO =
 
 /** Resolved credits contract (server may set CREDITS_CONTRACT_ADDRESS; client needs NEXT_PUBLIC_*). */
 export function getCreditsContractAddress(): string {
-  return (
+  const raw =
     process.env.CREDITS_CONTRACT_ADDRESS?.trim() ??
     process.env.NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS?.trim() ??
-    DEFAULT_CREDITS_CONTRACT_GALILEO
-  );
+    DEFAULT_CREDITS_CONTRACT_GALILEO;
+  try {
+    return ethers.getAddress(raw);
+  } catch {
+    return ethers.getAddress(DEFAULT_CREDITS_CONTRACT_GALILEO);
+  }
 }
 
 export const CREDITS_CONTRACT_ADDRESS = getCreditsContractAddress();
@@ -40,7 +44,7 @@ function requireCreditsAddress(): string {
       "Set CREDITS_CONTRACT_ADDRESS or NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS to the EnclavCredits contract.",
     );
   }
-  return addr;
+  return ethers.getAddress(addr);
 }
 
 export async function getCreditsBalance(walletAddress: string): Promise<bigint> {
@@ -48,9 +52,10 @@ export async function getCreditsBalance(walletAddress: string): Promise<bigint> 
   if (!ethers.isAddress(walletAddress)) {
     throw new Error("Invalid wallet address for credit balance.");
   }
+  const user = ethers.getAddress(walletAddress);
   const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
   const c = new ethers.Contract(addr, ABI, provider);
-  const bal: bigint = await c.credits(walletAddress);
+  const bal: bigint = await c.credits(user);
   return bal;
 }
 
@@ -161,6 +166,10 @@ export async function deductCreditsFromServer(
   deployerPrivateKey: string,
 ): Promise<{ txHash: string }> {
   const addr = requireCreditsAddress();
+  if (!ethers.isAddress(userAddress)) {
+    throw new Error("Invalid user address for deductCredits.");
+  }
+  const normalizedUser = ethers.getAddress(userAddress);
   const pk = deployerPrivateKey.trim();
   if (!pk.startsWith("0x") || pk.length < 60) {
     throw new Error("Invalid deployer private key for deductCredits.");
@@ -168,7 +177,7 @@ export async function deductCreditsFromServer(
   const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
   const signer = new ethers.Wallet(pk, provider);
   const cOwner = new ethers.Contract(addr, ABI, signer);
-  const tx = await cOwner.deductCredits(userAddress, amountWei);
+  const tx = await cOwner.deductCredits(normalizedUser, amountWei);
   const receipt = await tx.wait();
   if (!receipt) throw new Error("deductCredits receipt missing.");
   return { txHash: receipt.hash };

@@ -2,9 +2,19 @@ import { ethers, type InterfaceAbi, type TransactionReceipt } from "ethers";
 import type { WalletClient } from "viem";
 import EnclavAbi from "./enclav-abi.json";
 
-export const INFT_CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ??
-  "0x8E2225136CaAf9aD28dDBF86e9280DB326AB2464";
+const INFT_CONTRACT_DEFAULT = "0x8E2225136CaAf9aD28dDBF86e9280DB326AB2464";
+
+function resolveInftContractAddress(): string {
+  const raw = (process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ?? "").trim();
+  const chosen = raw.length > 0 ? raw : INFT_CONTRACT_DEFAULT;
+  try {
+    return ethers.getAddress(chosen);
+  } catch {
+    return ethers.getAddress(INFT_CONTRACT_DEFAULT);
+  }
+}
+
+export const INFT_CONTRACT_ADDRESS = resolveInftContractAddress();
 export const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
 const CHAINSCAN_BASE_URL = "https://chainscan-galileo.0g.ai";
 const OG_GALILEO_CHAIN_ID = 16602;
@@ -215,7 +225,7 @@ export async function mintFromWallet(
   const provider = new ethers.BrowserProvider(injectedProvider);
   await provider.send("eth_requestAccounts", []);
   const signer = await provider.getSigner();
-  const walletAddress = await signer.getAddress();
+  const walletAddress = ethers.getAddress(await signer.getAddress());
 
   const chainSnap = await readWalletChainIdFromProvider(injectedProvider);
   const chainIdHex = chainSnap.normalizedHex;
@@ -223,7 +233,7 @@ export async function mintFromWallet(
 
   const codeHex = (await injectedProvider.request({
     method: "eth_getCode",
-    params: [INFT_CONTRACT_ADDRESS, "latest"],
+    params: [ethers.getAddress(INFT_CONTRACT_ADDRESS), "latest"],
   })) as string;
   const hasContractBytecode = typeof codeHex === "string" && codeHex.length > 2 && codeHex !== "0x";
 
@@ -243,7 +253,11 @@ export async function mintFromWallet(
     );
   }
 
-  const contract = new ethers.Contract(INFT_CONTRACT_ADDRESS, ENCLAV_ABI, signer);
+  const contract = new ethers.Contract(
+    ethers.getAddress(INFT_CONTRACT_ADDRESS),
+    ENCLAV_ABI,
+    signer,
+  );
 
   const mintArgs = [
     walletAddress,

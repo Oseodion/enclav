@@ -174,8 +174,18 @@ export async function POST(request: Request) {
     });
   }
 
+  let normalizedWallet: string;
   try {
-    const creditBalance = await getCreditsBalance(walletAddress);
+    normalizedWallet = ethers.getAddress(walletAddress);
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid walletAddress." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    const creditBalance = await getCreditsBalance(normalizedWallet);
     if (creditBalance < SCAN_CREDIT_COST_WEI) {
       return new Response(
         JSON.stringify({
@@ -435,7 +445,7 @@ export async function POST(request: Request) {
         if (files.length > 0 && deployerPrivateKey) {
           try {
             await deductCreditsFromServer(
-              walletAddress,
+              normalizedWallet,
               SCAN_CREDIT_COST_WEI,
               deployerPrivateKey,
             );

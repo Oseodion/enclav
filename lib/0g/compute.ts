@@ -34,14 +34,22 @@ export type Finding = {
 };
 
 function getEnv() {
+  const rawProvider =
+    (process.env.OG_COMPUTE_PROVIDER ?? process.env.ZEROG_COMPUTE_PROVIDER ?? "").trim();
+  let providerAddress = "";
+  if (rawProvider) {
+    if (!ethers.isAddress(rawProvider)) {
+      throw new Error(
+        `OG_COMPUTE_PROVIDER must be a valid hex address (ENS is not supported on 0G Galileo).`,
+      );
+    }
+    providerAddress = ethers.getAddress(rawProvider);
+  }
   return {
     rpcUrl: process.env.OG_RPC_URL ?? TESTNET_RPC,
     computeApiBaseUrl:
       process.env.OG_COMPUTE_API_BASE_URL ?? COMPUTE_API_BASE_URL_DEFAULT,
-    providerAddress:
-      process.env.OG_COMPUTE_PROVIDER ??
-      process.env.ZEROG_COMPUTE_PROVIDER ??
-      "",
+    providerAddress,
     model: process.env.OG_COMPUTE_MODEL ?? TESTNET_MODEL,
     privateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",
   };
@@ -59,7 +67,15 @@ async function resolveProviderAddress(
   },
   configuredProviderAddress?: string,
 ) {
-  if (configuredProviderAddress) return configuredProviderAddress;
+  const configured = configuredProviderAddress?.trim();
+  if (configured) {
+    if (!ethers.isAddress(configured)) {
+      throw new Error(
+        `OG_COMPUTE_PROVIDER must be a valid hex address (got "${configured}"). ENS is not supported on 0G Galileo.`,
+      );
+    }
+    return ethers.getAddress(configured);
+  }
 
   if (!broker.inference.listService) {
     throw new Error(
@@ -68,14 +84,14 @@ async function resolveProviderAddress(
   }
 
   const services = await broker.inference.listService(0, 20, true);
-  const providerAddress = services.find((s) => !!s.provider)?.provider;
-  if (!providerAddress) {
+  const rawProvider = services.find((s) => !!s.provider)?.provider;
+  if (!rawProvider || !ethers.isAddress(rawProvider)) {
     throw new Error(
       "OG_COMPUTE_PROVIDER is required for security scanning (no providers found via listService).",
     );
   }
 
-  return providerAddress;
+  return ethers.getAddress(rawProvider);
 }
 
 export async function createBroker(signer: ethers.Signer) {
