@@ -3,16 +3,19 @@
 import Link from "next/link";
 import {
   Activity,
+  Check,
   CheckCircle2,
-  Code2,
+  Clock,
+  Copy,
+  Database,
   ExternalLink,
-  Grid2x2,
-  History,
+  HelpCircle,
   Info,
   Link2,
   Menu,
   ScanSearch,
-  Settings2,
+  Search,
+  Shield,
   ShieldAlert,
   ShieldCheck,
   Siren,
@@ -62,6 +65,7 @@ type ScanHistoryEntry = {
 
 const panelClass =
   "relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']";
+const CHAINSCAN_GALILEO = "https://chainscan-galileo.0g.ai";
 const SCAN_HISTORY_KEY = "enclav-scan-history-v1";
 const getWalletHistoryKey = (walletAddress?: string) =>
   walletAddress ? `${SCAN_HISTORY_KEY}:${walletAddress.toLowerCase()}` : null;
@@ -73,7 +77,9 @@ export default function DashboardPage() {
   const { disconnect } = useDisconnect();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("scanner");
-  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("All");
+  type SidebarPanel = "none" | "summary" | "recent" | "storage";
+  const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>("none");
+  const [contractCopied, setContractCopied] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [scanCompleted, setScanCompleted] = useState(false);
@@ -164,6 +170,48 @@ export default function DashboardPage() {
     [findings],
   );
 
+  const lastScanSeverityCounts = useMemo(() => {
+    if (findings.length > 0) return findingsSummary;
+    const h = scanHistory[0];
+    if (h) {
+      return {
+        Critical: h.criticalCount,
+        High: h.highCount,
+        Medium: h.mediumCount,
+        Low: h.lowCount,
+      } as Record<FindingSeverity, number>;
+    }
+    return {
+      Critical: 0,
+      High: 0,
+      Medium: 0,
+      Low: 0,
+    } as Record<FindingSeverity, number>;
+  }, [findings, findingsSummary, scanHistory]);
+
+  const lastScanMeta = useMemo(() => {
+    if (latestScanData) {
+      return { repoUrl: latestScanData.repoUrl, scanDate: latestScanData.scanDate };
+    }
+    const h = scanHistory[0];
+    if (h) return { repoUrl: h.repoUrl, scanDate: h.scanDate };
+    return null;
+  }, [latestScanData, scanHistory]);
+
+  const recentRepoUrls = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const entry of scanHistory) {
+      const u = entry.repoUrl;
+      if (!seen.has(u)) {
+        seen.add(u);
+        out.push(u);
+        if (out.length >= 3) break;
+      }
+    }
+    return out;
+  }, [scanHistory]);
+
   const progressPercent =
     totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
   const mostRecentFindings = isConnected
@@ -171,10 +219,6 @@ export default function DashboardPage() {
       ? findings
       : (scanHistory[0]?.findings ?? [])
     : [];
-  const filteredFindings =
-    severityFilter === "All"
-      ? mostRecentFindings
-      : mostRecentFindings.filter((item) => item.severity === severityFilter);
 
   const persistScanHistory = (entry: ScanHistoryEntry) => {
     const walletHistoryKey = getWalletHistoryKey(address);
@@ -539,13 +583,149 @@ export default function DashboardPage() {
       ) : null}
 
       <div className="relative z-[1] flex min-h-0 flex-1 overflow-hidden">
-        <aside className={`${panelClass} m-3 hidden w-[56px] shrink-0 flex-col items-center gap-1 bg-[rgba(255,255,255,0.02)] py-3 md:flex`}>
-          <SidebarIcon icon={Grid2x2} active={activeTab === "scanner"} title="Scanner" onClick={() => handleTabChange("scanner")} />
-          <SidebarIcon icon={Code2} active={activeTab === "findings"} title="Findings" onClick={() => handleTabChange("findings")} />
-          <SidebarIcon icon={History} active={activeTab === "history"} title="History" onClick={() => handleTabChange("history")} />
+        {sidebarPanel !== "none" ? (
+          <button
+            type="button"
+            aria-label="Close quick panel"
+            className="fixed inset-0 z-[85] bg-black/45 md:block"
+            onClick={() => setSidebarPanel("none")}
+          />
+        ) : null}
+
+        <aside
+          className={`${panelClass} relative z-[88] m-3 hidden w-[56px] shrink-0 flex-col items-center gap-1.5 bg-[rgba(255,255,255,0.02)] py-3 md:flex`}
+        >
+          <SidebarQuickIcon
+            icon={Shield}
+            label="Last scan summary — findings count per severity"
+            active={sidebarPanel === "summary"}
+            onClick={() => setSidebarPanel((p) => (p === "summary" ? "none" : "summary"))}
+          />
+          <SidebarQuickIcon
+            icon={Clock}
+            label="Recently scanned repos (last 3)"
+            active={sidebarPanel === "recent"}
+            onClick={() => setSidebarPanel((p) => (p === "recent" ? "none" : "recent"))}
+          />
+          <SidebarQuickIcon
+            icon={Database}
+            label="0G Storage usage and scan snapshot stats"
+            active={sidebarPanel === "storage"}
+            onClick={() => setSidebarPanel((p) => (p === "storage" ? "none" : "storage"))}
+          />
           <div className="my-1 h-px w-6 bg-[#2E2C3E]" />
-          <SidebarIcon icon={Settings2} active={activeTab === "settings"} title="Settings" onClick={() => handleTabChange("settings")} />
+          <button
+            type="button"
+            title="Built on 0G Infrastructure · TeeML · OpenClaw"
+            aria-label="Built on 0G Infrastructure · TeeML · OpenClaw"
+            className="flex h-[36px] w-[36px] items-center justify-center rounded-lg text-[#9B99B0] transition hover:bg-white/5 hover:text-[#A78BFA]"
+          >
+            <HelpCircle className="h-4 w-4" strokeWidth={1.6} />
+          </button>
         </aside>
+
+        {sidebarPanel === "summary" ? (
+          <div
+            className={`${panelClass} fixed left-3 top-[120px] z-[90] w-[min(300px,calc(100vw-1.5rem))] border border-white/15 p-4 shadow-2xl md:left-[72px] md:top-[88px]`}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Last scan summary"
+          >
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[#9B99B0]">
+              Last scan summary
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] px-3 py-2">
+                <p className="font-mono text-[10px] uppercase text-[#FCA5A5]">Critical</p>
+                <p className="font-mono text-xl text-[#F0EEF8]">{lastScanSeverityCounts.Critical}</p>
+              </div>
+              <div className="rounded-lg border border-[rgba(249,115,22,0.25)] bg-[rgba(249,115,22,0.08)] px-3 py-2">
+                <p className="font-mono text-[10px] uppercase text-[#FDBA74]">High</p>
+                <p className="font-mono text-xl text-[#F0EEF8]">{lastScanSeverityCounts.High}</p>
+              </div>
+              <div className="rounded-lg border border-[rgba(234,179,8,0.25)] bg-[rgba(234,179,8,0.08)] px-3 py-2">
+                <p className="font-mono text-[10px] uppercase text-[#FDE68A]">Medium</p>
+                <p className="font-mono text-xl text-[#F0EEF8]">{lastScanSeverityCounts.Medium}</p>
+              </div>
+              <div className="rounded-lg border border-[rgba(59,130,246,0.25)] bg-[rgba(59,130,246,0.08)] px-3 py-2">
+                <p className="font-mono text-[10px] uppercase text-[#93C5FD]">Low</p>
+                <p className="font-mono text-xl text-[#F0EEF8]">{lastScanSeverityCounts.Low}</p>
+              </div>
+            </div>
+            {lastScanMeta ? (
+              <p className="mt-3 truncate font-mono text-[10px] text-[#6B6880]" title={lastScanMeta.repoUrl}>
+                {extractRepoDisplayName(lastScanMeta.repoUrl)}
+              </p>
+            ) : (
+              <p className="mt-3 font-mono text-[10px] text-[#6B6880]">No scan data yet</p>
+            )}
+          </div>
+        ) : null}
+
+        {sidebarPanel === "recent" ? (
+          <div
+            className={`${panelClass} fixed left-3 top-[120px] z-[90] w-[min(300px,calc(100vw-1.5rem))] border border-white/15 p-4 shadow-2xl md:left-[72px] md:top-[88px]`}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Recently scanned repositories"
+          >
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.1em] text-[#9B99B0]">
+              Recent repos
+            </p>
+            {recentRepoUrls.length === 0 ? (
+              <p className="font-mono text-xs text-[#6B6880]">No completed scans in history yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {recentRepoUrls.map((url) => (
+                  <li
+                    key={url}
+                    className="truncate rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] px-3 py-2 font-mono text-[11px] text-[#E9E4FF]"
+                    title={url}
+                  >
+                    {extractRepoDisplayName(url)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+
+        {sidebarPanel === "storage" ? (
+          <div
+            className={`${panelClass} fixed left-3 top-[120px] z-[90] w-[min(320px,calc(100vw-1.5rem))] border border-white/15 p-4 shadow-2xl md:left-[72px] md:top-[88px]`}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="0G Storage snapshot"
+          >
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[#9B99B0]">
+              0G Storage · scan snapshot
+            </p>
+            <p className="mb-3 text-xs leading-relaxed text-[#9B99B0]">
+              Repository chunks and the aggregated findings report are uploaded to 0G Storage during each
+              scan (serial uploads per file plus a JSON summary).
+            </p>
+            <div className="space-y-2 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3 font-mono text-[11px]">
+              <div className="flex justify-between gap-2 text-[#9B99B0]">
+                <span>Files processed (session)</span>
+                <span className="text-[#F0EEF8]">
+                  {scannedFiles}/{totalFiles || "—"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2 text-[#9B99B0]">
+                <span>Summary report hash</span>
+                <span className="max-w-[140px] truncate text-[#A78BFA]" title={latestScanData?.reportHash ?? ""}>
+                  {latestScanData?.reportHash
+                    ? `${latestScanData.reportHash.slice(0, 10)}…${latestScanData.reportHash.slice(-8)}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2 text-[#9B99B0]">
+                <span>Findings in report</span>
+                <span className="text-[#F0EEF8]">{latestScanData?.totalFindings ?? "—"}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden p-3 md:pl-0">
           <div className={`${panelClass} sticky top-0 z-10 mb-3 shrink-0 p-3`}>
@@ -698,19 +878,30 @@ export default function DashboardPage() {
           ) : null}
           {activeTab === "findings" ? (
             <FindingsTab
-              findings={filteredFindings}
+              findings={mostRecentFindings}
+              latestScanData={latestScanData}
               hasScanData={mostRecentFindings.length > 0}
               canView={isConnected}
-              severityFilter={severityFilter}
-              onFilterChange={setSeverityFilter}
             />
           ) : null}
-          {activeTab === "history" ? <HistoryTab history={scanHistory} canView={isConnected} /> : null}
+          {activeTab === "history" ? (
+            <HistoryTab history={scanHistory} canView={isConnected} />
+          ) : null}
           {activeTab === "settings" ? (
             <SettingsTab
               address={address ?? null}
               isConnected={isConnected}
               onDisconnect={disconnect}
+              contractCopied={contractCopied}
+              onCopyContract={async () => {
+                try {
+                  await navigator.clipboard.writeText(INFT_CONTRACT_ADDRESS);
+                  setContractCopied(true);
+                  window.setTimeout(() => setContractCopied(false), 2000);
+                } catch {
+                  setContractCopied(false);
+                }
+              }}
             />
           ) : null}
         </section>
@@ -759,29 +950,54 @@ export default function DashboardPage() {
   );
 }
 
-function SidebarIcon({
+function SidebarQuickIcon({
   icon: Icon,
+  label,
   active = false,
-  title,
   onClick,
 }: {
-  icon: typeof Grid2x2;
+  icon: typeof Shield;
+  label: string;
   active?: boolean;
-  title: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      title={title}
+      title={label}
+      aria-label={label}
       onClick={onClick}
-      className={`flex h-[36px] w-[36px] items-center justify-center rounded-lg ${
-        active ? "bg-[rgba(124,58,237,0.16)]" : "hover:bg-white/5"
+      className={`flex h-[36px] w-[36px] items-center justify-center rounded-lg transition ${
+        active
+          ? "bg-[rgba(124,58,237,0.22)] text-[#A78BFA]"
+          : "text-[#9B99B0] hover:bg-white/5 hover:text-[#E9E4FF]"
       }`}
     >
-      <Icon className={active ? "h-4 w-4 text-[#A78BFA]" : "h-4 w-4 text-[#2E2C3E]"} strokeWidth={1.6} />
+      <Icon className="h-4 w-4" strokeWidth={1.6} />
     </button>
   );
+}
+
+function extractRepoDisplayName(repoUrl: string): string {
+  try {
+    const parts = new URL(repoUrl).pathname.replace(/^\/+/, "").split("/").filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0]}/${parts[1].replace(/\.git$/, "")}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return repoUrl;
+}
+
+function formatScanDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return iso;
+  }
 }
 
 function LiveScanFeed({
@@ -1068,93 +1284,155 @@ function SummaryRow({
 
 function FindingsTab({
   findings,
+  latestScanData,
   hasScanData,
   canView,
-  severityFilter,
-  onFilterChange,
 }: {
   findings: Finding[];
+  latestScanData: MintScanData | null;
   hasScanData: boolean;
   canView: boolean;
-  severityFilter: SeverityFilter;
-  onFilterChange: (value: SeverityFilter) => void;
 }) {
-  const [expandedFixId, setExpandedFixId] = useState<string | null>(null);
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("All");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const counts = useMemo(() => {
+    return findings.reduce(
+      (acc, f) => {
+        acc[f.severity] += 1;
+        return acc;
+      },
+      {
+        Critical: 0,
+        High: 0,
+        Medium: 0,
+        Low: 0,
+      } as Record<FindingSeverity, number>,
+    );
+  }, [findings]);
+
+  const filteredFindings = useMemo(() => {
+    let list = findings;
+    if (severityFilter !== "All") {
+      list = list.filter((f) => f.severity === severityFilter);
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (f) =>
+          f.file.toLowerCase().includes(q) ||
+          f.description.toLowerCase().includes(q) ||
+          f.fix.toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [findings, severityFilter, searchQuery]);
+
+  const repoHeading = latestScanData?.repoUrl
+    ? extractRepoDisplayName(latestScanData.repoUrl)
+    : "";
+  const scanWhen = latestScanData?.scanDate ? formatScanDate(latestScanData.scanDate) : "";
+
   return (
-    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4`}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-[#F0EEF8]">Findings</h3>
-        <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
-          {(["All", "Critical", "High", "Medium", "Low"] as const).map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              onClick={() => onFilterChange(filter)}
-              className={`rounded px-2 py-1 font-mono text-[10px] uppercase ${
-                severityFilter === filter
-                  ? "bg-[rgba(124,58,237,0.3)] text-white"
-                  : "text-[#9B99B0]"
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
-      </div>
-      {!canView ? (
-        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
-          Connect wallet to view findings history.
-        </div>
-      ) : !hasScanData ? (
-        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
-          Run a scan to see findings
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {findings.map((finding, index) => (
-            <div key={`${finding.file}-${finding.line}-${index}`} className="rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
-              {(() => {
-                const fixId = `${finding.file}:${finding.line}:${index}`;
-                const isExpanded = expandedFixId === fixId;
-                return (
-                  <>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="rounded bg-[rgba(124,58,237,0.2)] px-2 py-0.5 font-mono text-[10px] uppercase text-[#E9E4FF]">
-                  {finding.severity}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpandedFixId((prev) =>
-                      prev === fixId
-                        ? null
-                        : fixId,
-                    )
-                  }
-                  className="rounded border border-[rgba(167,139,250,0.4)] px-2 py-1 font-mono text-[10px] uppercase text-[#E9E4FF]"
-                >
-                  {isExpanded ? "Hide Fix" : "View Fix"}
-                </button>
-              </div>
-              <p className="text-sm text-[#F4F2FF]">{finding.description}</p>
-              <p className="font-mono text-[11px] text-[#9B99B0]">
-                {finding.file}:{finding.line}
+    <section className={`${panelClass} flex h-full min-h-0 flex-col overflow-hidden`}>
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+        <div className="mb-6">
+          <h2 className="font-geist text-2xl font-bold tracking-tight text-[#F0EEF8] md:text-3xl">
+            Security Findings
+          </h2>
+          {latestScanData ? (
+            <>
+              <p className="mt-2 font-mono text-sm text-[#A78BFA]" title={latestScanData.repoUrl}>
+                {repoHeading}
               </p>
-              {isExpanded ? (
-                <div className="mt-2 rounded-md border border-white/10 bg-[rgba(255,255,255,0.03)] p-2.5">
-                  <p className="text-[12px] text-[#9B99B0]">
-                    <span className="font-semibold text-[#F0EEF8]">Fix guidance:</span>{" "}
-                    {finding.fix}
-                  </p>
-                </div>
-              ) : null}
-                  </>
-                );
-              })()}
-            </div>
-          ))}
+              <p className="mt-1 font-mono text-xs text-[#9B99B0]">Scan date · {scanWhen}</p>
+            </>
+          ) : (
+            <p className="mt-2 font-mono text-xs text-[#6B6880]">No scan metadata loaded yet.</p>
+          )}
         </div>
-      )}
+
+        {!canView ? (
+          <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 text-sm text-[#9B99B0]">
+            Connect your wallet to view findings.
+          </div>
+        ) : !hasScanData ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[rgba(255,255,255,0.02)] px-6 py-16 text-center">
+            <Shield className="mb-4 h-12 w-12 text-[#4A475C]" strokeWidth={1.25} />
+            <p className="max-w-sm font-mono text-sm text-[#9B99B0]">Run a scan to see findings</p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-xl border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] px-3 py-3 text-center">
+                <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#FCA5A5]">Critical</p>
+                <p className="font-mono text-2xl font-semibold text-[#F0EEF8]">{counts.Critical}</p>
+              </div>
+              <div className="rounded-xl border border-[rgba(249,115,22,0.3)] bg-[rgba(249,115,22,0.08)] px-3 py-3 text-center">
+                <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#FDBA74]">High</p>
+                <p className="font-mono text-2xl font-semibold text-[#F0EEF8]">{counts.High}</p>
+              </div>
+              <div className="rounded-xl border border-[rgba(234,179,8,0.3)] bg-[rgba(234,179,8,0.08)] px-3 py-3 text-center">
+                <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#FDE68A]">Medium</p>
+                <p className="font-mono text-2xl font-semibold text-[#F0EEF8]">{counts.Medium}</p>
+              </div>
+              <div className="rounded-xl border border-[rgba(59,130,246,0.3)] bg-[rgba(59,130,246,0.08)] px-3 py-3 text-center">
+                <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#93C5FD]">Low</p>
+                <p className="font-mono text-2xl font-semibold text-[#F0EEF8]">{counts.Low}</p>
+              </div>
+            </div>
+
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
+                {(["All", "Critical", "High", "Medium", "Low"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setSeverityFilter(filter)}
+                    className={`rounded px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] transition ${
+                      severityFilter === filter
+                        ? "bg-[rgba(124,58,237,0.35)] text-white"
+                        : "text-[#9B99B0] hover:text-[#F0EEF8]"
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+              <div className="relative flex min-w-0 flex-1 sm:max-w-xs sm:flex-none">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B6880]" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Filter by file or issue…"
+                  className="w-full rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-2 pl-9 pr-3 font-mono text-xs text-[#F0EEF8] outline-none placeholder:text-[#6B6880] focus:border-[#A78BFA]/40"
+                />
+              </div>
+              <button
+                type="button"
+                disabled
+                title="Coming soon"
+                className="shrink-0 rounded-full border border-white/10 bg-[rgba(255,255,255,0.04)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#4A475C] cursor-not-allowed"
+              >
+                Export Report
+              </button>
+            </div>
+
+            <div className="space-y-[12px] pb-4">
+              {filteredFindings.length === 0 ? (
+                <p className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.03)] p-4 font-mono text-sm text-[#9B99B0]">
+                  No findings match your filters.
+                </p>
+              ) : (
+                filteredFindings.map((finding, index) => (
+                  <FindingCard key={`${finding.file}-${finding.line}-${index}`} finding={finding} />
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -1167,32 +1445,57 @@ function HistoryTab({
   canView: boolean;
 }) {
   return (
-    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4`}>
-      <h3 className="mb-3 text-sm font-semibold text-[#F0EEF8]">Scan History</h3>
+    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
+      <h2 className="mb-6 font-geist text-2xl font-bold tracking-tight text-[#F0EEF8]">Scan history</h2>
       {!canView ? (
-        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
-          Connect wallet to view scan history.
+        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 text-sm text-[#9B99B0]">
+          Connect your wallet to view scan history.
         </div>
       ) : history.length === 0 ? (
-        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 text-sm text-[#9B99B0]">
-          No scan history yet
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[rgba(255,255,255,0.02)] px-6 py-16 text-center">
+          <Timer className="mb-4 h-10 w-10 text-[#4A475C]" strokeWidth={1.25} />
+          <p className="max-w-md font-mono text-sm leading-relaxed text-[#9B99B0]">
+            No scans yet — your scan history will appear here
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {history.map((item) => (
-            <div key={item.id} className="rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
-              <p className="mb-1 text-sm text-[#F4F2FF]">{item.repoUrl}</p>
-              <p className="mb-1 font-mono text-[11px] text-[#9B99B0]">
-                {new Date(item.scanDate).toLocaleString()} · {item.filesScanned} files · {item.totalFindings} findings
-              </p>
-              <p className="font-mono text-[10px] text-[#9B99B0]">
-                Critical: {item.criticalCount} · High: {item.highCount} · Medium: {item.mediumCount} · Low: {item.lowCount}
-              </p>
-              <Link href="/agent-id" className="mt-2 inline-flex rounded border border-[rgba(167,139,250,0.35)] px-2 py-1 font-mono text-[10px] uppercase text-[#A78BFA]">
-                View Certificate
-              </Link>
-            </div>
-          ))}
+          {history.map((item) => {
+            const breakdownParts: string[] = [];
+            if (item.criticalCount > 0) breakdownParts.push(`${item.criticalCount} Critical`);
+            if (item.highCount > 0) breakdownParts.push(`${item.highCount} High`);
+            if (item.mediumCount > 0) breakdownParts.push(`${item.mediumCount} Medium`);
+            if (item.lowCount > 0) breakdownParts.push(`${item.lowCount} Low`);
+            const breakdown =
+              breakdownParts.length > 0 ? breakdownParts.join(" · ") : "No findings";
+
+            return (
+              <div
+                key={item.id}
+                className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 transition hover:border-[rgba(167,139,250,0.35)] hover:bg-[rgba(124,58,237,0.06)]"
+              >
+                <p className="font-semibold text-[#F4F2FF]">{extractRepoDisplayName(item.repoUrl)}</p>
+                <p className="mt-1 font-mono text-[11px] text-[#9B99B0]">{formatScanDate(item.scanDate)}</p>
+                <p className="mt-2 font-mono text-xs text-[#C4BDD9]">
+                  {item.filesScanned} files scanned · {breakdown}
+                </p>
+                <div className="mt-3">
+                  {item.tokenId ? (
+                    <Link
+                      href={`/agent-id?tokenId=${encodeURIComponent(item.tokenId)}`}
+                      className="inline-flex rounded-full border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.25)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#E9E4FF] transition hover:bg-[rgba(124,58,237,0.4)]"
+                    >
+                      View Certificate
+                    </Link>
+                  ) : (
+                    <span className="font-mono text-[10px] text-[#4A475C]" title="Mint a certificate after scan to link">
+                      Certificate not linked (mint required)
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>
@@ -1203,19 +1506,79 @@ function SettingsTab({
   address,
   isConnected,
   onDisconnect,
+  contractCopied,
+  onCopyContract,
 }: {
   address: string | null;
   isConnected: boolean;
   onDisconnect: () => void;
+  contractCopied: boolean;
+  onCopyContract: () => void | Promise<void>;
 }) {
+  const explorerContractUrl = `${CHAINSCAN_GALILEO}/address/${INFT_CONTRACT_ADDRESS}`;
+
   return (
-    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4`}>
-      <h3 className="mb-3 text-sm font-semibold text-[#F0EEF8]">Settings</h3>
-      <div className="space-y-2 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.04)] p-3 font-mono text-xs">
-        <p className="text-[#9B99B0]">Wallet: <span className="text-[#F0EEF8]">{isConnected && address ? address : "Not connected"}</span></p>
-        <p className="text-[#9B99B0]">Contract: <span className="text-[#F0EEF8]">{INFT_CONTRACT_ADDRESS}</span></p>
-        <p className="text-[#9B99B0]">Network: <span className="text-[#F0EEF8]">0G Galileo Testnet</span></p>
-        <button type="button" onClick={onDisconnect} className="mt-2 rounded border border-[rgba(239,68,68,0.35)] px-2 py-1 text-[10px] uppercase tracking-[0.06em] text-[#FCA5A5]">
+    <section className={`${panelClass} h-full min-h-0 overflow-y-auto p-4 md:p-6`}>
+      <h2 className="mb-6 font-geist text-2xl font-bold tracking-tight text-[#F0EEF8]">Settings</h2>
+
+      <div className="mb-6 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4">
+        <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#9B99B0]">Network</h3>
+        <p className="mb-1 text-sm text-[#F0EEF8]">
+          Current network: <span className="font-mono text-[#A78BFA]">0G Galileo Testnet</span>
+        </p>
+        <p className="mb-4 font-mono text-xs text-[#9B99B0]">Chain ID 16602</p>
+
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[10px] uppercase text-[#9B99B0]">INFT contract</span>
+          <code className="max-w-full truncate rounded border border-white/10 bg-black/40 px-2 py-1 font-mono text-[10px] text-[#E9E4FF]">
+            {INFT_CONTRACT_ADDRESS}
+          </code>
+          <button
+            type="button"
+            onClick={() => void onCopyContract()}
+            title="Copy address"
+            className="inline-flex items-center gap-1 rounded border border-white/15 px-2 py-1 font-mono text-[10px] uppercase text-[#A78BFA] transition hover:bg-white/5"
+          >
+            {contractCopied ? (
+              <>
+                <Check className="h-3 w-3 text-[#6EE7B7]" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="h-3 w-3" />
+                Copy
+              </>
+            )}
+          </button>
+          <a
+            href={explorerContractUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 font-mono text-[10px] uppercase text-[#A78BFA] hover:underline"
+          >
+            Explorer
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+
+        <p className="rounded-lg border border-[rgba(234,179,8,0.2)] bg-[rgba(234,179,8,0.06)] px-3 py-2 font-mono text-[11px] leading-snug text-[#FDE68A]">
+          Switch to mainnet before final submission (hackathon / production certificate).
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 font-mono text-xs">
+        <p className="text-[#9B99B0]">
+          Wallet:{" "}
+          <span className="break-all text-[#F0EEF8]">
+            {isConnected && address ? address : "Not connected"}
+          </span>
+        </p>
+        <button
+          type="button"
+          onClick={onDisconnect}
+          className="mt-4 rounded-lg border border-[rgba(239,68,68,0.35)] px-3 py-2 text-[10px] uppercase tracking-[0.06em] text-[#FCA5A5] transition hover:bg-[rgba(239,68,68,0.08)]"
+        >
           Disconnect wallet
         </button>
       </div>
