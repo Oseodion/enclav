@@ -250,6 +250,13 @@ const getWalletHistoryKey = (walletAddress?: string) =>
 
 export default function DashboardPage() {
   const { address, isConnected } = useWallet();
+  const [clientWalletMounted, setClientWalletMounted] = useState(false);
+  useEffect(() => {
+    setClientWalletMounted(true);
+  }, []);
+  const walletUiReady = clientWalletMounted;
+  const effectiveConnected = walletUiReady && isConnected;
+  const effectiveAddress = walletUiReady ? (address ?? null) : null;
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const { disconnect } = useDisconnect();
@@ -327,10 +334,12 @@ export default function DashboardPage() {
   }, [address, isConnected]);
 
   useEffect(() => {
+    if (!walletUiReady) return;
     void refreshCredits();
-  }, [refreshCredits]);
+  }, [walletUiReady, refreshCredits]);
 
   useEffect(() => {
+    if (!walletUiReady) return;
     if (!isConnected || !address) {
       setScanHistory([]);
       return;
@@ -360,7 +369,7 @@ export default function DashboardPage() {
     } catch {
       setScanHistory([]);
     }
-  }, [address, isConnected]);
+  }, [walletUiReady, address, isConnected]);
 
   useEffect(() => {
     if (mintStatus !== "minting") return;
@@ -397,15 +406,15 @@ export default function DashboardPage() {
     totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
 
   const needsCreditsDeposit =
-    isConnected &&
+    effectiveConnected &&
     creditsContractConfigured &&
     !creditsLoading &&
     scanCreditsWei !== null &&
     scanCreditsWei === BigInt(0);
   const creditsReadFailed =
-    isConnected && creditsContractConfigured && !creditsLoading && creditsError !== null;
+    effectiveConnected && creditsContractConfigured && !creditsLoading && creditsError !== null;
   const showScanInputRow =
-    !isConnected || !creditsContractConfigured || !creditsReadFailed;
+    !effectiveConnected || !creditsContractConfigured || !creditsReadFailed;
 
   const handleDepositCredits = async () => {
     if (!walletClient) {
@@ -477,7 +486,7 @@ export default function DashboardPage() {
     }
   };
 
-  const mostRecentFindings = isConnected
+  const mostRecentFindings = effectiveConnected
     ? findings.length > 0
       ? findings
       : (scanHistory[0]?.findings ?? [])
@@ -894,7 +903,7 @@ export default function DashboardPage() {
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {isConnected && creditsContractConfigured ? (
+          {effectiveConnected && creditsContractConfigured ? (
             <div
               className="hidden max-w-[8.5rem] truncate rounded-full border border-[rgba(167,139,250,0.25)] bg-[rgba(124,58,237,0.12)] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[#D4C4FF] sm:inline-flex sm:max-w-none sm:px-2.5 sm:py-1 sm:text-[10px]"
               title="On-chain scan credit balance"
@@ -955,7 +964,7 @@ export default function DashboardPage() {
       <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-4 pb-6 md:p-3 md:pb-3">
           <div className={`${panelClass} sticky top-0 z-10 mb-4 max-w-full shrink-0 overflow-hidden p-4 md:mb-3 md:p-3`}>
-            {isConnected && creditsContractConfigured && creditsReadFailed ? (
+            {effectiveConnected && creditsContractConfigured && creditsReadFailed ? (
               <div className="mb-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] p-3">
                 <p className="font-mono text-[11px] text-[#FCA5A5]">{creditsError}</p>
                 <button
@@ -967,7 +976,7 @@ export default function DashboardPage() {
                 </button>
               </div>
             ) : null}
-            {isConnected && !creditsContractConfigured ? (
+            {effectiveConnected && !creditsContractConfigured ? (
               <p className="mb-3 font-mono text-[11px] text-[#FDE68A]">
                 Scan credits contract is not configured (set NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS).
               </p>
@@ -1003,8 +1012,8 @@ export default function DashboardPage() {
                         disabled={
                           isScanning ||
                           creditsReadFailed ||
-                          (Boolean(isConnected && creditsContractConfigured && creditsLoading)) ||
-                          (needsCreditsDeposit && creditsContractConfigured && isConnected)
+                          (Boolean(effectiveConnected && creditsContractConfigured && creditsLoading)) ||
+                          (needsCreditsDeposit && creditsContractConfigured && effectiveConnected)
                         }
                         className="flex w-full min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2.5 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:w-auto md:py-2"
                       >
@@ -1023,7 +1032,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
-                {isConnected && creditsContractConfigured && creditsLoading ? (
+                {effectiveConnected && creditsContractConfigured && creditsLoading ? (
                   <p className="mt-2 truncate font-mono text-[10px] text-[#6B6880] sm:text-[11px]">
                     Loading credit balance…
                   </p>
@@ -1070,7 +1079,7 @@ export default function DashboardPage() {
                       disabled={
                         mintStatus === "awaiting_wallet" ||
                         mintStatus === "minting" ||
-                        !isConnected
+                        !effectiveConnected
                       }
                       className="rounded-full border border-[rgba(167,139,250,0.55)] bg-[rgba(124,58,237,0.45)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-white shadow-[0_0_18px_rgba(124,58,237,0.5)] transition disabled:cursor-not-allowed disabled:opacity-60"
                       style={{ animation: "glowBreath 2.4s ease-in-out infinite" }}
@@ -1179,20 +1188,20 @@ export default function DashboardPage() {
               findings={mostRecentFindings}
               latestScanData={latestScanData}
               hasScanData={mostRecentFindings.length > 0}
-              canView={isConnected}
+              canView={effectiveConnected}
             />
           ) : null}
           {activeTab === "history" ? (
             <HistoryTab
               history={scanHistory}
-              canView={isConnected}
+              canView={effectiveConnected}
               onGoToScanner={() => handleTabChange("scanner")}
             />
           ) : null}
           {activeTab === "settings" ? (
             <SettingsTab
-              address={address ?? null}
-              isConnected={isConnected}
+              address={effectiveAddress}
+              isConnected={effectiveConnected}
               onDisconnect={disconnect}
               contractCopied={contractCopied}
               onCopyContract={async () => {

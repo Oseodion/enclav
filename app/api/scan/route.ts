@@ -35,7 +35,31 @@ type GithubBlobFile = {
   url: string;
 };
 
-const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol", ".go"];
+/** File extensions eligible for security scanning (any public repo layout). */
+const SCANNABLE_EXTENSIONS = [
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".py",
+  ".sol",
+  ".go",
+  ".rs",
+  ".java",
+  ".rb",
+  ".php",
+  ".cpp",
+  ".cc",
+  ".c",
+  ".h",
+  ".cs",
+  ".swift",
+  ".kt",
+  ".vue",
+  ".svelte",
+];
 /** Path segment (any depth) — applies to any repository layout. */
 const EXCLUDED_REPO_PATH_SEGMENTS = new Set([
   "node_modules",
@@ -252,7 +276,7 @@ export async function POST(request: Request) {
     const segments = filePath.split("/");
     if (segments.some((seg) => EXCLUDED_REPO_PATH_SEGMENTS.has(seg))) return false;
 
-    return CODE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
+    return SCANNABLE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   }) as GithubBlobFile[];
 
   const stream = new ReadableStream<Uint8Array>({
