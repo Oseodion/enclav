@@ -76,6 +76,29 @@ export function createStorageClient() {
   }
 }
 
+/**
+ * Download UTF-8 text from 0G Storage by content root hash (for long-context memory retrieval).
+ */
+export async function downloadTextByRootHash(rootHash: string): Promise<string | null> {
+  const raw = rootHash.trim();
+  if (!raw) return null;
+  const hex = raw.startsWith("0x") ? raw.slice(2) : raw;
+  if (!/^[0-9a-fA-F]{64}$/i.test(hex)) {
+    return null;
+  }
+  const h = `0x${hex.toLowerCase()}`;
+  try {
+    const indexer = createStorageClient();
+    const [blob, err] = await indexer.downloadToBlob(h);
+    if (err || !blob) {
+      return null;
+    }
+    return await blob.text();
+  } catch {
+    return null;
+  }
+}
+
 export async function uploadFile(
   content: string,
   filename: string,

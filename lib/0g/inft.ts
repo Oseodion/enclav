@@ -24,6 +24,8 @@ export type MintScanData = {
   mediumCount: number;
   lowCount: number;
   reportHash: string;
+  /** Optional: 0G Storage root hash for cross-scan memory blob (not stored on-chain). */
+  memoryRootHash?: string;
 };
 
 export type MintCertificateResult = {

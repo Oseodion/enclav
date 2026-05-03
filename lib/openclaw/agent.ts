@@ -18,6 +18,8 @@ export type OpenClawScanResult = {
 
 type RunSecurityScanOptions = {
   broker?: unknown;
+  /** TeeML long-context memory (previous scan findings from 0G Storage). */
+  memoryContext?: string;
 };
 
 function getRuntimeConfig() {
@@ -47,10 +49,13 @@ export async function runSecurityScan(
   options?: RunSecurityScanOptions,
 ): Promise<OpenClawScanResult[]> {
   const broker = options?.broker ?? (await getBrokerFromEnv());
+  const memoryContext = options?.memoryContext?.trim();
   const results: OpenClawScanResult[] = [];
 
   for (const file of fileContents) {
-    const scan = await scanFileForVulnerabilities(broker, file.path, file.content);
+    const scan = await scanFileForVulnerabilities(broker, file.path, file.content, {
+      memoryContext,
+    });
     results.push({
       file: file.path,
       findings: scan.findings,

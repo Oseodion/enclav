@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   Activity,
+  ArrowRightLeft,
   Check,
   CheckCircle2,
   Copy,
@@ -24,6 +25,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { WalletConnect } from "@/components/ui/WalletConnect";
 import { INFT_CONTRACT_ADDRESS, mintFromWallet, type MintScanData } from "@/lib/0g/inft";
+import { normalizeRepoUrlForMemory } from "@/lib/0g/memory";
 import { useWallet } from "@/lib/wallet";
 import { useChainId, useDisconnect, useWalletClient } from "wagmi";
 
@@ -55,6 +57,8 @@ type ScanHistoryEntry = {
   lowCount: number;
   reportHash: string;
   findings: Finding[];
+  /** 0G Storage root hash of long-context memory blob after this scan. */
+  memoryRootHash?: string | null;
   tokenId?: string | null;
   txHash?: string | null;
   explorerUrl?: string | null;
@@ -114,7 +118,7 @@ export default function DashboardPage() {
       const walletRaw = localStorage.getItem(walletHistoryKey);
       if (walletRaw) {
         const parsed = JSON.parse(walletRaw) as ScanHistoryEntry[];
-        setScanHistory(Array.isArray(parsed) ? parsed.slice(0, 5) : []);
+        setScanHistory(Array.isArray(parsed) ? parsed.slice(0, 15) : []);
         return;
       }
 
@@ -122,7 +126,7 @@ export default function DashboardPage() {
       const legacyRaw = localStorage.getItem(SCAN_HISTORY_KEY);
       if (legacyRaw) {
         const parsedLegacy = JSON.parse(legacyRaw) as ScanHistoryEntry[];
-        const migrated = Array.isArray(parsedLegacy) ? parsedLegacy.slice(0, 5) : [];
+        const migrated = Array.isArray(parsedLegacy) ? parsedLegacy.slice(0, 15) : [];
         localStorage.setItem(walletHistoryKey, JSON.stringify(migrated));
         setScanHistory(migrated);
         return;
@@ -173,11 +177,31 @@ export default function DashboardPage() {
       : (scanHistory[0]?.findings ?? [])
     : [];
 
-  const persistScanHistory = (entry: ScanHistoryEntry) => {
+  const saveCompletedScanToHistory = (scanData: MintScanData, scanFindings: Finding[]) => {
     const walletHistoryKey = getWalletHistoryKey(address);
     if (!walletHistoryKey) return;
+    const entry: ScanHistoryEntry = {
+      id: `scan-${scanData.scanDate}-${encodeURIComponent(scanData.repoUrl)}`,
+      repoUrl: scanData.repoUrl,
+      scanDate: scanData.scanDate,
+      filesScanned: scanData.filesScanned,
+      totalFindings: scanData.totalFindings,
+      criticalCount: scanData.criticalCount,
+      highCount: scanData.highCount,
+      mediumCount: scanData.mediumCount,
+      lowCount: scanData.lowCount,
+      reportHash: scanData.reportHash,
+      findings: scanFindings.map((f) => ({ ...f })),
+      memoryRootHash: scanData.memoryRootHash ?? null,
+      tokenId: null,
+      txHash: null,
+      explorerUrl: null,
+    };
     setScanHistory((prev) => {
-      const next = [entry, ...prev].slice(0, 5);
+      const filtered = prev.filter(
+        (e) => !(e.repoUrl === entry.repoUrl && e.scanDate === entry.scanDate),
+      );
+      const next = [entry, ...filtered].slice(0, 15);
       localStorage.setItem(walletHistoryKey, JSON.stringify(next));
       return next;
     });
@@ -209,6 +233,20 @@ export default function DashboardPage() {
     setScanLogs(["Repository queued. Starting autonomous scan..."]);
     setIsScanning(true);
 
+    const normRepo = normalizeRepoUrlForMemory(trimmedRepoUrl);
+    const priorMemory = scanHistory
+      .filter(
+        (e) =>
+          normalizeRepoUrlForMemory(e.repoUrl) === normRepo &&
+          typeof e.memoryRootHash === "string" &&
+          e.memoryRootHash.length > 0,
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.scanDate).getTime() - new Date(a.scanDate).getTime(),
+      )[0];
+    const previousMemoryRootHash = priorMemory?.memoryRootHash ?? undefined;
+
     try {
       const response = await fetch("/api/scan", {
         method: "POST",
@@ -216,6 +254,9 @@ export default function DashboardPage() {
         body: JSON.stringify({
           repoUrl: trimmedRepoUrl,
           walletAddress: address,
+          ...(previousMemoryRootHash
+            ? { previousMemoryRootHash }
+            : {}),
         }),
       });
 
@@ -269,7 +310,23 @@ export default function DashboardPage() {
                 totalFindings: number;
                 scanData: MintScanData;
               }
+            | {
+                type: "memory";
+                previousFindingCount: number;
+                message: string;
+              }
             | { type: "error"; message: string };
+
+          if (event.type === "memory") {
+            setScanLogs((prev) => [event.message, ...prev.slice(0, 8)]);
+            setScanNotices((prev) => [
+              {
+                id: `memory-${Date.now()}`,
+                message: event.message,
+              },
+              ...prev.slice(0, 8),
+            ]);
+          }
 
           if (event.type === "file") {
             setCurrentFile(event.filename);
@@ -298,6 +355,7 @@ export default function DashboardPage() {
             setCurrentFile("Completed");
             setScanCompleted(true);
             setLatestScanData(event.scanData);
+            saveCompletedScanToHistory(event.scanData, streamedFindings);
             setScanLogs((prev) => [
               `Scan complete. ${event.totalFindings} findings detected.`,
               ...prev.slice(0, 6),
@@ -384,22 +442,49 @@ export default function DashboardPage() {
       setMintStatus("success");
       setMintStatusMessage(result.proofLabel);
       if (result.tokenId && latestScanData && address) {
-        persistScanHistory({
-          id: `${Date.now()}-${latestScanData.repoUrl}`,
-          repoUrl: latestScanData.repoUrl,
-          scanDate: latestScanData.scanDate,
-          filesScanned: latestScanData.filesScanned,
-          totalFindings: latestScanData.totalFindings,
-          criticalCount: latestScanData.criticalCount,
-          highCount: latestScanData.highCount,
-          mediumCount: latestScanData.mediumCount,
-          lowCount: latestScanData.lowCount,
-          reportHash: latestScanData.reportHash,
-          findings: findingsRef.current.map((f) => ({ ...f })),
-          tokenId: result.tokenId,
-          txHash: result.txHash,
-          explorerUrl: result.explorerUrl,
-        });
+        const walletHistoryKey = getWalletHistoryKey(address);
+        if (walletHistoryKey) {
+          setScanHistory((prev) => {
+            const idx = prev.findIndex(
+              (e) =>
+                e.repoUrl === latestScanData.repoUrl &&
+                e.scanDate === latestScanData.scanDate,
+            );
+            let next: ScanHistoryEntry[];
+            if (idx >= 0) {
+              next = [...prev];
+              next[idx] = {
+                ...next[idx],
+                tokenId: result.tokenId,
+                txHash: result.txHash,
+                explorerUrl: result.explorerUrl,
+              };
+            } else {
+              next = [
+                {
+                  id: `${Date.now()}-${latestScanData.repoUrl}`,
+                  repoUrl: latestScanData.repoUrl,
+                  scanDate: latestScanData.scanDate,
+                  filesScanned: latestScanData.filesScanned,
+                  totalFindings: latestScanData.totalFindings,
+                  criticalCount: latestScanData.criticalCount,
+                  highCount: latestScanData.highCount,
+                  mediumCount: latestScanData.mediumCount,
+                  lowCount: latestScanData.lowCount,
+                  reportHash: latestScanData.reportHash,
+                  findings: findingsRef.current.map((f) => ({ ...f })),
+                  memoryRootHash: latestScanData.memoryRootHash ?? null,
+                  tokenId: result.tokenId,
+                  txHash: result.txHash,
+                  explorerUrl: result.explorerUrl,
+                },
+                ...prev,
+              ].slice(0, 15);
+            }
+            localStorage.setItem(walletHistoryKey, JSON.stringify(next.slice(0, 15)));
+            return next;
+          });
+        }
       }
     } catch (error) {
       console.log("[mint] error", error);
@@ -1240,6 +1325,11 @@ function FindingsTab({
   );
 }
 
+function findingFingerprint(f: Finding): string {
+  const text = f.description.slice(0, 160).replace(/\s+/g, " ").trim();
+  return `${f.file}|${f.line}|${f.severity}|${text}`;
+}
+
 function HistoryTab({
   history,
   canView,
@@ -1247,6 +1337,22 @@ function HistoryTab({
   history: ScanHistoryEntry[];
   canView: boolean;
 }) {
+  const sortedByRepo = useMemo(() => {
+    const map = new Map<string, ScanHistoryEntry[]>();
+    for (const h of history) {
+      const k = normalizeRepoUrlForMemory(h.repoUrl);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(h);
+    }
+    for (const arr of map.values()) {
+      arr.sort(
+        (a, b) =>
+          new Date(b.scanDate).getTime() - new Date(a.scanDate).getTime(),
+      );
+    }
+    return map;
+  }, [history]);
+
   return (
     <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-5 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
       <h2 className="mb-8 break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Scan history</h2>
@@ -1272,6 +1378,27 @@ function HistoryTab({
             const breakdown =
               breakdownParts.length > 0 ? breakdownParts.join(" - ") : "No findings";
 
+            const repoKey = normalizeRepoUrlForMemory(item.repoUrl);
+            const branch = sortedByRepo.get(repoKey) ?? [];
+            const branchIdx = branch.findIndex((x) => x.id === item.id);
+            const olderScan =
+              branchIdx >= 0 && branchIdx < branch.length - 1
+                ? branch[branchIdx + 1]
+                : null;
+
+            const prevKeys = olderScan
+              ? new Set(olderScan.findings.map((f) => findingFingerprint(f)))
+              : null;
+            const currKeys = new Set(item.findings.map((f) => findingFingerprint(f)));
+            const fixedFindings =
+              olderScan && prevKeys
+                ? olderScan.findings.filter((f) => !currKeys.has(findingFingerprint(f)))
+                : [];
+            const newFindings =
+              olderScan && prevKeys
+                ? item.findings.filter((f) => !prevKeys.has(findingFingerprint(f)))
+                : [];
+
             return (
               <div
                 key={item.id}
@@ -1296,6 +1423,44 @@ function HistoryTab({
                     </span>
                   )}
                 </div>
+                {olderScan ? (
+                  <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/35 p-3">
+                    <p className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[#A78BFA]">
+                      <ArrowRightLeft className="h-3.5 w-3.5 shrink-0" strokeWidth={1.5} aria-hidden />
+                      Scan comparison (vs {formatScanDate(olderScan.scanDate)})
+                    </p>
+                    <p className="mb-1 font-mono text-[11px] text-[#6EE7B7]">
+                      Likely fixed ({fixedFindings.length})
+                    </p>
+                    {fixedFindings.length === 0 ? (
+                      <p className="mb-3 font-mono text-[10px] text-[#6B6880]">None detected vs prior fingerprint set.</p>
+                    ) : (
+                      <ul className="mb-3 max-h-24 space-y-1 overflow-y-auto font-mono text-[10px] text-[#9B99B0] [scrollbar-width:thin]">
+                        {fixedFindings.slice(0, 8).map((f) => (
+                          <li key={findingFingerprint(f)} className="truncate" title={f.description}>
+                            {f.severity} {f.file}:{f.line} — {f.description.slice(0, 72)}
+                            {f.description.length > 72 ? "…" : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="mb-1 font-mono text-[11px] text-[#FCA5A5]">
+                      New since last scan ({newFindings.length})
+                    </p>
+                    {newFindings.length === 0 ? (
+                      <p className="font-mono text-[10px] text-[#6B6880]">No new fingerprinted issues vs prior scan.</p>
+                    ) : (
+                      <ul className="max-h-24 space-y-1 overflow-y-auto font-mono text-[10px] text-[#C4BDD9] [scrollbar-width:thin]">
+                        {newFindings.slice(0, 8).map((f) => (
+                          <li key={findingFingerprint(f)} className="truncate" title={f.description}>
+                            {f.severity} {f.file}:{f.line} — {f.description.slice(0, 72)}
+                            {f.description.length > 72 ? "…" : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
               </div>
             );
           })}

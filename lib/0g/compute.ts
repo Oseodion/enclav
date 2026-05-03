@@ -151,13 +151,22 @@ async function getBroker() {
   return brokerPromise;
 }
 
+export type ScanFileOptions = {
+  /** Appended to the security system prompt (0G long-context memory). */
+  memoryContext?: string;
+};
+
 export async function scanFileForVulnerabilities(
   broker: unknown,
   filename: string,
   content: string,
+  options?: ScanFileOptions,
 ): Promise<{ findings: Finding[]; attestationHash: string }> {
   try {
     const { providerAddress, model } = getEnv();
+    const systemContent = options?.memoryContext?.trim()
+      ? `${SECURITY_SYSTEM_PROMPT}\n\n${options.memoryContext.trim()}`
+      : SECURITY_SYSTEM_PROMPT;
 
     const sdkBroker = broker as {
       inference: {
@@ -190,7 +199,7 @@ export async function scanFileForVulnerabilities(
     const payload = {
       model: model || service.model || TESTNET_MODEL,
       messages: [
-        { role: "system", content: SECURITY_SYSTEM_PROMPT },
+        { role: "system", content: systemContent },
         {
           role: "user",
           content: `Filename: ${filename}\n\nCode:\n${content}`,

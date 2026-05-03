@@ -1,11 +1,20 @@
 import { ethers } from "ethers";
 import { initializeComputeAccount } from "@/lib/0g/compute";
+import {
+  buildLongContextMemoryPrompt,
+  enclavMemoryObjectKey,
+  hashRepoUrl,
+  parseRepoMemoryJson,
+  type EnclavRepoMemoryV1,
+} from "@/lib/0g/memory";
 import { runSecurityScan } from "@/lib/openclaw/agent";
-import { uploadFile } from "@/lib/0g/storage";
+import { downloadTextByRootHash, uploadFile } from "@/lib/0g/storage";
 
 type ScanRequestBody = {
   repoUrl?: string;
   walletAddress?: string;
+  /** 0G Storage root hash of prior `enclav-memory-*` blob for this repo (long-context memory). */
+  previousMemoryRootHash?: string;
 };
 type StreamFinding = {
   severity: "Critical" | "High" | "Medium" | "Low";
@@ -201,6 +210,7 @@ export async function POST(request: Request) {
       let processedFiles = 0;
       let failedFiles = 0;
       let rootHash: string | null = null;
+      let memoryRootHash: string | null = null;
       const aggregatedFindings: Array<
         StreamFinding & { attestationHash: string }
       > = [];
@@ -210,6 +220,24 @@ export async function POST(request: Request) {
         const signer = new ethers.Wallet(deployerPrivateKey, provider);
         const broker = await initializeComputeAccount(signer);
         const runStorageUploadSequentially = createSequentialTaskRunner();
+
+        let memoryContext: string | undefined;
+        const prevHash = body.previousMemoryRootHash?.trim();
+        if (prevHash) {
+          const rawMem = await downloadTextByRootHash(prevHash);
+          if (rawMem) {
+            const parsedMem = parseRepoMemoryJson(rawMem);
+            if (parsedMem) {
+              memoryContext = buildLongContextMemoryPrompt(parsedMem.aggregatedFindings);
+              const previousFindingCount = parsedMem.aggregatedFindings.length;
+              streamChunk(controller, {
+                type: "memory",
+                previousFindingCount,
+                message: `Previous scan found ${previousFindingCount} issues. Checking for fixes and new vulnerabilities...`,
+              });
+            }
+          }
+        }
 
         const scanSingleFile = async (file: GithubBlobFile, batchIndex: number) => {
           if (!file.path || !file.url) return;
@@ -247,7 +275,7 @@ export async function POST(request: Request) {
               runSecurityScan(
                 repoUrl,
                 [{ path: filePath, content: decodedContent }],
-                { broker },
+                { broker, memoryContext },
               ).then((items) => items[0]),
               COMPUTE_SCAN_TIMEOUT_MS,
               `Compute scan for ${filePath}`,
@@ -295,13 +323,14 @@ export async function POST(request: Request) {
           error instanceof Error ? error.message : "Unexpected scan pipeline error.";
         streamChunk(controller, { type: "error", message });
       } finally {
+        const completedAt = new Date().toISOString();
         try {
           const provider = new ethers.JsonRpcProvider("https://evmrpc-testnet.0g.ai");
           if (deployerPrivateKey) {
             const signer = new ethers.Wallet(deployerPrivateKey, provider);
             const summaryReport = {
               repoUrl,
-              scanDate: new Date().toISOString(),
+              scanDate: completedAt,
               totalFiles: files.length,
               processedFiles,
               failedFiles,
@@ -316,6 +345,33 @@ export async function POST(request: Request) {
               ),
               SUMMARY_UPLOAD_TIMEOUT_MS,
               "Summary report upload",
+            );
+
+            const memoryKey = enclavMemoryObjectKey(repoUrl);
+            const slimFindings = aggregatedFindings.map((f) => ({
+              severity: f.severity,
+              file: f.file,
+              line: f.line,
+              issue: f.issue,
+              fix: f.fix,
+            }));
+            const memoryDoc: EnclavRepoMemoryV1 = {
+              version: 1,
+              key: memoryKey,
+              repoUrl,
+              repoUrlHash: hashRepoUrl(repoUrl),
+              scanDate: completedAt,
+              totalFindings: aggregatedFindings.length,
+              aggregatedFindings: slimFindings,
+            };
+            memoryRootHash = await withTimeout(
+              uploadFile(
+                JSON.stringify(memoryDoc, null, 2),
+                `${memoryKey}.json`,
+                signer,
+              ),
+              SUMMARY_UPLOAD_TIMEOUT_MS,
+              "Long-context memory upload",
             );
           }
         } catch (error) {
@@ -345,7 +401,7 @@ export async function POST(request: Request) {
           totalFindings,
           scanData: {
             repoUrl,
-            scanDate: new Date().toISOString(),
+            scanDate: completedAt,
             filesScanned: processedFiles,
             totalFindings,
             criticalCount: severityCounts.Critical,
@@ -353,6 +409,7 @@ export async function POST(request: Request) {
             mediumCount: severityCounts.Medium,
             lowCount: severityCounts.Low,
             reportHash: rootHash ?? "",
+            ...(memoryRootHash ? { memoryRootHash } : {}),
           },
         });
         controller.close();
