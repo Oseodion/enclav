@@ -36,35 +36,15 @@ type GithubBlobFile = {
 };
 
 const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol", ".go"];
-const EXCLUDED_SCAN_PREFIXES = [
-  "contracts/scripts/",
-  ".git/",
-  "node_modules/",
-  "dist/",
-  "build/",
-  ".next/",
-  "design-templates/",
-];
-/** Exact paths (lowercase) with no security relevance for typical audits. */
-const EXCLUDED_SCAN_EXACT_PATHS = new Set(
-  [
-    "app/layout.tsx",
-    "app/globals.css",
-    "postcss.config.mjs",
-    "next.config.mjs",
-    "tsconfig.json",
-    "next-env.d.ts",
-    "lib/0g/compute.ts",
-    "lib/0g/storage.ts",
-    "lib/0g/inft.ts",
-    "lib/0g/credits.ts",
-    "lib/0g/memory.ts",
-    "lib/openclaw/agent.ts",
-    "lib/openclaw/skills/0g-deploy.ts",
-    "lib/wagmi.ts",
-    "lib/wallet.ts",
-  ].map((p) => p.toLowerCase()),
-);
+/** Path segment (any depth) — applies to any repository layout. */
+const EXCLUDED_REPO_PATH_SEGMENTS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  "design-templates",
+]);
 const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
@@ -269,12 +249,8 @@ export async function POST(request: Request) {
       filePath.includes("/.env.");
     if (isEnvFile) return false;
 
-    if (filePath === "hardhat.config.ts") return false;
-
-    if (EXCLUDED_SCAN_EXACT_PATHS.has(filePath)) return false;
-
-    const isExcluded = EXCLUDED_SCAN_PREFIXES.some((prefix) => filePath.startsWith(prefix));
-    if (isExcluded) return false;
+    const segments = filePath.split("/");
+    if (segments.some((seg) => EXCLUDED_REPO_PATH_SEGMENTS.has(seg))) return false;
 
     return CODE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   }) as GithubBlobFile[];
