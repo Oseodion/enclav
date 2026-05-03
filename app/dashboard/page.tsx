@@ -2177,10 +2177,6 @@ function SettingsTab({
             <ExternalLink className="h-3 w-3" />
           </a>
         </div>
-
-        <p className="rounded-lg border border-[rgba(234,179,8,0.2)] bg-[rgba(234,179,8,0.06)] px-3 py-2 font-mono text-[11px] leading-snug text-[#FDE68A]">
-          Switch to mainnet before final submission (hackathon / production certificate).
-        </p>
       </div>
 
       <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-5 font-mono text-xs md:p-4">
