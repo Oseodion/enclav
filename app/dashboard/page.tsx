@@ -78,8 +78,17 @@ const panelClass =
   "relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']";
 const CHAINSCAN_GALILEO = "https://chainscan-galileo.0g.ai";
 
+/** Display strings aligned with on-chain SCAN_CREDIT_COST_WEI (0.05 OG) and typical mint gas. */
+const COST_LABEL_SCAN_OG = "0.05";
+const COST_LABEL_MINT_GAS_OG = "0.001";
+
+function scansRemainingCount(balanceWei: bigint): bigint {
+  return balanceWei / SCAN_CREDIT_COST_WEI;
+}
+
 function AddScanCreditsPanel({
   balanceLabel,
+  balanceWei,
   depositOg,
   onDepositOgChange,
   onDeposit,
@@ -88,6 +97,7 @@ function AddScanCreditsPanel({
   errorMessage,
 }: {
   balanceLabel: string;
+  balanceWei: bigint | null;
   depositOg: string;
   onDepositOgChange: (value: string) => void;
   onDeposit: () => void;
@@ -95,6 +105,9 @@ function AddScanCreditsPanel({
   scanCostLabel: string;
   errorMessage: string | null;
 }) {
+  const scansRemaining =
+    balanceWei !== null ? scansRemainingCount(balanceWei).toString() : "—";
+
   return (
     <div className="rounded-xl border border-[rgba(167,139,250,0.35)] bg-[rgba(124,58,237,0.08)] p-4 md:p-3">
       <div className="mb-3 flex items-center gap-2">
@@ -103,6 +116,14 @@ function AddScanCreditsPanel({
           Add scan credits
         </h3>
       </div>
+      <ul className="mb-3 space-y-1 font-mono text-[10px] leading-relaxed text-[#6B6880]">
+        <li>1 scan = {COST_LABEL_SCAN_OG} OG</li>
+        <li>Suggested: 0.5 OG covers ~10 scans</li>
+        <li>
+          Scans remaining at current balance:{" "}
+          <span className="text-[#9B99B0]">{scansRemaining}</span>
+        </li>
+      </ul>
       <p className="mb-3 font-mono text-[11px] leading-relaxed text-[#C4BDD9]">
         Deposit native OG on 0G Galileo to your Enclav credit balance. Each completed scan uses{" "}
         <span className="text-[#A78BFA]">{scanCostLabel} OG</span> from your balance.
@@ -595,7 +616,9 @@ export default function DashboardPage() {
     }
     try {
       setMintStatus("awaiting_wallet");
-      setMintStatusMessage("Waiting for wallet confirmation...");
+      setMintStatusMessage(
+        `Minting costs ~${COST_LABEL_MINT_GAS_OG} OG in gas fees. Confirm in MetaMask…`,
+      );
       console.log("[mint] calling mintFromWallet");
       const mintOptions =
         typeof chainId === "number" && Number.isFinite(chainId)
@@ -835,6 +858,7 @@ export default function DashboardPage() {
             {showCreditsGate ? (
               <AddScanCreditsPanel
                 balanceLabel={scanCreditsWei !== null ? formatOgFromWei(scanCreditsWei) : "0"}
+                balanceWei={scanCreditsWei}
                 depositOg={depositCreditsOg}
                 onDepositOgChange={setDepositCreditsOg}
                 onDeposit={() => void handleDepositCredits()}
@@ -865,6 +889,19 @@ export default function DashboardPage() {
                 </button>
               </div>
             ) : null}
+            {showScanInputRow ? (
+              <div className="mt-2 flex items-start gap-2 rounded-lg border border-white/[0.06] bg-[rgba(255,255,255,0.02)] px-3 py-2">
+                <Info
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5A5768]"
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
+                <p className="font-mono text-[10px] leading-relaxed text-[#6B6880] sm:text-[11px]">
+                  Scan cost: ~{COST_LABEL_SCAN_OG} OG · Certificate mint: ~{COST_LABEL_MINT_GAS_OG} OG gas ·
+                  Credits are refundable
+                </p>
+              </div>
+            ) : null}
             <p className="mt-3 flex items-start justify-center gap-2 overflow-hidden px-1 text-center font-mono text-[11px] leading-relaxed text-[var(--text-3)] sm:mt-2 sm:items-center">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#6B6880] sm:mt-0" />
               <span className="break-words text-left sm:text-center">
@@ -885,6 +922,9 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex flex-col items-start sm:items-end">
+                    <p className="mb-2 max-w-full text-left font-mono text-[10px] leading-snug text-[#7A738F] sm:text-right">
+                      Minting costs ~{COST_LABEL_MINT_GAS_OG} OG in gas fees.
+                    </p>
                     <button
                       type="button"
                       onClick={handleMintCertificate}
@@ -1794,8 +1834,17 @@ function SettingsTab({
                 {scanCreditsWei !== null ? `${formatOgFromWei(scanCreditsWei)} OG` : "—"}
               </span>
             </p>
-            <p className="mb-3 font-mono text-[10px] text-[#6B6880]">
-              Each completed scan charges {formatOgFromWei(SCAN_CREDIT_COST_WEI)} OG from your contract balance.
+            <p className="mb-2 font-mono text-[11px] text-[#9B99B0]">
+              {scanCreditsWei !== null ? (
+                <>
+                  ~{scansRemainingCount(scanCreditsWei).toString()} scans remaining (at {COST_LABEL_SCAN_OG} OG each)
+                </>
+              ) : (
+                "— scans remaining"
+              )}
+            </p>
+            <p className="mb-3 font-mono text-[10px] leading-relaxed text-[#6B6880]">
+              Each scan: {COST_LABEL_SCAN_OG} OG · Minting: ~{COST_LABEL_MINT_GAS_OG} OG gas
             </p>
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="font-mono text-[10px] uppercase text-[#9B99B0]">Credits contract</span>
