@@ -825,7 +825,11 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-hidden bg-black font-geist text-[#F0EEF8]">
+    <main
+      className={`relative flex min-h-dvh h-[100dvh] flex-col overflow-hidden bg-black font-geist text-[#F0EEF8] ${
+        isScanning ? "pb-40" : "pb-28"
+      }`}
+    >
       <AmbientGlow />
       <header className="relative z-10 flex min-h-[56px] shrink-0 items-center border-b border-white/10 bg-black/80 px-4 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -1217,14 +1221,28 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <footer className={`${panelClass} relative z-[5] mx-4 mb-4 mt-0 flex min-h-[44px] max-w-[calc(100vw-2rem)] shrink-0 flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden rounded-xl bg-[rgba(255,255,255,0.02)] px-4 py-3 font-mono text-[10px] text-[#9B99B0] md:mx-3 md:mb-3 md:max-w-none md:py-2`}>
-        <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value="0G Galileo" />
-        <StatusItem
-          iconColor={isScanning ? "bg-[#10B981]" : "bg-[#6B7280]"}
-          label="Inference"
-          value={isScanning ? "Running" : "Idle"}
-        />
-      </footer>
+      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-[15] flex flex-col items-stretch justify-end gap-2 px-4 pb-4 pt-0 md:px-3 md:pb-3">
+        {isScanning ? (
+          <div
+            className="pointer-events-auto mx-auto flex w-full max-w-[calc(100vw-2rem)] items-center gap-2 rounded-xl border border-[rgba(234,179,8,0.35)] bg-[rgba(234,179,8,0.16)] px-3 py-2.5 font-mono text-[11px] leading-snug text-[#FDE68A] shadow-[0_-8px_24px_rgba(0,0,0,0.35)] md:max-w-none"
+            role="status"
+            aria-live="polite"
+          >
+            <TriangleAlert className="h-4 w-4 shrink-0 text-[#FBBF24]" strokeWidth={2} aria-hidden />
+            <span>Scan in progress — do not navigate away or the scan will stop</span>
+          </div>
+        ) : null}
+        <footer
+          className={`${panelClass} pointer-events-auto relative z-[5] mx-auto mb-0 mt-0 flex min-h-[44px] w-full max-w-[calc(100vw-2rem)] shrink-0 flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden rounded-xl bg-[rgba(255,255,255,0.02)] px-4 py-3 font-mono text-[10px] text-[#9B99B0] md:max-w-none md:py-2`}
+        >
+          <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value="0G Galileo" />
+          <StatusItem
+            iconColor={isScanning ? "bg-[#10B981]" : "bg-[#6B7280]"}
+            label="Inference"
+            value={isScanning ? "Running" : "Idle"}
+          />
+        </footer>
+      </div>
       <CreditsDepositModal
         open={creditsModalOpen}
         onClose={() => setCreditsModalOpen(false)}

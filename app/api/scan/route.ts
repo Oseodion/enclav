@@ -360,8 +360,8 @@ export async function POST(request: Request) {
           }
         };
 
-        const SCAN_BATCH_SIZE = 2;
-        const SCAN_BATCH_DELAY_MS = 6000;
+        const SCAN_BATCH_SIZE = 3;
+        const SCAN_BATCH_DELAY_MS = 5000;
         for (let i = 0; i < files.length; i += SCAN_BATCH_SIZE) {
           if (i > 0) {
             await sleep(SCAN_BATCH_DELAY_MS);
