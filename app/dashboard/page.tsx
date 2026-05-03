@@ -27,10 +27,6 @@ import { INFT_CONTRACT_ADDRESS, mintFromWallet, type MintScanData } from "@/lib/
 import { useWallet } from "@/lib/wallet";
 import { useChainId, useDisconnect, useWalletClient } from "wagmi";
 
-const SHOW_DEV_QUICK_SCAN =
-  process.env.NODE_ENV === "development" ||
-  process.env.NEXT_PUBLIC_ENABLE_DEV_QUICK_SCAN === "1";
-
 type FindingSeverity = "Critical" | "High" | "Medium" | "Low";
 
 type Finding = {
@@ -190,14 +186,10 @@ export default function DashboardPage() {
     });
   };
 
-  const runScan = async (scanOpts?: { devQuick?: boolean }) => {
+  const startScan = async () => {
     if (isScanning) return;
-    const devQuick = scanOpts?.devQuick === true;
     const trimmedRepoUrl = repoUrl.trim();
-    if (!devQuick && !trimmedRepoUrl) {
-      setScanError("Paste a GitHub repository URL first.");
-      return;
-    }
+    if (!trimmedRepoUrl) return;
     if (!isConnected || !address) {
       setScanError("Connect your wallet before starting a scan.");
       return;
@@ -217,22 +209,17 @@ export default function DashboardPage() {
     setMintStatus("idle");
     setMintStatusMessage(null);
     setCurrentFile("Initializing scanner...");
-    setScanLogs(
-      devQuick
-        ? ["Dev Test Mode: scanning 3 mock files via 0G Compute (no GitHub fetch)..."]
-        : ["Repository queued. Starting autonomous scan..."],
-    );
+    setScanLogs(["Repository queued. Starting autonomous scan..."]);
     setIsScanning(true);
 
     try {
       const response = await fetch("/api/scan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          devQuick
-            ? { devQuickScan: true, walletAddress: address }
-            : { repoUrl: trimmedRepoUrl, walletAddress: address },
-        ),
+        body: JSON.stringify({
+          repoUrl: trimmedRepoUrl,
+          walletAddress: address,
+        }),
       });
 
       if (!response.ok) {
@@ -562,7 +549,7 @@ export default function DashboardPage() {
 
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden p-3 md:pl-0">
           <div className={`${panelClass} sticky top-0 z-10 mb-3 shrink-0 p-3`}>
-            <div className="flex flex-col gap-2 md:flex-row md:items-stretch">
+            <div className="flex flex-col gap-2 md:flex-row">
               <div className="relative flex-1">
                 <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B99B0]" />
                 <input
@@ -573,34 +560,15 @@ export default function DashboardPage() {
                   className="w-full rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-2 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40 disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
-              <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-stretch md:w-auto">
-                <button
-                  type="button"
-                  onClick={() => void runScan()}
-                  disabled={isScanning}
-                  className="w-full rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1 md:w-auto"
-                >
-                  {isScanning ? "Scanning..." : "Start Scan"}
-                </button>
-                {SHOW_DEV_QUICK_SCAN ? (
-                  <button
-                    type="button"
-                    onClick={() => void runScan({ devQuick: true })}
-                    disabled={isScanning}
-                    title="Development only: 3 mock files, real 0G Compute / TeeML"
-                    className="w-full rounded-full border border-white/15 bg-[rgba(255,255,255,0.06)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#B6A7E6] backdrop-blur-[10px] transition hover:border-[rgba(167,139,250,0.35)] hover:text-[#F0EEF8] disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1 md:w-auto"
-                  >
-                    Dev Test Mode
-                  </button>
-                ) : null}
-              </div>
+              <button
+                type="button"
+                onClick={() => void startScan()}
+                disabled={isScanning}
+                className="w-full rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+              >
+                {isScanning ? "Scanning..." : "Start Scan"}
+              </button>
             </div>
-            {SHOW_DEV_QUICK_SCAN ? (
-              <p className="mt-1.5 font-mono text-[10px] leading-snug text-[#5C5A6E]">
-                Dev Test Mode: scans three small mock files via 0G Compute (no GitHub). For development
-                testing only. Server: set ENABLE_DEV_QUICK_SCAN=true to allow in production builds.
-              </p>
-            ) : null}
             <p className="mt-2 flex items-center justify-center gap-1.5 font-mono text-[11px] text-[var(--text-3)]">
               <Info className="h-3 w-3" />
               Supports public GitHub repositories only · Results may vary by codebase ·

@@ -6,7 +6,6 @@ import { uploadFile } from "@/lib/0g/storage";
 type ScanRequestBody = {
   repoUrl?: string;
   walletAddress?: string;
-  devQuickScan?: boolean;
 };
 type StreamFinding = {
   severity: "Critical" | "High" | "Medium" | "Low";
@@ -16,30 +15,10 @@ type StreamFinding = {
   fix: string;
 };
 
-type ScanFileJob = {
+type GithubBlobFile = {
   path: string;
-  url?: string;
-  content?: string;
+  url: string;
 };
-
-/** Label stored in scanData.repoUrl for dev quick scans (no GitHub fetch). */
-const DEV_QUICK_SCAN_REPO_LABEL = "https://github.com/enclav/dev-test-mode";
-const DEV_QUICK_SCAN_FILES: Array<{ path: string; content: string }> = [
-  {
-    path: "dev/mock-a.ts",
-    content:
-      'import http from "http";\nconst s = http.createServer((_req, res) => {\n  const cmd = "placeholder";\n  res.end(cmd);\n});\n',
-  },
-  {
-    path: "dev/mock-b.ts",
-    content:
-      'const demoSecret = "sk-placeholder-demo-not-real";\nexport function expose() { return demoSecret; }\n',
-  },
-  {
-    path: "dev/mock-c.ts",
-    content: "export function unsafeEval(userInput: string) {\n  return eval(userInput);\n}\n",
-  },
-];
 
 const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".py", ".sol", ".go"];
 const EXCLUDED_SCAN_PREFIXES = [
@@ -106,16 +85,9 @@ function streamChunk(controller: ReadableStreamDefaultController<Uint8Array>, ch
   controller.enqueue(encoder.encode(`${JSON.stringify(chunk)}\n`));
 }
 
-function devQuickScanAllowed(): boolean {
-  return (
-    process.env.NODE_ENV === "development" || process.env.ENABLE_DEV_QUICK_SCAN === "true"
-  );
-}
-
 export async function POST(request: Request) {
   const body = (await request.json()) as ScanRequestBody;
-  const devQuickScan = body.devQuickScan === true;
-  const repoUrlInput = body.repoUrl?.trim() ?? "";
+  const repoUrl = body.repoUrl?.trim();
   const walletAddress = body.walletAddress?.trim();
   const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY?.trim();
   const githubToken = process.env.GITHUB_TOKEN?.trim();
@@ -124,11 +96,18 @@ export async function POST(request: Request) {
     ...(githubToken ? { Authorization: `token ${githubToken}` } : {}),
   };
 
-  if (!walletAddress) {
-    return new Response(JSON.stringify({ error: "walletAddress is required." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+  if (!repoUrl || !walletAddress) {
+    return new Response(
+      JSON.stringify({ error: "repoUrl and walletAddress are required." }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (!GITHUB_REPO_URL_PATTERN.test(repoUrl)) {
+    return new Response(
+      JSON.stringify({ error: "Please enter a valid public GitHub repository URL" }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
   }
 
   if (!deployerPrivateKey) {
@@ -151,109 +130,70 @@ export async function POST(request: Request) {
     );
   }
 
-  let resolvedRepoUrl: string;
-  let summaryOwner: string;
-  let summaryRepo: string;
-  let files: ScanFileJob[];
-
-  if (devQuickScan) {
-    if (!devQuickScanAllowed()) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "Dev quick scan is disabled. Run in development or set ENABLE_DEV_QUICK_SCAN=true on the server.",
-        }),
-        { status: 403, headers: { "Content-Type": "application/json" } },
-      );
-    }
-    resolvedRepoUrl = DEV_QUICK_SCAN_REPO_LABEL;
-    summaryOwner = "enclav";
-    summaryRepo = "dev-test-mode";
-    files = DEV_QUICK_SCAN_FILES.map((f) => ({ path: f.path, content: f.content }));
-  } else {
-    if (!repoUrlInput) {
-      return new Response(
-        JSON.stringify({ error: "repoUrl and walletAddress are required." }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    if (!GITHUB_REPO_URL_PATTERN.test(repoUrlInput)) {
-      return new Response(
-        JSON.stringify({ error: "Please enter a valid public GitHub repository URL" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    const parsedRepo = parseRepoUrl(repoUrlInput);
-    if (!parsedRepo) {
-      return new Response(JSON.stringify({ error: "Invalid GitHub repository URL." }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const { owner, repo } = parsedRepo;
-    summaryOwner = owner;
-    summaryRepo = repo;
-    resolvedRepoUrl = repoUrlInput;
-
-    const treeRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
-      { headers: githubHeaders },
-    );
-
-    if (treeRes.status === 404) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded — try again in a few minutes.",
-        }),
-        { status: 404, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    if (treeRes.status === 403) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded — try again in a few minutes.",
-        }),
-        { status: 403, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    if (!treeRes.ok) {
-      const detail = await treeRes.text();
-      return new Response(
-        JSON.stringify({ error: `Failed to fetch repository tree: ${detail}` }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
-    }
-
-    const treeJson = (await treeRes.json()) as {
-      tree?: Array<{ path?: string; type?: string; url?: string }>;
-    };
-
-    files = (treeJson.tree ?? []).filter((node) => {
-      if (node.type !== "blob" || !node.path) return false;
-      const filePath = node.path.toLowerCase();
-
-      const isEnvFile =
-        filePath === ".env" ||
-        filePath.endsWith("/.env") ||
-        filePath.startsWith(".env.") ||
-        filePath.includes("/.env.");
-      if (isEnvFile) return false;
-
-      if (filePath === "hardhat.config.ts") return false;
-
-      const isExcluded = EXCLUDED_SCAN_PREFIXES.some((prefix) => filePath.startsWith(prefix));
-      if (isExcluded) return false;
-
-      return CODE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
-    }) as ScanFileJob[];
+  const parsedRepo = parseRepoUrl(repoUrl);
+  if (!parsedRepo) {
+    return new Response(JSON.stringify({ error: "Invalid GitHub repository URL." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
+
+  const { owner, repo } = parsedRepo;
+  const treeRes = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
+    { headers: githubHeaders },
+  );
+
+  if (treeRes.status === 404) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded — try again in a few minutes.",
+      }),
+      { status: 404, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (treeRes.status === 403) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded — try again in a few minutes.",
+      }),
+      { status: 403, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (!treeRes.ok) {
+    const detail = await treeRes.text();
+    return new Response(
+      JSON.stringify({ error: `Failed to fetch repository tree: ${detail}` }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const treeJson = (await treeRes.json()) as {
+    tree?: Array<{ path?: string; type?: string; url?: string }>;
+  };
+
+  const files = (treeJson.tree ?? []).filter((node) => {
+    if (node.type !== "blob" || !node.path || !node.url) return false;
+    const filePath = node.path.toLowerCase();
+
+    const isEnvFile =
+      filePath === ".env" ||
+      filePath.endsWith("/.env") ||
+      filePath.startsWith(".env.") ||
+      filePath.includes("/.env.");
+    if (isEnvFile) return false;
+
+    if (filePath === "hardhat.config.ts") return false;
+
+    const isExcluded = EXCLUDED_SCAN_PREFIXES.some((prefix) => filePath.startsWith(prefix));
+    if (isExcluded) return false;
+
+    return CODE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
+  }) as GithubBlobFile[];
 
   const stream = new ReadableStream<Uint8Array>({
     start: async (controller) => {
@@ -271,45 +211,29 @@ export async function POST(request: Request) {
         const broker = await initializeComputeAccount(signer);
         const runStorageUploadSequentially = createSequentialTaskRunner();
 
-        const scanSingleFile = async (file: ScanFileJob, batchIndex: number) => {
-          if (!file.path || (file.content === undefined && !file.url)) {
-            processedFiles += 1;
-            return;
-          }
+        const scanSingleFile = async (file: GithubBlobFile, batchIndex: number) => {
+          if (!file.path || !file.url) return;
           const filePath = file.path;
+          const fileUrl = file.url;
           await sleep(batchIndex * 2000);
 
           streamChunk(controller, { type: "file", filename: filePath });
 
-          let decodedContent: string;
-          if (file.content !== undefined) {
-            decodedContent = file.content;
-          } else if (file.url) {
-            const blobRes = await fetch(file.url, {
-              headers: githubHeaders,
-            });
-            if (!blobRes.ok) {
-              processedFiles += 1;
-              return;
-            }
+          const blobRes = await fetch(fileUrl, {
+            headers: githubHeaders,
+          });
+          if (!blobRes.ok) return;
 
-            const blobJson = (await blobRes.json()) as {
-              content?: string;
-              encoding?: string;
-            };
-            if (!blobJson.content) {
-              processedFiles += 1;
-              return;
-            }
+          const blobJson = (await blobRes.json()) as {
+            content?: string;
+            encoding?: string;
+          };
+          if (!blobJson.content) return;
 
-            decodedContent =
-              blobJson.encoding === "base64"
-                ? Buffer.from(blobJson.content.replace(/\n/g, ""), "base64").toString("utf8")
-                : blobJson.content;
-          } else {
-            processedFiles += 1;
-            return;
-          }
+          const decodedContent =
+            blobJson.encoding === "base64"
+              ? Buffer.from(blobJson.content.replace(/\n/g, ""), "base64").toString("utf8")
+              : blobJson.content;
 
           try {
             await runStorageUploadSequentially(() =>
@@ -321,7 +245,7 @@ export async function POST(request: Request) {
             );
             const result = await withTimeout(
               runSecurityScan(
-                resolvedRepoUrl,
+                repoUrl,
                 [{ path: filePath, content: decodedContent }],
                 { broker },
               ).then((items) => items[0]),
@@ -376,7 +300,7 @@ export async function POST(request: Request) {
           if (deployerPrivateKey) {
             const signer = new ethers.Wallet(deployerPrivateKey, provider);
             const summaryReport = {
-              repoUrl: resolvedRepoUrl,
+              repoUrl,
               scanDate: new Date().toISOString(),
               totalFiles: files.length,
               processedFiles,
@@ -387,7 +311,7 @@ export async function POST(request: Request) {
             rootHash = await withTimeout(
               uploadFile(
                 JSON.stringify(summaryReport, null, 2),
-                `scan-report-${summaryOwner}-${summaryRepo}-${Date.now()}.json`,
+                `scan-report-${owner}-${repo}-${Date.now()}.json`,
                 signer,
               ),
               SUMMARY_UPLOAD_TIMEOUT_MS,
@@ -420,7 +344,7 @@ export async function POST(request: Request) {
           failedFiles,
           totalFindings,
           scanData: {
-            repoUrl: resolvedRepoUrl,
+            repoUrl,
             scanDate: new Date().toISOString(),
             filesScanned: processedFiles,
             totalFindings,
