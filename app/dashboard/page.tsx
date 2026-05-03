@@ -32,6 +32,7 @@ import {
   getCreditsContractAddress,
   SCAN_CREDIT_COST_WEI,
   withdrawCredits,
+  withdrawCreditsAmount,
 } from "@/lib/0g/credits";
 import { INFT_CONTRACT_ADDRESS, mintFromWallet, type MintScanData } from "@/lib/0g/inft";
 import { normalizeRepoUrlForMemory } from "@/lib/0g/memory";
@@ -290,6 +291,7 @@ export default function DashboardPage() {
   const [depositBusy, setDepositBusy] = useState(false);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [creditsModalOpen, setCreditsModalOpen] = useState(false);
+  const [withdrawCreditsOg, setWithdrawCreditsOg] = useState("");
 
   const refreshCredits = useCallback(async () => {
     if (!address || !isConnected) {
@@ -421,7 +423,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleWithdrawCredits = async () => {
+  const handleWithdrawCreditsAll = async () => {
     if (!walletClient) {
       setCreditsActionError("Connect a wallet first.");
       return;
@@ -430,6 +432,35 @@ export default function DashboardPage() {
     setWithdrawBusy(true);
     try {
       await withdrawCredits(walletClient, { wagmiChainId: chainId });
+      setWithdrawCreditsOg("");
+      await refreshCredits();
+    } catch (e) {
+      setCreditsActionError(e instanceof Error ? e.message : "Withdraw failed.");
+    } finally {
+      setWithdrawBusy(false);
+    }
+  };
+
+  const handleWithdrawCreditsPartial = async () => {
+    if (!walletClient) {
+      setCreditsActionError("Connect a wallet first.");
+      return;
+    }
+    setCreditsActionError(null);
+    setWithdrawBusy(true);
+    try {
+      const raw = withdrawCreditsOg.trim() || "0";
+      const wei = ethers.parseEther(raw);
+      if (wei <= BigInt(0)) {
+        setCreditsActionError("Enter a positive OG amount to withdraw.");
+        return;
+      }
+      if (scanCreditsWei !== null && wei > scanCreditsWei) {
+        setCreditsActionError("Amount exceeds your credit balance.");
+        return;
+      }
+      await withdrawCreditsAmount(walletClient, wei, { wagmiChainId: chainId });
+      setWithdrawCreditsOg("");
       await refreshCredits();
     } catch (e) {
       setCreditsActionError(e instanceof Error ? e.message : "Withdraw failed.");
@@ -794,17 +825,6 @@ export default function DashboardPage() {
 
   return (
     <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-hidden bg-black font-geist text-[#F0EEF8]">
-      {isScanning ? (
-        <div
-          role="status"
-          className="sticky top-0 z-[60] flex shrink-0 items-center gap-2 border-b border-[rgba(245,158,11,0.35)] bg-[rgba(120,53,15,0.45)] px-4 py-2 backdrop-blur-md sm:px-5"
-        >
-          <TriangleAlert className="h-4 w-4 shrink-0 text-[#FBBF24]" strokeWidth={2} aria-hidden />
-          <p className="min-w-0 font-mono text-[10px] leading-snug text-[#FDE68A] sm:text-[11px]">
-            Scan in progress — do not navigate away or the scan will stop
-          </p>
-        </div>
-      ) : null}
       <AmbientGlow />
       <header className="relative z-10 flex min-h-[56px] shrink-0 items-center border-b border-white/10 bg-black/80 px-4 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -946,30 +966,54 @@ export default function DashboardPage() {
             ) : null}
             {showScanInputRow ? (
               <>
-                <div className="flex flex-col gap-3 md:flex-row md:gap-2">
-                  <div className="relative min-w-0 flex-1">
-                    <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B99B0]" />
-                    <input
-                      value={repoUrl}
-                      onChange={(e) => setRepoUrl(e.target.value)}
-                      disabled={isScanning}
-                      placeholder="Paste GitHub repo URL to begin scan..."
-                      className="w-full min-h-[48px] min-w-0 rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-3 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40 disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:py-2"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void startScan()}
-                    disabled={
-                      isScanning ||
-                      creditsReadFailed ||
-                      (Boolean(isConnected && creditsContractConfigured && creditsLoading)) ||
-                      (needsCreditsDeposit && creditsContractConfigured && isConnected)
-                    }
-                    className="w-full min-h-[48px] shrink-0 rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2.5 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:w-auto md:py-2"
+                <div
+                  className={`rounded-2xl p-[1px] transition-[box-shadow] duration-300 ${
+                    isScanning
+                      ? "animate-shimmer [background:linear-gradient(120deg,rgba(167,139,250,0.55),rgba(124,58,237,0.38),rgba(236,72,153,0.42),rgba(167,139,250,0.55))] bg-[length:200%_200%]"
+                      : ""
+                  }`}
+                >
+                  <div
+                    className={`rounded-2xl bg-[rgba(6,4,12,0.92)] p-1.5 md:p-1 ${
+                      isScanning ? "md:rounded-[14px]" : ""
+                    }`}
                   >
-                    {isScanning ? "Scanning..." : "Start Scan"}
-                  </button>
+                    <div className="flex flex-col gap-3 md:flex-row md:gap-2">
+                      <div className="relative min-w-0 flex-1">
+                        <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B99B0]" />
+                        <input
+                          value={repoUrl}
+                          onChange={(e) => setRepoUrl(e.target.value)}
+                          disabled={isScanning}
+                          placeholder="Paste GitHub repo URL to begin scan..."
+                          className="w-full min-h-[48px] min-w-0 rounded-full border border-white/10 bg-[rgba(255,255,255,0.05)] py-3 pl-10 pr-4 text-sm text-[#F0EEF8] outline-none ring-purple/0 transition placeholder:text-[#9B99B0] focus:border-[#A78BFA]/50 focus:ring-2 focus:ring-[#7C3AED]/40 disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:py-2"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void startScan()}
+                        disabled={
+                          isScanning ||
+                          creditsReadFailed ||
+                          (Boolean(isConnected && creditsContractConfigured && creditsLoading)) ||
+                          (needsCreditsDeposit && creditsContractConfigured && isConnected)
+                        }
+                        className="flex w-full min-h-[48px] shrink-0 items-center justify-center gap-2 rounded-full border border-[rgba(167,139,250,0.5)] bg-[rgba(124,58,237,0.3)] px-5 py-2.5 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(124,58,237,0.2)] backdrop-blur-[10px] transition hover:bg-[rgba(124,58,237,0.45)] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:w-auto md:py-2"
+                      >
+                        {isScanning ? (
+                          <>
+                            <span
+                              className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#C4B5FD] shadow-[0_0_10px_rgba(167,139,250,0.9)]"
+                              aria-hidden
+                            />
+                            <span>Scanning...</span>
+                          </>
+                        ) : (
+                          "Start Scan"
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 {isConnected && creditsContractConfigured && creditsLoading ? (
                   <p className="mt-2 truncate font-mono text-[10px] text-[#6B6880] sm:text-[11px]">
@@ -1012,9 +1056,6 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex flex-col items-start sm:items-end">
-                    <p className="mb-2 max-w-full text-left font-mono text-[10px] leading-snug text-[#7A738F] sm:text-right">
-                      Minting costs ~{COST_LABEL_MINT_GAS_OG} OG in gas fees.
-                    </p>
                     <button
                       type="button"
                       onClick={handleMintCertificate}
@@ -1134,7 +1175,11 @@ export default function DashboardPage() {
             />
           ) : null}
           {activeTab === "history" ? (
-            <HistoryTab history={scanHistory} canView={isConnected} />
+            <HistoryTab
+              history={scanHistory}
+              canView={isConnected}
+              onGoToScanner={() => handleTabChange("scanner")}
+            />
           ) : null}
           {activeTab === "settings" ? (
             <SettingsTab
@@ -1161,7 +1206,10 @@ export default function DashboardPage() {
               depositBusy={depositBusy}
               withdrawBusy={withdrawBusy}
               onDepositCredits={() => void handleDepositCredits()}
-              onWithdrawCredits={() => void handleWithdrawCredits()}
+              withdrawCreditsOg={withdrawCreditsOg}
+              onWithdrawCreditsOgChange={setWithdrawCreditsOg}
+              onWithdrawCreditsPartial={() => void handleWithdrawCreditsPartial()}
+              onWithdrawCreditsAll={() => void handleWithdrawCreditsAll()}
               creditsActionError={creditsActionError}
             />
           ) : null}
@@ -1258,6 +1306,34 @@ function formatScanDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/** e.g. "May 3, 2026 at 9:35 PM" */
+function formatHistoryScanDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function formatHistorySummaryLine(item: ScanHistoryEntry): string {
+  const parts: string[] = [`${item.filesScanned} files`];
+  if (item.criticalCount > 0) parts.push(`${item.criticalCount} Critical`);
+  if (item.highCount > 0) parts.push(`${item.highCount} High`);
+  if (item.mediumCount > 0) parts.push(`${item.mediumCount} Medium`);
+  if (item.lowCount > 0) parts.push(`${item.lowCount} Low`);
+  if (parts.length === 1) parts.push("no findings");
+  return parts.join(" · ");
 }
 
 function LiveScanFeed({
@@ -1731,9 +1807,11 @@ function findingFingerprint(f: Finding): string {
 function HistoryTab({
   history,
   canView,
+  onGoToScanner,
 }: {
   history: ScanHistoryEntry[];
   canView: boolean;
+  onGoToScanner: () => void;
 }) {
   const sortedByRepo = useMemo(() => {
     const map = new Map<string, ScanHistoryEntry[]>();
@@ -1760,22 +1838,19 @@ function HistoryTab({
         </div>
       ) : history.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[rgba(255,255,255,0.02)] px-6 py-16 text-center">
-          <Timer className="mb-4 h-10 w-10 text-[#4A475C]" strokeWidth={1.25} />
-          <p className="max-w-md font-mono text-sm leading-relaxed text-[#9B99B0]">
-            No scans yet - your scan history will appear here
-          </p>
+          <Shield className="mb-4 h-10 w-10 text-[#4A475C]" strokeWidth={1.25} />
+          <p className="mb-1 max-w-md font-mono text-sm text-[#9B99B0]">Your scan history will appear here</p>
+          <button
+            type="button"
+            onClick={onGoToScanner}
+            className="mt-3 inline-flex rounded-full border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.25)] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.06em] text-[#E9E4FF] transition hover:bg-[rgba(124,58,237,0.4)]"
+          >
+            Run a scan to get started
+          </button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {history.map((item) => {
-            const breakdownParts: string[] = [];
-            if (item.criticalCount > 0) breakdownParts.push(`${item.criticalCount} Critical`);
-            if (item.highCount > 0) breakdownParts.push(`${item.highCount} High`);
-            if (item.mediumCount > 0) breakdownParts.push(`${item.mediumCount} Medium`);
-            if (item.lowCount > 0) breakdownParts.push(`${item.lowCount} Low`);
-            const breakdown =
-              breakdownParts.length > 0 ? breakdownParts.join(" - ") : "No findings";
-
             const repoKey = normalizeRepoUrlForMemory(item.repoUrl);
             const branch = sortedByRepo.get(repoKey) ?? [];
             const branchIdx = branch.findIndex((x) => x.id === item.id);
@@ -1800,29 +1875,32 @@ function HistoryTab({
             return (
               <div
                 key={item.id}
-                className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-5 transition hover:border-[rgba(167,139,250,0.35)] hover:bg-[rgba(124,58,237,0.06)] md:p-4"
+                className="flex flex-col gap-2 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 transition hover:border-[rgba(167,139,250,0.35)] md:flex-row md:items-start md:justify-between md:gap-3 md:p-3.5"
               >
-                <p className="break-words font-semibold text-[#F4F2FF]">{extractRepoDisplayName(item.repoUrl)}</p>
-                <p className="mt-1 break-words font-mono text-[11px] text-[#9B99B0]">{formatScanDate(item.scanDate)}</p>
-                {olderScan ? (
-                  <p className="mt-0.5 truncate font-mono text-[10px] text-[#6B6880]" title="Fingerprint-based diff vs previous scan">
-                    vs previous scan: {fixedFindings.length} no longer detected · {newFindings.length} new
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="truncate font-semibold text-[#F4F2FF]">{extractRepoDisplayName(item.repoUrl)}</p>
+                  <p className="truncate font-mono text-[11px] text-[#9B99B0]">{formatHistoryScanDate(item.scanDate)}</p>
+                  <p className="truncate font-mono text-[11px]" title="Fingerprint-based diff vs previous scan">
+                    <span className="text-[#C4BDD9]">{formatHistorySummaryLine(item)}</span>
+                    {olderScan ? (
+                      <span className="text-[#9D8BCF]">
+                        {" "}
+                        · vs previous: {fixedFindings.length} no longer detected · {newFindings.length} new
+                      </span>
+                    ) : null}
                   </p>
-                ) : null}
-                <p className="mt-2 break-words font-mono text-xs text-[#C4BDD9]">
-                  {item.filesScanned} files scanned - {breakdown}
-                </p>
-                <div className="mt-3">
+                </div>
+                <div className="shrink-0 md:pt-0.5">
                   {item.tokenId ? (
                     <Link
                       href={`/agent-id?tokenId=${encodeURIComponent(item.tokenId)}`}
-                      className="inline-flex rounded-full border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.25)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#E9E4FF] transition hover:bg-[rgba(124,58,237,0.4)]"
+                      className="inline-flex w-full justify-center rounded-full border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.25)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#E9E4FF] transition hover:bg-[rgba(124,58,237,0.4)] md:w-auto"
                     >
                       View Certificate
                     </Link>
                   ) : (
                     <span className="font-mono text-[10px] text-[#4A475C]" title="Mint a certificate after scan to link">
-                      Certificate not linked (mint required)
+                      No certificate
                     </span>
                   )}
                 </div>
@@ -1851,7 +1929,10 @@ function SettingsTab({
   depositBusy,
   withdrawBusy,
   onDepositCredits,
-  onWithdrawCredits,
+  withdrawCreditsOg,
+  onWithdrawCreditsOgChange,
+  onWithdrawCreditsPartial,
+  onWithdrawCreditsAll,
   creditsActionError,
 }: {
   address: string | null;
@@ -1869,7 +1950,10 @@ function SettingsTab({
   depositBusy: boolean;
   withdrawBusy: boolean;
   onDepositCredits: () => void;
-  onWithdrawCredits: () => void;
+  withdrawCreditsOg: string;
+  onWithdrawCreditsOgChange: (value: string) => void;
+  onWithdrawCreditsPartial: () => void;
+  onWithdrawCreditsAll: () => void;
   creditsActionError: string | null;
 }) {
   const explorerContractUrl = `${CHAINSCAN_GALILEO}/address/${INFT_CONTRACT_ADDRESS}`;
@@ -1965,19 +2049,66 @@ function SettingsTab({
               >
                 {depositBusy ? "Wallet…" : "Deposit OG"}
               </button>
+            </div>
+            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="min-w-[8rem] flex-1 sm:max-w-[12rem]">
+                <label
+                  htmlFor="settings-withdraw-og"
+                  className="mb-1 block font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]"
+                >
+                  Withdraw (OG)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="settings-withdraw-og"
+                    type="text"
+                    inputMode="decimal"
+                    value={withdrawCreditsOg}
+                    onChange={(e) => onWithdrawCreditsOgChange(e.target.value)}
+                    disabled={withdrawBusy || scanCreditsWei === null || scanCreditsWei === BigInt(0)}
+                    placeholder="0"
+                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[rgba(255,255,255,0.05)] px-3 py-2 font-mono text-sm text-[#F0EEF8] outline-none focus:border-[#A78BFA]/50 disabled:opacity-60"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onWithdrawCreditsOgChange(
+                        scanCreditsWei !== null && scanCreditsWei > BigInt(0)
+                          ? formatOgFromWei(scanCreditsWei)
+                          : "",
+                      )
+                    }
+                    disabled={
+                      withdrawBusy || scanCreditsWei === null || scanCreditsWei === BigInt(0)
+                    }
+                    className="shrink-0 rounded-lg border border-white/15 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[#A78BFA] hover:bg-white/5 disabled:opacity-40"
+                  >
+                    Max
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={onWithdrawCredits}
+                onClick={onWithdrawCreditsPartial}
                 disabled={
                   withdrawBusy ||
                   scanCreditsWei === null ||
-                  scanCreditsWei === BigInt(0)
+                  scanCreditsWei === BigInt(0) ||
+                  withdrawCreditsOg.trim() === ""
                 }
                 className="rounded-full border border-white/15 bg-white/5 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[#C4BDD9] hover:bg-white/10 disabled:opacity-40"
               >
-                {withdrawBusy ? "Wallet…" : "Withdraw all"}
+                {withdrawBusy ? "Wallet…" : "Withdraw"}
               </button>
             </div>
+            <button
+              type="button"
+              onClick={onWithdrawCreditsAll}
+              disabled={withdrawBusy || scanCreditsWei === null || scanCreditsWei === BigInt(0)}
+              className="mb-1 rounded-full border border-white/10 bg-transparent px-4 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[#9B99B0] hover:border-white/20 hover:bg-white/5 disabled:opacity-40"
+            >
+              {withdrawBusy ? "Wallet…" : "Withdraw all"}
+            </button>
             {creditsActionError ? (
               <p className="font-mono text-[11px] text-[#FCA5A5]">{creditsActionError}</p>
             ) : null}
@@ -2032,19 +2163,22 @@ function SettingsTab({
       </div>
 
       <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-5 font-mono text-xs md:p-4">
-        <p className="text-[#9B99B0]">
-          Wallet:{" "}
-          <span className="break-all text-[#F0EEF8]">
-            {isConnected && address ? address : "Not connected"}
-          </span>
-        </p>
-        <button
-          type="button"
-          onClick={onDisconnect}
-          className="mt-4 rounded-lg border border-[rgba(239,68,68,0.35)] px-3 py-2 text-[10px] uppercase tracking-[0.06em] text-[#FCA5A5] transition hover:bg-[rgba(239,68,68,0.08)]"
-        >
-          Disconnect wallet
-        </button>
+        {isConnected && address ? (
+          <>
+            <p className="text-[#9B99B0]">
+              Wallet: <span className="break-all text-[#F0EEF8]">{address}</span>
+            </p>
+            <button
+              type="button"
+              onClick={onDisconnect}
+              className="mt-4 rounded-lg border border-[rgba(239,68,68,0.35)] px-3 py-2 text-[10px] uppercase tracking-[0.06em] text-[#FCA5A5] transition hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              Disconnect wallet
+            </button>
+          </>
+        ) : (
+          <p className="text-[#6B6880]">No wallet connected</p>
+        )}
       </div>
     </section>
   );

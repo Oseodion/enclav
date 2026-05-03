@@ -24,6 +24,7 @@ const ENCLAV_CREDITS_ABI = [
   "function credits(address user) view returns (uint256)",
   "function deposit() payable",
   "function withdraw()",
+  "function withdrawAmount(uint256 amount)",
   "function owner() view returns (address)",
   "function deductCredits(address user, uint256 amount)",
   "event Deposited(address indexed user, uint256 amount)",
@@ -113,6 +114,36 @@ export async function withdrawCredits(
   const c = new ethers.Contract(contractAddr, ABI, signer);
   try {
     const tx = await c.withdraw();
+    const receipt = await tx.wait();
+    if (!receipt) throw new Error("Withdraw transaction receipt missing.");
+    return { txHash: receipt.hash };
+  } catch (e) {
+    throw new Error(extractErrorMessage(e));
+  }
+}
+
+/** Withdraw a partial credit balance (requires contract with withdrawAmount). */
+export async function withdrawCreditsAmount(
+  walletClient: WalletClient | null | undefined,
+  amountWei: bigint,
+  options?: { wagmiChainId?: number },
+): Promise<{ txHash: string }> {
+  void walletClient;
+  if (amountWei <= BigInt(0)) {
+    throw new Error("Withdraw amount must be positive.");
+  }
+  const contractAddr = requireCreditsAddress();
+  const injectedProvider = (globalThis as { ethereum?: ethers.Eip1193Provider }).ethereum;
+  if (!injectedProvider) throw new Error("No injected wallet provider found.");
+
+  await ensureWalletOnGalileo(injectedProvider, options?.wagmiChainId);
+
+  const provider = new ethers.BrowserProvider(injectedProvider);
+  await provider.send("eth_requestAccounts", []);
+  const signer = await provider.getSigner();
+  const c = new ethers.Contract(contractAddr, ABI, signer);
+  try {
+    const tx = await c.withdrawAmount(amountWei);
     const receipt = await tx.wait();
     if (!receipt) throw new Error("Withdraw transaction receipt missing.");
     return { txHash: receipt.hash };

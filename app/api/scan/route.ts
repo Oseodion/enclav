@@ -295,11 +295,10 @@ export async function POST(request: Request) {
           }
         }
 
-        const scanSingleFile = async (file: GithubBlobFile, batchIndex: number) => {
+        const scanSingleFile = async (file: GithubBlobFile) => {
           if (!file.path || !file.url) return;
           const filePath = file.path;
           const fileUrl = file.url;
-          await sleep(batchIndex * 2000);
 
           streamChunk(controller, { type: "file", filename: filePath });
 
@@ -365,14 +364,11 @@ export async function POST(request: Request) {
           }
         };
 
-        for (let index = 0; index < files.length; index += 3) {
-          const batch = files.slice(index, index + 3);
-          await Promise.all(
-            batch.map((file, batchIndex) => scanSingleFile(file, batchIndex)),
-          );
-          if (index + 3 < files.length) {
+        for (let i = 0; i < files.length; i++) {
+          if (i > 0) {
             await sleep(8000);
           }
+          await scanSingleFile(files[i]!);
         }
       } catch (error) {
         const message =

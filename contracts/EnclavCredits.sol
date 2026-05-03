@@ -42,6 +42,16 @@ contract EnclavCredits {
         emit Credited(msg.sender, credits[msg.sender]);
     }
 
+    /** Withdraw a partial credit balance (native OG). */
+    function withdrawAmount(uint256 amount) external {
+        if (amount == 0) revert ZeroAmount();
+        if (credits[msg.sender] < amount) revert InsufficientCredits();
+        credits[msg.sender] -= amount;
+        (bool ok, ) = payable(msg.sender).call{value: amount}("");
+        if (!ok) revert TransferFailed();
+        emit Credited(msg.sender, credits[msg.sender]);
+    }
+
     function deductCredits(address user, uint256 amount) external onlyOwner {
         if (amount == 0) revert ZeroAmount();
         if (credits[user] < amount) revert InsufficientCredits();
