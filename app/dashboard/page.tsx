@@ -841,7 +841,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-hidden bg-black pb-28 font-geist text-[#F0EEF8]">
+    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-hidden bg-black pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] font-geist text-[#F0EEF8]">
       <AmbientGlow />
       <header className="relative z-10 flex min-h-[56px] shrink-0 items-center border-b border-white/10 bg-black/80 px-4 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -962,7 +962,7 @@ export default function DashboardPage() {
       ) : null}
 
       <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 py-4 pb-6 md:p-3 md:pb-3">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 pb-2 pt-4 md:px-3 md:pb-2 md:pt-3">
           <div className={`${panelClass} sticky top-0 z-10 mb-4 max-w-full shrink-0 overflow-hidden p-4 md:mb-3 md:p-3`}>
             {effectiveConnected && creditsContractConfigured && creditsReadFailed ? (
               <div className="mb-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] p-3">
@@ -1155,9 +1155,10 @@ export default function DashboardPage() {
             ) : null}
           </div>
 
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {activeTab === "scanner" ? (
             <div
-              className={`grid h-full min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden md:gap-3 lg:grid-cols-[1.2fr_0.9fr_280px] ${
+              className={`grid h-full min-h-0 min-w-0 flex-1 auto-rows-[minmax(0,1fr)] grid-cols-1 gap-4 overflow-hidden md:gap-3 lg:grid-cols-[1.2fr_0.9fr_280px] ${
                 isScanning
                   ? "rounded-2xl border border-transparent bg-[linear-gradient(rgba(0,0,0,0.75),rgba(0,0,0,0.75))_padding-box,linear-gradient(120deg,#A78BFA,#7C3AED,#EC4899)_border-box] p-[1px] animate-pulse"
                   : ""
@@ -1230,6 +1231,7 @@ export default function DashboardPage() {
               creditsActionError={creditsActionError}
             />
           ) : null}
+          </div>
         </section>
       </div>
 
@@ -1254,7 +1256,7 @@ export default function DashboardPage() {
                 <div className="flex gap-2.5">
                   <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#FBBF24]" strokeWidth={2} aria-hidden />
                   <p id="scan-notice-title" className="min-w-0 text-balance">
-                    Scan in progress — do not navigate away or the scan will stop
+                    Scan in progress - do not navigate away or the scan will stop
                   </p>
                 </div>
               </div>
@@ -1451,7 +1453,7 @@ function LiveScanFeed({
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-16 sm:p-5 sm:pb-[60px] [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-24 sm:p-5 sm:pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
         {notices.map((notice) => (
           <div
             key={notice.id}
@@ -1588,7 +1590,7 @@ function ScanStatus({
           {isScanning ? "Running" : scanCompleted ? "Complete" : "Waiting"}
         </span>
       </div>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 pb-24 sm:p-5 sm:pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Current file
@@ -1651,58 +1653,60 @@ function RightPanelSummary({
   mintedTokenId: string | null;
 }) {
   return (
-    <aside className={`${panelClass} hidden h-full min-h-0 min-w-0 flex-col overflow-y-auto xl:flex [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent`}>
-      <div className="border-b border-white/10 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
-          <span
-            className={`rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] ${
-              mintedTokenId
-                ? "border-[rgba(167,139,250,0.25)] bg-[rgba(139,92,246,0.1)] text-[#A78BFA]"
-                : "border-white/10 bg-white/5 text-[#4A475C]"
-            }`}
-          >
-            {mintedTokenId ? `Token #${mintedTokenId}` : "Not minted"}
-          </span>
+    <aside className={`${panelClass} hidden h-full min-h-0 min-w-0 flex-col overflow-hidden xl:flex`}>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+        <div className="shrink-0 border-b border-white/10 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
+            <span
+              className={`rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] ${
+                mintedTokenId
+                  ? "border-[rgba(167,139,250,0.25)] bg-[rgba(139,92,246,0.1)] text-[#A78BFA]"
+                  : "border-white/10 bg-white/5 text-[#4A475C]"
+              }`}
+            >
+              {mintedTokenId ? `Token #${mintedTokenId}` : "Not minted"}
+            </span>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
+            <ShieldCheck className="mb-2 h-5 w-5 text-[#A78BFA]" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+              Agent ID - ERC-7857
+            </p>
+            <p
+              className={`font-mono text-xs ${
+                mintedTokenId ? "text-[#F0EEF8]" : "text-[#2E2C3E]"
+              }`}
+            >
+              {mintedTokenId ? `Token #${mintedTokenId}` : "Not minted"}
+            </p>
+          </div>
         </div>
-        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
-          <ShieldCheck className="mb-2 h-5 w-5 text-[#A78BFA]" />
-          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
-            Agent ID - ERC-7857
-          </p>
-          <p
-            className={`font-mono text-xs ${
-              mintedTokenId ? "text-[#F0EEF8]" : "text-[#2E2C3E]"
-            }`}
-          >
-            {mintedTokenId ? `Token #${mintedTokenId}` : "Not minted"}
-          </p>
-        </div>
-      </div>
 
-      <div className="border-b border-white/10 p-4">
-        <h4 className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
-          Scan Progress
-        </h4>
-        <p className="mb-2 font-mono text-xs text-[#9B99B0]">
-          {scannedFiles}/{totalFiles} files scanned
-        </p>
-        <div className="h-2 overflow-hidden rounded-full bg-[rgba(255,255,255,0.08)]">
-          <div
-            className="h-full rounded-full bg-[rgba(124,58,237,0.6)] transition-all duration-500"
-            style={{ width: `${progressPercent}%` }}
-          />
+        <div className="shrink-0 border-b border-white/10 p-4">
+          <h4 className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+            Scan Progress
+          </h4>
+          <p className="mb-2 font-mono text-xs text-[#9B99B0]">
+            {scannedFiles}/{totalFiles} files scanned
+          </p>
+          <div className="h-2 overflow-hidden rounded-full bg-[rgba(255,255,255,0.08)]">
+            <div
+              className="h-full rounded-full bg-[rgba(124,58,237,0.6)] transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="flex-1 p-4">
-        <h4 className="mb-3 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
-          Findings Summary
-        </h4>
-        <SummaryRow label="Critical" count={findingsSummary.Critical} color="bg-[#EF4444]" icon={Siren} />
-        <SummaryRow label="High" count={findingsSummary.High} color="bg-[#F97316]" icon={ShieldAlert} />
-        <SummaryRow label="Medium" count={findingsSummary.Medium} color="bg-[#EAB308]" icon={TriangleAlert} />
-        <SummaryRow label="Low" count={findingsSummary.Low} color="bg-[#3B82F6]" icon={Activity} />
+        <div className="shrink-0 p-4">
+          <h4 className="mb-3 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+            Findings Summary
+          </h4>
+          <SummaryRow label="Critical" count={findingsSummary.Critical} color="bg-[#EF4444]" icon={Siren} />
+          <SummaryRow label="High" count={findingsSummary.High} color="bg-[#F97316]" icon={ShieldAlert} />
+          <SummaryRow label="Medium" count={findingsSummary.Medium} color="bg-[#EAB308]" icon={TriangleAlert} />
+          <SummaryRow label="Low" count={findingsSummary.Low} color="bg-[#3B82F6]" icon={Activity} />
+        </div>
       </div>
     </aside>
   );
@@ -1784,7 +1788,7 @@ function FindingsTab({
 
   return (
     <section className={`${panelClass} flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden`}>
-      <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden p-5 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden px-5 pb-24 pt-5 md:px-6 md:pb-28 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="mb-8 min-w-0 max-w-full md:mb-6">
           <h2 className="break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:text-3xl">
             Security Findings
@@ -1904,7 +1908,7 @@ function HistoryTab({
   );
 
   return (
-    <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-5 md:p-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
+    <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-5 pb-24 pt-5 md:px-6 md:pb-28 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
       <h2 className="mb-8 break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Scan history</h2>
       {!canView ? (
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 text-sm text-[#9B99B0]">
@@ -2017,7 +2021,7 @@ function SettingsTab({
     creditsAddr.length > 0 ? `${CHAINSCAN_GALILEO}/address/${creditsAddr}` : "";
 
   return (
-    <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto p-5 md:p-6`}>
+    <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-5 pb-24 pt-5 md:px-6 md:pb-28 md:pt-6`}>
       <h2 className="mb-8 break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Settings</h2>
 
       <div className="mb-8 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-5 md:mb-6 md:p-4">
