@@ -39,3 +39,6 @@ next-env.d.ts
 # hardhat
 artifacts/
 cache/
+
+# Cursor / local agent instructions (not for public repo)
+CLAUDE.md
