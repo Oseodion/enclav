@@ -133,7 +133,7 @@ git clone https://github.com/Oseodion/enclav.git
 cd enclav
 npm install
 cp .env.example .env.local
-# Edit .env.local — at minimum set DEPLOYER_PRIVATE_KEY and OG_COMPUTE_PROVIDER
+# Edit .env.local — at minimum set DEPLOYER_PRIVATE_KEY (set OG_COMPUTE_PROVIDER to pin a specific provider)
 npm run dev
 # Open http://localhost:3000 — dashboard at /dashboard
 ```
@@ -143,7 +143,7 @@ npm run dev
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `DEPLOYER_PRIVATE_KEY` | **Yes** for scans | `0x…` key on selected 0G network: 0G Storage uploads, 0G Compute broker, `deductCredits` as contract owner. |
-| `OG_COMPUTE_PROVIDER` | **Yes** for scans | Provider **0x address** from 0G Compute (fallback env name: `ZEROG_COMPUTE_PROVIDER`). |
+| `OG_COMPUTE_PROVIDER` | **Usually no** | Provider **0x address**. Omit if on-chain `listService` works on your `OG_RPC_URL` network (auto-picks first provider—**not** model-specific). Set explicitly to pin a model. Legacy alias in code: `ZEROG_COMPUTE_PROVIDER`. |
 | `GITHUB_TOKEN` | No | GitHub API token (`Authorization: token …`) for higher rate limits. |
 | `OG_RPC_URL` | No | Server RPC (defaults to 0G mainnet in current code). |
 | `NEXT_PUBLIC_OG_RPC_URL` | No | Browser / mint code RPC override. |
@@ -154,7 +154,7 @@ npm run dev
 | `NEXT_PUBLIC_INFT_CONTRACT_ADDRESS` | No* | Enclav certificate; defaults to deployed Aristotle address in code. |
 | `NEXT_PUBLIC_APP_URL` | No | App base URL for metadata/links. |
 
-\*Required only if you deploy new contracts and need to point away from the baked-in Galileo defaults.
+\*Required only if you deploy new contracts and need to point away from the baked-in mainnet defaults in code.
 
 See **`.env.example`** in the repo for a copy-paste template aligned with these names.
 
@@ -165,7 +165,7 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 1. **Wallet** — Install **MetaMask** (or any injected EVM wallet). For test runs, add **0G Galileo**: chain ID **16602**, RPC `https://evmrpc-testnet.0g.ai`, explorer `https://chainscan-galileo.0g.ai`.
 2. **Test account / faucet** — Get testnet OG from [https://faucet.0g.ai](https://faucet.0g.ai) and fund the same wallet you will use in the app.
 3. **Credits** — Open **Dashboard → Settings**. Deposit native **OG** into **EnclavCredits** so your balance covers **0.05 OG per scan** (plus gas for deposit/mint).
-4. **Operator wallet** — The maintainer’s `.env.local` must include a funded **`DEPLOYER_PRIVATE_KEY`** (same chain) and a valid **`OG_COMPUTE_PROVIDER`** so judges’ scans can reach Storage + Compute.
+4. **Operator wallet** — The maintainer’s `.env.local` must include a funded **`DEPLOYER_PRIVATE_KEY`** on the same chain as **`OG_RPC_URL`**. Set **`OG_COMPUTE_PROVIDER`** if you need a known model: e.g. **`qwen/qwen-2.5-7b-instruct`** on **Galileo** is **`0xa48f01287233509FD694a22Bf840225062E67836`**. On **Aristotle**, the default **`OG_COMPUTE_MODEL`** (`deepseek-chat-v3-0324`) is served at **`0x1B3AAef3ae5050EEE04ea38cD4B087472BD85EB0`** (on-chain list; catalog changes over time).
 5. **Scan** — Use a **small public** GitHub repo first (e.g. this repo: `https://github.com/Oseodion/enclav`) to avoid long runs. Paste the URL, **Start Scan**, watch the **Live Scan Feed** and Tee attestation fields.
 6. **Mint** — After **Complete**, use **Mint security certificate**; approve the transaction on the active network. View the **Certificate** / **Agent ID** page and explorer links.
 
