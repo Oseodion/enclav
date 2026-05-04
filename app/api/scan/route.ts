@@ -1,5 +1,9 @@
 import { ethers } from "ethers";
-import { initializeComputeAccount, listComputeProviders } from "@/lib/0g/compute";
+import {
+  createBroker,
+  initializeComputeAccount,
+  listComputeProviders,
+} from "@/lib/0g/compute";
 import {
   deductCreditsFromServer,
   getCreditsBalance,
@@ -475,7 +479,7 @@ export async function POST(request: Request) {
       try {
         const provider = new ethers.JsonRpcProvider(resolveOgRpcUrl());
         const signer = new ethers.Wallet(deployerPrivateKey, provider);
-        const broker = await initializeComputeAccount(signer);
+        const broker = await createBroker(signer);
         let computeProviders = await listComputeProviders(broker);
         const envPreferred =
           (process.env.ZERO_G_COMPUTE_PROVIDER ??
@@ -496,6 +500,8 @@ export async function POST(request: Request) {
               "No 0G Compute providers available from listService. Set ZERO_G_COMPUTE_PROVIDER or OG_COMPUTE_PROVIDER or try again later.",
           });
           skipBilling = true;
+        } else {
+          await initializeComputeAccount(broker, computeProviders);
         }
         const runStorageUploadSequentially = createSequentialTaskRunner();
 

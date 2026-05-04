@@ -64,6 +64,35 @@ function providerCacheKey(address: string): string {
   return ethers.getAddress(address);
 }
 
+/** Log Authorization as Bearer prefix…suffix only (never full token). */
+function sanitizeHeadersForLog(raw: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const lk = k.toLowerCase();
+    if (lk === "authorization") {
+      const trimmed = v.replace(/^Bearer\s+/i, "").trim();
+      out[k] =
+        trimmed.length > 16
+          ? `Bearer ${trimmed.slice(0, 10)}…${trimmed.slice(-4)}`
+          : "Bearer [redacted]";
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function headersInitToRecord(init: HeadersInit | undefined): Record<string, string> {
+  if (!init) return {};
+  if (typeof Headers !== "undefined" && init instanceof Headers) {
+    return Object.fromEntries(init.entries());
+  }
+  if (Array.isArray(init)) {
+    return Object.fromEntries(init as Iterable<[string, string]>);
+  }
+  return { ...(init as Record<string, string>) };
+}
+
 export function clearOpenAiCompatibleTokenCache(providerAddress?: string): void {
   if (providerAddress) {
     openAiTokenByProvider.delete(providerCacheKey(providerAddress));
@@ -89,16 +118,30 @@ async function getOpenAiCompatibleApiKey(
   if (inflight) return inflight;
 
   inflight = (async () => {
-    const headers = await broker.inference.getRequestHeaders(providerAddress, payloadJson);
-    const headersObj = headers as Record<string, string>;
-    const auth = headersObj.Authorization ?? headersObj.authorization ?? "";
-    const apiKey = auth.replace(/^Bearer\s+/i, "").trim();
-    if (!apiKey) {
-      throw new Error("0G broker returned empty Authorization header for OpenAI-compatible inference.");
+    try {
+      const headers = await broker.inference.getRequestHeaders(providerAddress, payloadJson);
+      const headersObj = headers as Record<string, string>;
+      console.log("[compute] broker getRequestHeaders (token mint for OpenAI proxy)", {
+        provider: providerAddress,
+        layer: "broker-sdk",
+        sanitizedHeaders: sanitizeHeadersForLog(headersObj),
+      });
+      const auth = headersObj.Authorization ?? headersObj.authorization ?? "";
+      const apiKey = auth.replace(/^Bearer\s+/i, "").trim();
+      if (!apiKey) {
+        throw new Error("0G broker returned empty Authorization header for OpenAI-compatible inference.");
+      }
+      const expiresAt = decodeExpiryFromApiKey(apiKey);
+      openAiTokenByProvider.set(key, { apiKey, expiresAt });
+      return apiKey;
+    } catch (err) {
+      console.error("[compute] broker getRequestHeaders failed (not OpenAI proxy yet)", {
+        provider: providerAddress,
+        layer: "broker-sdk",
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
     }
-    const expiresAt = decodeExpiryFromApiKey(apiKey);
-    openAiTokenByProvider.set(key, { apiKey, expiresAt });
-    return apiKey;
   })();
 
   openAiTokenInflight.set(key, inflight);
@@ -344,17 +387,39 @@ export async function createBroker(signer: ethers.Signer) {
   }
 }
 
-export async function initializeComputeAccount(signer: ethers.Signer) {
-  const broker = (await createBroker(signer)) as {
-    ledger?: {
-      getLedger?: () => Promise<unknown>;
-      addLedger?: (amount: number, gasPrice?: number) => Promise<unknown>;
-    };
-  };
+/** Seed each listed inference provider sub-account from the main ledger (see SDK `transferFund`). */
+const INFERENCE_SUB_ACCOUNT_SEED_OG = "0.1";
 
-  const ledgerApi = broker.ledger;
+type InferenceLedgerApi = {
+  getLedger: () => Promise<unknown>;
+  addLedger: (amount: number, gasPrice?: number) => Promise<void>;
+  getProvidersWithBalance: (
+    serviceTypeStr: "inference" | "fine-tuning",
+  ) => Promise<[string, bigint, bigint][]>;
+  transferFund: (
+    provider: string,
+    serviceTypeStr: "inference" | "fine-tuning",
+    amount: bigint,
+    gasPrice?: number,
+  ) => Promise<void>;
+};
+
+/**
+ * Ensures the on-chain 0G Compute **main ledger** exists, then funds each inference **provider sub-account**
+ * that is not yet listed under **`getProvidersWithBalance("inference")`** by moving OG from the **main ledger**
+ * available balance via **`transferFund`** (wallet native OG is not spent here unless you previously **`depositFund`**’d into the ledger).
+ *
+ * SDK (see `lib.commonjs/ledger/broker.d.ts`): **`transferFund(provider, "inference", amount, gasPrice?)`**
+ * — `amount` is **bigint neuron** (use `ethers.parseEther("0.1")` for 0.1 OG).
+ * There is **no** `depositFundForProvider`; main → provider sub-account uses **`transferFund`**.
+ */
+export async function initializeComputeAccount(
+  broker: unknown,
+  inferenceProviderAddresses: string[],
+): Promise<void> {
+  const ledgerApi = (broker as { ledger?: InferenceLedgerApi }).ledger;
   if (!ledgerApi?.getLedger || !ledgerApi?.addLedger) {
-    return broker;
+    return;
   }
 
   try {
@@ -363,15 +428,72 @@ export async function initializeComputeAccount(signer: ethers.Signer) {
     const message = error instanceof Error ? error.message : String(error);
     if (
       message.includes("Account does not exist") ||
-      message.includes("add-account")
+      message.includes("add-account") ||
+      message.includes("does not exist")
     ) {
+      console.log(
+        "[compute] main ledger not found — creating with broker.ledger.addLedger(3) (3 OG minimum)",
+      );
       await ledgerApi.addLedger(3);
-      return broker;
+    } else {
+      throw error;
     }
-    throw error;
   }
 
-  return broker;
+  const transferFund = ledgerApi.transferFund;
+  const getProvidersWithBalance = ledgerApi.getProvidersWithBalance;
+  if (!transferFund || !getProvidersWithBalance || inferenceProviderAddresses.length === 0) {
+    return;
+  }
+
+  let fundedRows: [string, bigint, bigint][];
+  try {
+    fundedRows = await getProvidersWithBalance("inference");
+  } catch (error) {
+    console.warn(
+      "[compute] getProvidersWithBalance failed; skipping sub-account seeding",
+      error instanceof Error ? error.message : error,
+    );
+    return;
+  }
+
+  const alreadyFunded = new Set<string>();
+  for (const row of fundedRows) {
+    try {
+      alreadyFunded.add(ethers.getAddress(row[0]));
+    } catch {
+      /* skip malformed row */
+    }
+  }
+
+  const amountNeuron = ethers.parseEther(INFERENCE_SUB_ACCOUNT_SEED_OG);
+  const uniqueProviders = [
+    ...new Set(
+      inferenceProviderAddresses.map((p) => p.trim()).filter((p) => p.length > 0),
+    ),
+  ];
+
+  for (const raw of uniqueProviders) {
+    if (!ethers.isAddress(raw)) continue;
+    const addr = ethers.getAddress(raw);
+    if (alreadyFunded.has(addr)) continue;
+
+    console.log("[compute] inference sub-account needs funds — broker.ledger.transferFund", {
+      provider: addr,
+      amountOg: INFERENCE_SUB_ACCOUNT_SEED_OG,
+      amountNeuron: amountNeuron.toString(),
+      note:
+        "Moves OG from your main compute ledger into this provider sub-account (on-chain ledger split, not native OG gas).",
+    });
+    try {
+      await transferFund(addr, "inference", amountNeuron);
+    } catch (error) {
+      console.error("[compute] broker.ledger.transferFund failed", {
+        provider: addr,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 async function getBroker() {
@@ -407,19 +529,64 @@ async function runOpenAiCompatibleChatCompletion(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
 ): Promise<{ rawContent: string; attestationHash: string }> {
   const model = getOpenAiModel();
+  const baseURL = getOpenAiBaseUrl();
 
   const send = async (): Promise<{ rawContent: string; attestationHash: string }> => {
+    console.log("[compute] using OpenAI-compatible path — HTTP inference targets OPENAI_BASE_URL only", {
+      provider: resolvedProviderAddress,
+      model,
+      baseURL,
+      openAiChatUrl: `${baseURL}/chat/completions`,
+    });
+    console.log(
+      "[compute] broker direct inference path (broker service.endpoint /chat/completions): NOT USED — broker is only used for getRequestHeaders token mint + processResponse",
+    );
+
     const payloadJson = JSON.stringify({ model, messages });
     const apiKey = await getOpenAiCompatibleApiKey(broker, resolvedProviderAddress, payloadJson);
     let zgKey: string | null = null;
     const scopedFetch: typeof fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : (input as Request).url;
+      const reqHeaders = sanitizeHeadersForLog(headersInitToRecord(init?.headers as HeadersInit));
+      console.log("[compute] OpenAI-compatible HTTP request (via OpenAI SDK fetch)", {
+        layer: "openai-proxy",
+        url,
+        method: init?.method ?? "POST",
+        sanitizedRequestHeaders: reqHeaders,
+      });
+
       const res = await fetch(input as RequestInfo, init as RequestInit);
       zgKey = res.headers.get("ZG-Res-Key") ?? zgKey;
+
+      if (!res.ok) {
+        let bodyPreview = "";
+        try {
+          bodyPreview = (await res.clone().text()).slice(0, 1200);
+        } catch {
+          bodyPreview = "(could not read body)";
+        }
+        const rateHint =
+          res.status === 429 ? "likely rate limit at OpenAI-compatible proxy upstream" : "HTTP error from OpenAI-compatible proxy";
+        console.error("[compute] OpenAI-compatible HTTP non-OK response", {
+          layer: "openai-proxy",
+          url,
+          status: res.status,
+          statusText: res.statusText,
+          rateHint,
+          bodyPreview,
+        });
+      }
+
       return res;
     };
     const client = new OpenAI({
       apiKey,
-      baseURL: getOpenAiBaseUrl(),
+      baseURL,
       fetch: scopedFetch,
     });
     let completion;
@@ -430,8 +597,27 @@ async function runOpenAiCompatibleChatCompletion(
       });
     } catch (err) {
       if (err instanceof APIError) {
-        throw new ComputeHttpError(err.status ?? 500, err.message);
+        const status = err.status ?? 500;
+        const detail = {
+          layer: "openai-sdk",
+          mapsToProxy: "errors usually originate from OPENAI_BASE_URL /chat/completions",
+          status,
+          code: err.code ?? null,
+          type: err.type ?? null,
+          message: err.message,
+          rateLimited: status === 429,
+        };
+        if (status === 429) {
+          console.error("[compute] rate limited — OpenAI SDK error (upstream is OPENAI_BASE_URL proxy)", detail);
+        } else {
+          console.error("[compute] OpenAI SDK chat.completions error", detail);
+        }
+        throw new ComputeHttpError(status, err.message);
       }
+      console.error("[compute] non-APIError during chat.completions.create", {
+        layer: "unknown",
+        error: err instanceof Error ? err.message : String(err),
+      });
       throw err;
     }
     const rawContent = completion.choices[0]?.message?.content?.trim() ?? "[]";
@@ -452,6 +638,9 @@ async function runOpenAiCompatibleChatCompletion(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/session token expired|token expired/i.test(msg)) {
+      console.warn("[compute] session/token expired — clearing cache and retrying once", {
+        provider: resolvedProviderAddress,
+      });
       clearOpenAiCompatibleTokenCache(resolvedProviderAddress);
       return await send();
     }
@@ -504,6 +693,12 @@ async function executeSecurityScanWithProviderRotation(
         return result;
       } catch (e) {
         if (e instanceof ComputeHttpError && e.status === 429) {
+          console.warn("[compute] rate limited — rotating to next provider", {
+            provider,
+            status: e.status,
+            bodyPreview: e.body.slice(0, 800),
+            note: "429 surfaced as ComputeHttpError (usually from OpenAI SDK / OPENAI_BASE_URL proxy, not broker HTTP)",
+          });
           continue;
         }
         throw e;

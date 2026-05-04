@@ -1,6 +1,8 @@
 import { ethers } from "ethers";
 import {
+  createBroker,
   initializeComputeAccount,
+  listComputeProviders,
   scanChunkForVulnerabilities,
   type Finding,
 } from "@/lib/0g/compute";
@@ -57,7 +59,24 @@ async function getBrokerFromEnv() {
   }
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const signer = new ethers.Wallet(privateKey, provider);
-  return initializeComputeAccount(signer);
+  const broker = await createBroker(signer);
+  let computeProviders = await listComputeProviders(broker);
+  const envPreferred =
+    (process.env.ZERO_G_COMPUTE_PROVIDER ??
+      process.env.OG_COMPUTE_PROVIDER ??
+      process.env.ZEROG_COMPUTE_PROVIDER ??
+      "").trim();
+  if (
+    computeProviders.length === 0 &&
+    envPreferred &&
+    ethers.isAddress(envPreferred)
+  ) {
+    computeProviders = [ethers.getAddress(envPreferred)];
+  }
+  if (computeProviders.length > 0) {
+    await initializeComputeAccount(broker, computeProviders);
+  }
+  return broker;
 }
 
 /**
