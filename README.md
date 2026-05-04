@@ -87,17 +87,24 @@ Enclav’s scan path is built around **0G Compute** broker flows and **TeeML att
 
 ---
 
-## Deployed contracts (0G Galileo testnet)
+## Deployed contracts (0G Aristotle mainnet)
 
 | Contract | Address |
 |----------|---------|
-| **Enclav** (security certificate NFT — `Enclav.sol`) | `0x8E2225136CaAf9aD28dDBF86e9280DB326AB2464` |
-| **EnclavCredits** (scan credits) | `0x502f013010F0229199dFb937C5c783337C5De3EE` |
+| **Enclav** (security certificate NFT — `Enclav.sol`) | `0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5` |
+| **EnclavCredits** (scan credits) | `0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073` |
 
-**Explorer (Galileo):** [chainscan-galileo.0g.ai](https://chainscan-galileo.0g.ai)
+**Explorer (Aristotle):** [chainscan.0g.ai](https://chainscan.0g.ai)
 
-- Certificate contract: `https://chainscan-galileo.0g.ai/address/0x8E2225136CaAf9aD28dDBF86e9280DB326AB2464`  
-- Credits contract: `https://chainscan-galileo.0g.ai/address/0x502f013010F0229199dFb937C5c783337C5De3EE`  
+- Certificate contract: `https://chainscan.0g.ai/address/0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5`  
+- Credits contract: `https://chainscan.0g.ai/address/0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073`  
+
+## Mainnet Deployment
+
+- **INFT Contract (mainnet):** `0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5`  
+  Explorer: [https://chainscan.0g.ai/address/0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5](https://chainscan.0g.ai/address/0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5)
+- **Credits Contract (mainnet):** `0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073`  
+  Explorer: [https://chainscan.0g.ai/address/0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073](https://chainscan.0g.ai/address/0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073)
 
 Override addresses anytime with `NEXT_PUBLIC_INFT_CONTRACT_ADDRESS` / `NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS` (see `.env.example`).
 
