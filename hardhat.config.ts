@@ -27,6 +27,12 @@ const config: HardhatUserConfig = {
       chainId: 16602,
       accounts: deployerPrivateKey ? [deployerPrivateKey] : [],
     },
+    ogAristotle: {
+      type: "http",
+      url: "https://evmrpc.0g.ai",
+      chainId: 16661,
+      accounts: deployerPrivateKey ? [deployerPrivateKey] : [],
+    },
   },
 };
 
