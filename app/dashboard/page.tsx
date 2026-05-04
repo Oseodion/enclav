@@ -37,8 +37,14 @@ import {
 import { INFT_CONTRACT_ADDRESS, mintFromWallet, type MintScanData } from "@/lib/0g/inft";
 import { normalizeRepoUrlForMemory } from "@/lib/0g/memory";
 import { useWallet } from "@/lib/wallet";
-import { ogAristotle, ogGalileo } from "@/lib/wagmi";
 import { useAccount, useChainId, useDisconnect, useWalletClient } from "wagmi";
+
+/** Human-readable 0G chain label from EIP-155 chain id (wagmi `useChainId`). */
+function ogNetworkLabel(chainId: number): string {
+  if (chainId === 16661) return "0G Aristotle Mainnet";
+  if (chainId === 16602) return "0G Galileo Testnet";
+  return "0G Network";
+}
 
 type FindingSeverity = "Critical" | "High" | "Medium" | "Low";
 
@@ -108,11 +114,13 @@ function CreditsDepositModal({
 }) {
   const { isConnected } = useAccount();
   const chainId = useChainId();
-  const networkName = useMemo(() => {
-    if (chainId === ogAristotle.id) return ogAristotle.name;
-    if (chainId === ogGalileo.id) return ogGalileo.name;
-    return `Chain ${chainId}`;
-  }, [chainId]);
+  const networkName = ogNetworkLabel(chainId);
+
+  useEffect(() => {
+    if (open) {
+      console.log("[CreditsDepositModal] wagmi chainId", chainId);
+    }
+  }, [open, chainId]);
 
   if (!open) return null;
 
@@ -205,11 +213,7 @@ export default function DashboardPage() {
   const effectiveConnected = walletUiReady && isConnected;
   const effectiveAddress = walletUiReady ? (address ?? null) : null;
   const chainId = useChainId();
-  const connectedChainName = useMemo(() => {
-    if (chainId === ogAristotle.id) return ogAristotle.name;
-    if (chainId === ogGalileo.id) return ogGalileo.name;
-    return `Chain ${chainId}`;
-  }, [chainId]);
+  const connectedChainName = ogNetworkLabel(chainId);
   const { data: walletClient } = useWalletClient();
   const { disconnect } = useDisconnect();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
