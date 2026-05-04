@@ -478,7 +478,10 @@ export async function POST(request: Request) {
         const broker = await initializeComputeAccount(signer);
         let computeProviders = await listComputeProviders(broker);
         const envPreferred =
-          (process.env.OG_COMPUTE_PROVIDER ?? process.env.ZEROG_COMPUTE_PROVIDER ?? "").trim();
+          (process.env.ZERO_G_COMPUTE_PROVIDER ??
+            process.env.OG_COMPUTE_PROVIDER ??
+            process.env.ZEROG_COMPUTE_PROVIDER ??
+            "").trim();
         if (
           computeProviders.length === 0 &&
           envPreferred &&
@@ -490,7 +493,7 @@ export async function POST(request: Request) {
           streamChunk(controller, {
             type: "error",
             message:
-              "No 0G Compute providers available from listService. Set OG_COMPUTE_PROVIDER or try again later.",
+              "No 0G Compute providers available from listService. Set ZERO_G_COMPUTE_PROVIDER or OG_COMPUTE_PROVIDER or try again later.",
           });
           skipBilling = true;
         }

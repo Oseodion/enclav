@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "list-providers": "node scripts/list-zero-g-providers.cjs"
   },
   "dependencies": {
     "@0gfoundation/0g-ts-sdk": "^1.2.6",
@@ -25,6 +26,7 @@
     "geist": "^1.7.0",
     "lucide-react": "^1.11.0",
     "next": "^14.2.35",
+    "openai": "^6.36.0",
     "porto": "^0.2.37",
     "react": "^18",
     "react-dom": "^18",
