@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { initializeComputeAccount } from "@/lib/0g/compute";
+import { initializeComputeAccount, listComputeProviders } from "@/lib/0g/compute";
 import {
   deductCreditsFromServer,
   getCreditsBalance,
@@ -244,7 +244,7 @@ const STORAGE_UPLOAD_TIMEOUT_MS = 30_000;
 /** One TeeML call may include multiple files — allow extra wall time. */
 const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 90_000;
 const INFERENCE_CHUNK_SIZE = 3;
-const CHUNK_INFERENCE_DELAY_MS = 8_000;
+const CHUNK_INFERENCE_DELAY_MS = 15_000;
 const SUMMARY_UPLOAD_TIMEOUT_MS = 30_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -467,6 +467,7 @@ export async function POST(request: Request) {
       let failedFiles = 0;
       let rootHash: string | null = null;
       let memoryRootHash: string | null = null;
+      let skipBilling = false;
       const aggregatedFindings: Array<
         StreamFinding & { attestationHash: string }
       > = [];
@@ -475,6 +476,24 @@ export async function POST(request: Request) {
         const provider = new ethers.JsonRpcProvider(resolveOgRpcUrl());
         const signer = new ethers.Wallet(deployerPrivateKey, provider);
         const broker = await initializeComputeAccount(signer);
+        let computeProviders = await listComputeProviders(broker);
+        const envPreferred =
+          (process.env.OG_COMPUTE_PROVIDER ?? process.env.ZEROG_COMPUTE_PROVIDER ?? "").trim();
+        if (
+          computeProviders.length === 0 &&
+          envPreferred &&
+          ethers.isAddress(envPreferred)
+        ) {
+          computeProviders = [ethers.getAddress(envPreferred)];
+        }
+        if (computeProviders.length === 0) {
+          streamChunk(controller, {
+            type: "error",
+            message:
+              "No 0G Compute providers available from listService. Set OG_COMPUTE_PROVIDER or try again later.",
+          });
+          skipBilling = true;
+        }
         const runStorageUploadSequentially = createSequentialTaskRunner();
 
         let memoryContext: string | undefined;
@@ -530,6 +549,7 @@ export async function POST(request: Request) {
           });
         }
 
+        if (!skipBilling) {
         for (let chunkIdx = 0; chunkIdx < scanFiles.length; chunkIdx += INFERENCE_CHUNK_SIZE) {
           if (chunkIdx > 0) {
             await sleep(CHUNK_INFERENCE_DELAY_MS);
@@ -602,6 +622,7 @@ export async function POST(request: Request) {
           try {
             const scanResults = await withTimeout(
               runSecurityScan(repoUrl, inputs, {
+                computeProviders,
                 broker,
                 memoryContext,
                 chunkSize: INFERENCE_CHUNK_SIZE,
@@ -648,6 +669,7 @@ export async function POST(request: Request) {
               });
             }
           }
+        }
         }
       } catch (error) {
         const message =
@@ -711,7 +733,7 @@ export async function POST(request: Request) {
           streamChunk(controller, { type: "error", message });
         }
 
-        if (scanFiles.length > 0 && deployerPrivateKey) {
+        if (scanFiles.length > 0 && deployerPrivateKey && !skipBilling) {
           try {
             await deductCreditsFromServer(
               normalizedWallet,

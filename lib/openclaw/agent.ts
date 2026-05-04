@@ -17,7 +17,9 @@ export type OpenClawScanResult = {
   attestationHash: string;
 };
 
-type RunSecurityScanOptions = {
+export type RunSecurityScanOptions = {
+  /** From `listComputeProviders(broker)` at scan start; enables provider rotation on 429. */
+  computeProviders: string[];
   broker?: unknown;
   /** TeeML long-context memory (previous scan findings from 0G Storage). */
   memoryContext?: string;
@@ -65,17 +67,23 @@ async function getBrokerFromEnv() {
 export async function runSecurityScan(
   repoUrl: string,
   fileContents: OpenClawFileInput[],
-  options?: RunSecurityScanOptions,
+  options: RunSecurityScanOptions,
 ): Promise<OpenClawScanResult[]> {
-  const broker = options?.broker ?? (await getBrokerFromEnv());
-  const memoryContext = options?.memoryContext?.trim();
+  const broker = options.broker ?? (await getBrokerFromEnv());
+  const memoryContext = options.memoryContext?.trim();
   const chunkSize =
-    options?.chunkSize !== undefined && options.chunkSize > 0 ? options.chunkSize : 3;
+    options.chunkSize !== undefined && options.chunkSize > 0 ? options.chunkSize : 3;
   const results: OpenClawScanResult[] = [];
+  const computeProviders = options.computeProviders;
 
   for (let i = 0; i < fileContents.length; i += chunkSize) {
     const chunk = fileContents.slice(i, i + chunkSize);
-    const scan = await scanChunkForVulnerabilities(broker, chunk, { memoryContext });
+    const chunkNumber = Math.floor(i / chunkSize) + 1;
+    const scan = await scanChunkForVulnerabilities(broker, chunk, {
+      memoryContext,
+      providers: computeProviders,
+      chunkIndex: chunkNumber,
+    });
 
     const byFile = new Map<string, Finding[]>();
     for (const f of chunk) {

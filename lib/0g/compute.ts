@@ -39,6 +39,19 @@ export type Finding = {
   suggestedCode: string;
 };
 
+type InferenceBroker = {
+  inference: {
+    listService?: (
+      offset?: number,
+      limit?: number,
+      includeUnacknowledged?: boolean,
+    ) => Promise<Array<{ provider?: string }>>;
+    getServiceMetadata: (provider: string) => Promise<{ endpoint: string; model?: string }>;
+    getRequestHeaders: (provider: string, payload: string) => Promise<Record<string, string>>;
+    processResponse: (provider: string, key: string, usage?: string) => Promise<void>;
+  };
+};
+
 function getEnv() {
   const rawProvider =
     (process.env.OG_COMPUTE_PROVIDER ?? process.env.ZEROG_COMPUTE_PROVIDER ?? "").trim();
@@ -98,6 +111,67 @@ async function resolveProviderAddress(
   }
 
   return ethers.getAddress(rawProvider);
+}
+
+/** All distinct provider addresses from the broker catalog (offset 0, limit 20, include unacknowledged). */
+export async function listComputeProviders(broker: unknown): Promise<string[]> {
+  const sdkBroker = broker as InferenceBroker;
+  if (!sdkBroker.inference.listService) {
+    throw new Error("0G Compute broker does not expose listService.");
+  }
+  const services = await sdkBroker.inference.listService(0, 20, true);
+  const set = new Set<string>();
+  for (const s of services) {
+    const raw = s.provider?.trim();
+    if (raw && ethers.isAddress(raw)) {
+      set.add(ethers.getAddress(raw));
+    }
+  }
+  return [...set];
+}
+
+function formatProviderLog(address: string): string {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+/** Preferred first (if present), then remaining providers; preferred may be prepended even if not in list. */
+export function orderProvidersForRotation(
+  addresses: string[],
+  preferredRaw?: string,
+): string[] {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const addr of addresses) {
+    if (!ethers.isAddress(addr)) continue;
+    const c = ethers.getAddress(addr);
+    if (!seen.has(c)) {
+      seen.add(c);
+      unique.push(c);
+    }
+  }
+  const preferred = preferredRaw?.trim();
+  if (!preferred || !ethers.isAddress(preferred)) {
+    return unique;
+  }
+  const p = ethers.getAddress(preferred);
+  const rest = unique.filter((x) => x !== p);
+  if (seen.has(p)) {
+    return [p, ...rest];
+  }
+  return [p, ...unique];
+}
+
+const RATE_LIMIT_FULL_ROTATION_BACKOFF_MS = 15_000;
+
+export class ComputeHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: string,
+  ) {
+    super(`Compute request failed (${status})`);
+    this.name = "ComputeHttpError";
+  }
 }
 
 export async function createBroker(signer: ethers.Signer) {
@@ -178,27 +252,20 @@ export type ScanFileOptions = {
   memoryContext?: string;
 };
 
-type InferenceBroker = {
-  inference: {
-    listService?: (
-      offset?: number,
-      limit?: number,
-      includeUnacknowledged?: boolean,
-    ) => Promise<Array<{ provider?: string }>>;
-    getServiceMetadata: (provider: string) => Promise<{ endpoint: string; model?: string }>;
-    getRequestHeaders: (provider: string, payload: string) => Promise<Record<string, string>>;
-    processResponse: (provider: string, key: string, usage?: string) => Promise<void>;
-  };
+export type ScanChunkOptions = ScanFileOptions & {
+  /** Catalog from `listComputeProviders` (scan start); rotation starts with `OG_COMPUTE_PROVIDER` when set. */
+  providers: string[];
+  chunkIndex: number;
 };
 
 async function executeSecurityScanCompletion(
   broker: unknown,
+  resolvedProviderAddress: string,
   systemContent: string,
   userContent: string,
 ): Promise<{ rawContent: string; attestationHash: string }> {
-  const { providerAddress, model } = getEnv();
+  const { model } = getEnv();
   const sdkBroker = broker as InferenceBroker;
-  const resolvedProviderAddress = await resolveProviderAddress(sdkBroker, providerAddress);
 
   const service = await sdkBroker.inference.getServiceMetadata(resolvedProviderAddress);
   const payload = {
@@ -224,7 +291,7 @@ async function executeSecurityScanCompletion(
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Security scan request failed (${response.status}): ${errorBody}`);
+    throw new ComputeHttpError(response.status, errorBody);
   }
 
   const responseJson = (await response.json()) as {
@@ -251,6 +318,47 @@ async function executeSecurityScanCompletion(
   );
 
   return { rawContent, attestationHash };
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Tries each provider in order; on 429 moves to the next. After a full pass of only 429s,
+ * waits 15s and retries from the first provider.
+ */
+async function executeSecurityScanWithProviderRotation(
+  broker: unknown,
+  orderedProviders: string[],
+  systemContent: string,
+  userContent: string,
+  chunkIndex: number,
+): Promise<{ rawContent: string; attestationHash: string }> {
+  if (orderedProviders.length === 0) {
+    throw new Error("No compute providers available for rotation.");
+  }
+
+  for (;;) {
+    for (const provider of orderedProviders) {
+      try {
+        const result = await executeSecurityScanCompletion(
+          broker,
+          provider,
+          systemContent,
+          userContent,
+        );
+        console.log(
+          `[compute] using provider ${formatProviderLog(provider)} for chunk ${chunkIndex}`,
+        );
+        return result;
+      } catch (e) {
+        if (e instanceof ComputeHttpError && e.status === 429) {
+          continue;
+        }
+        throw e;
+      }
+    }
+    await sleep(RATE_LIMIT_FULL_ROTATION_BACKOFF_MS);
+  }
 }
 
 function mapParsedRowToFinding(item: Partial<Finding>, fileFallback: string): Finding {
@@ -307,8 +415,12 @@ export async function scanFileForVulnerabilities(
       : SECURITY_SYSTEM_PROMPT;
 
     const userContent = `Filename: ${filename}\n\nCode:\n${content}`;
+    const { providerAddress } = getEnv();
+    const sdkBroker = broker as InferenceBroker;
+    const resolved = await resolveProviderAddress(sdkBroker, providerAddress);
     const { rawContent, attestationHash } = await executeSecurityScanCompletion(
       broker,
+      resolved,
       systemContent,
       userContent,
     );
@@ -338,11 +450,17 @@ export async function scanFileForVulnerabilities(
 export async function scanChunkForVulnerabilities(
   broker: unknown,
   files: Array<{ path: string; content: string }>,
-  options?: ScanFileOptions,
+  options?: ScanChunkOptions,
 ): Promise<{ findings: Finding[]; attestationHash: string }> {
   if (files.length === 0) {
     return { findings: [], attestationHash: "" };
   }
+  const providers = options?.providers;
+  const chunkIndex = options?.chunkIndex ?? 1;
+  if (!providers || providers.length === 0) {
+    throw new Error("scanChunkForVulnerabilities requires options.providers from listComputeProviders.");
+  }
+
   const chunkPaths = files.map((f) => f.path);
   const memory = options?.memoryContext?.trim();
   const systemContent = memory
@@ -351,10 +469,14 @@ export async function scanChunkForVulnerabilities(
   const userContent = buildChunkUserContent(files);
 
   try {
-    const { rawContent, attestationHash } = await executeSecurityScanCompletion(
+    const { providerAddress } = getEnv();
+    const ordered = orderProvidersForRotation(providers, providerAddress);
+    const { rawContent, attestationHash } = await executeSecurityScanWithProviderRotation(
       broker,
+      ordered,
       systemContent,
       userContent,
+      chunkIndex,
     );
 
     let parsed: unknown = [];
