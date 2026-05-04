@@ -16,6 +16,7 @@ export type ComputeChatResult = {
 };
 
 const DEFAULT_OG_RPC_URL = "https://evmrpc.0g.ai";
+/** Default when `OG_COMPUTE_MODEL` is unset — aligns with 0G Aristotle mainnet TeeML catalog (not Galileo qwen). */
 const DEFAULT_OG_MODEL = "deepseek-chat-v3-0324";
 const COMPUTE_API_BASE_URL_DEFAULT = "https://indexer-storage-turbo.0g.ai";
 const SECURITY_SYSTEM_PROMPT =
