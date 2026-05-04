@@ -1,6 +1,14 @@
 # Enclav
 
-**Enclav** connects a public GitHub repository to an autonomous security scan on **0G Galileo**: each file is uploaded to **0G Storage**, analyzed with **0G Compute (TeeML)**, findings stream to the dashboard, and you can mint an on-chain **security certificate** from your wallet (`Enclav.sol` is an OpenZeppelin **ERC-721**; the app labels it as an **INFT**-style certificate).
+## Quick Links For Judges
+- Live Demo: [coming soon - deploying to Vercel]
+- Demo Video: [coming soon]
+- INFT Contract (Mainnet): https://chainscan.0g.ai/address/0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5
+- Credits Contract (Mainnet): https://chainscan.0g.ai/address/0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073
+- GitHub: https://github.com/Oseodion/enclav
+- Track: Track 1 — Agentic Infrastructure & OpenClaw Lab
+
+**Enclav** connects a public GitHub repository to an autonomous security scan on **0G Chain**: files are uploaded to **0G Storage**, analyzed with **0G Compute (TeeML)**, then certified on-chain.
 
 *0G APAC Hackathon 2026 — **Track 1: Agentic Infrastructure & OpenClaw Lab***
 
@@ -14,7 +22,7 @@ Connect a repo URL; Enclav fetches code, runs TeeML-backed scans on 0G Compute, 
 
 ## What it does — autonomous scan flow
 
-1. **Wallet & credits** — You connect an EVM wallet on **0G Galileo (chain ID 16602)**. The app reads your balance on the **EnclavCredits** contract. Each completed scan debits **0.05 OG** of prepaid credits (server-side `deductCredits` after the run).
+1. **Wallet & credits** — You connect an EVM wallet on **0G Chain** (Aristotle mainnet or Galileo testnet). The app reads your balance on the **EnclavCredits** contract. Each completed scan debits **0.05 OG** of prepaid credits (server-side `deductCredits` after the run).
 2. **Repo URL** — You paste a **public** `https://github.com/owner/repo` URL on the dashboard. Private repos are not supported.
 3. **GitHub ingest** — The server calls the **GitHub API** (`git/trees/HEAD?recursive=1` + blob fetches). Optional `GITHUB_TOKEN` reduces rate-limit failures. Paths like `node_modules`, `.next`, `.git`, and `.env*` are skipped; only configured source extensions (e.g. `.ts`, `.py`, `.sol`, …) are scanned.
 4. **0G Storage** — For each file, the server uploads content via **`@0gfoundation/0g-ts-sdk`** (`Indexer` + `MemData.upload`) and receives a **root hash** per object.
@@ -40,7 +48,7 @@ Enclav’s scan path is built around **0G Compute** broker flows and **TeeML att
 ## Architecture (ASCII)
 
 ```
-  User (browser, wagmi / injected wallet, 0G Galileo 16602)
+  User (browser, wagmi / injected wallet, 0G Chain)
     |
     v
   Next.js 14 App Router
@@ -52,7 +60,7 @@ Enclav’s scan path is built around **0G Compute** broker flows and **TeeML att
     |       |-- GitHub REST ...... tree + blobs (public repos)
     |       |
     |       |-- EnclavCredits .... getCreditsBalance (402 if low)
-    |       |       on 0G Chain (Galileo)
+    |       |       on 0G Chain
     |       |
     |       |-- @0gfoundation/0g-ts-sdk
     |       |       Indexer.upload ........ per-file + report + memory JSON
@@ -76,14 +84,22 @@ Enclav’s scan path is built around **0G Compute** broker flows and **TeeML att
 
 | Component | Usage in this repo |
 |-------------|-------------------|
-| **0G Chain (Galileo)** | `16602`, RPC `https://evmrpc-testnet.0g.ai`; **Enclav** + **EnclavCredits** contracts; wallet mint + credit deposit/withdraw. |
+| **0G Chain (Aristotle / Galileo)** | Contracts, wallet transactions, explorer proof, and chain state for scans + certificate minting. |
 | **`@0gfoundation/0g-ts-sdk`** | `Indexer` for **upload** (`MemData`) and **download** (`downloadToBlob`) of file blobs, final scan JSON, and `enclav-memory-*` documents. |
 | **`@0glabs/0g-serving-broker`** | `ZGServingUserBrokerFactory.create` + `initializeComputeAccount` (ledger bootstrap); `inference.getServiceMetadata`, `getRequestHeaders`, OpenAI-compatible `chat/completions` POST, `processResponse`, optional `listService`. |
 | **TeeML attestation** | `ZG-Res-Key` response header (fallback: response id) attached to each finding in the UI / report. |
 | **EnclavCredits (Solidity)** | Prepaid **OG** for scans; `deposit` / `withdraw` / `credits` / `deductCredits` via `lib/0g/credits.ts`. |
-| **Enclav.sol (ERC-721 certificate)** | `mintCertificate` stores repo URL, scan date, counts, and **reportHash** (0G Storage root) on-chain. |
+| **Agent ID / INFT certificate** | The app mints a wallet-owned, on-chain security certificate after scan completion (implemented by `Enclav.sol`, OpenZeppelin ERC-721 style). |
+| **Enclav.sol (ERC-721 certificate contract)** | `mintCertificate` stores repo URL, scan date, counts, and **reportHash** (0G Storage root) on-chain. |
 
 **OpenClaw** — `lib/openclaw/agent.ts` is the scan orchestration entrypoint; `lib/openclaw/skills/0g-deploy.ts` is a **0g-deploy** skill module (contract deploy/read helpers) for agent-style workflows.
+
+### How 0G modules support the product
+
+- **0G Storage** provides immutable scan artifacts (per-file uploads, full scan report, memory blobs) referenced by root hashes.
+- **0G Compute + TeeML** runs structured vulnerability analysis and returns attested responses per scan call.
+- **0G Chain** anchors ownership, payment, and certificate state via EnclavCredits + Enclav certificate contract.
+- **Agent ID / INFT certificate flow** turns each completed scan into a wallet-owned, verifiable on-chain security credential.
 
 ---
 
@@ -126,16 +142,16 @@ npm run dev
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `DEPLOYER_PRIVATE_KEY` | **Yes** for scans | `0x…` key on Galileo: 0G Storage uploads, 0G Compute broker, `deductCredits` as contract owner. |
+| `DEPLOYER_PRIVATE_KEY` | **Yes** for scans | `0x…` key on selected 0G network: 0G Storage uploads, 0G Compute broker, `deductCredits` as contract owner. |
 | `OG_COMPUTE_PROVIDER` | **Yes** for scans | Provider **0x address** from 0G Compute (fallback env name: `ZEROG_COMPUTE_PROVIDER`). |
 | `GITHUB_TOKEN` | No | GitHub API token (`Authorization: token …`) for higher rate limits. |
-| `OG_RPC_URL` | No | Server RPC (defaults to Galileo testnet). |
+| `OG_RPC_URL` | No | Server RPC (defaults to 0G mainnet in current code). |
 | `NEXT_PUBLIC_OG_RPC_URL` | No | Browser / mint code RPC override. |
-| `OG_STORAGE_INDEXER_URL` | No | Storage indexer (defaults to testnet turbo indexer). |
-| `OG_COMPUTE_MODEL` | No | Defaults to `qwen/qwen-2.5-7b-instruct`. |
+| `OG_STORAGE_INDEXER_URL` | No | Storage indexer (defaults to mainnet turbo indexer in current code). |
+| `OG_COMPUTE_MODEL` | No | Defaults to `deepseek-chat-v3-0324` in current code. |
 | `OG_COMPUTE_API_BASE_URL` | No | Used when resolving compute API (has a code default). |
-| `CREDITS_CONTRACT_ADDRESS` / `NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS` | No* | EnclavCredits; defaults to deployed Galileo address in code. |
-| `NEXT_PUBLIC_INFT_CONTRACT_ADDRESS` | No* | Enclav certificate; defaults to deployed Galileo address in code. |
+| `CREDITS_CONTRACT_ADDRESS` / `NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS` | No* | EnclavCredits; defaults to deployed Aristotle address in code. |
+| `NEXT_PUBLIC_INFT_CONTRACT_ADDRESS` | No* | Enclav certificate; defaults to deployed Aristotle address in code. |
 | `NEXT_PUBLIC_APP_URL` | No | App base URL for metadata/links. |
 
 \*Required only if you deploy new contracts and need to point away from the baked-in Galileo defaults.
@@ -146,19 +162,19 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 
 ## How judges can test
 
-1. **Wallet** — Install **MetaMask** (or any injected EVM wallet). **Add 0G Galileo**: chain ID **16602**, RPC `https://evmrpc-testnet.0g.ai`, explorer `https://chainscan-galileo.0g.ai` (the app will prompt to switch when needed).
-2. **Testnet OG** — Use the official faucet: [https://faucet.0g.ai](https://faucet.0g.ai) to fund the wallet you will connect in the UI.
+1. **Wallet** — Install **MetaMask** (or any injected EVM wallet). For test runs, add **0G Galileo**: chain ID **16602**, RPC `https://evmrpc-testnet.0g.ai`, explorer `https://chainscan-galileo.0g.ai`.
+2. **Test account / faucet** — Get testnet OG from [https://faucet.0g.ai](https://faucet.0g.ai) and fund the same wallet you will use in the app.
 3. **Credits** — Open **Dashboard → Settings**. Deposit native **OG** into **EnclavCredits** so your balance covers **0.05 OG per scan** (plus gas for deposit/mint).
 4. **Operator wallet** — The maintainer’s `.env.local` must include a funded **`DEPLOYER_PRIVATE_KEY`** (same chain) and a valid **`OG_COMPUTE_PROVIDER`** so judges’ scans can reach Storage + Compute.
 5. **Scan** — Use a **small public** GitHub repo first (e.g. this repo: `https://github.com/Oseodion/enclav`) to avoid long runs. Paste the URL, **Start Scan**, watch the **Live Scan Feed** and Tee attestation fields.
-6. **Mint** — After **Complete**, use **Mint security certificate**; approve the transaction on Galileo. View the **Certificate** / **Agent ID** page and explorer links.
+6. **Mint** — After **Complete**, use **Mint security certificate**; approve the transaction on the active network. View the **Certificate** / **Agent ID** page and explorer links.
 
 ---
 
 ## Tech stack
 
 - **Frontend:** Next.js 14 (App Router), React 18, Tailwind CSS, Geist fonts, Lucide icons, Zustand  
-- **Wallet:** wagmi v3 + viem (single chain: 0G Galileo)  
+- **Wallet:** wagmi v3 + viem (0G Aristotle mainnet + 0G Galileo testnet)  
 - **Backend:** Next.js Route Handlers (`/api/scan`, `/api/chat`), TypeScript strict  
 - **0G:** `@0gfoundation/0g-ts-sdk`, `@0glabs/0g-serving-broker`, ethers v6  
 - **Contracts:** Solidity 0.8.19, Hardhat 3, OpenZeppelin ERC-721  
@@ -179,6 +195,11 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 ## Repository
 
 **GitHub:** [https://github.com/Oseodion/enclav](https://github.com/Oseodion/enclav)
+
+## Demo
+
+- **Live demo URL:** Coming soon - deploying to Vercel
+- **Demo video link:** Coming soon
 
 ---
 
