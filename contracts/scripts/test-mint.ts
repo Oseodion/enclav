@@ -1,5 +1,6 @@
 import hre from "hardhat";
 import { ethers } from "ethers";
+import { resolveOgRpcUrl } from "../../lib/og-env";
 
 function extractErrorMessage(error: unknown): string {
   if (!error || typeof error !== "object") {
@@ -26,7 +27,7 @@ function extractErrorMessage(error: unknown): string {
 async function main() {
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
   const contractAddress = process.env.INFT_CONTRACT_ADDRESS;
-  const rpcUrl = process.env.OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
+  const rpcUrl = resolveOgRpcUrl();
 
   if (!privateKey) {
     throw new Error("DEPLOYER_PRIVATE_KEY is required in .env.local");

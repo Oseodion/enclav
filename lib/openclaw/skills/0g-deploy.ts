@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { resolveOgExplorerUrl, resolveOgRpcUrl } from "@/lib/og-env";
 
 type DeployAction =
   | {
@@ -21,12 +22,10 @@ type DeployAction =
 
 type SkillContext = DeployAction;
 
-const CHAINSCAN_BASE = "https://chainscan-galileo.0g.ai";
-
 function getRuntimeConfig() {
   return {
     privateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",
-    rpcUrl: process.env.OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai",
+    rpcUrl: resolveOgRpcUrl(),
   };
 }
 
@@ -46,7 +45,7 @@ export const zeroGDeploySkill = {
   async execute(context: SkillContext) {
     if (context.action === "buildExplorerTxLink") {
       return {
-        explorerUrl: `${CHAINSCAN_BASE}/tx/${context.txHash}`,
+        explorerUrl: `${resolveOgExplorerUrl()}/tx/${context.txHash}`,
       };
     }
 

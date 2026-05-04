@@ -1,5 +1,6 @@
 import hre from "hardhat";
 import { ethers } from "ethers";
+import { resolveOgRpcUrl } from "../../lib/og-env";
 
 async function main() {
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
@@ -9,7 +10,7 @@ async function main() {
 
   const networkName = process.env.HARDHAT_NETWORK ?? "unknown";
   const networkConfig = hre.config.networks[networkName] as { url?: string } | undefined;
-  const rpcUrl = networkConfig?.url ?? process.env.OG_RPC_URL;
+  const rpcUrl = networkConfig?.url ?? process.env.OG_RPC_URL ?? resolveOgRpcUrl();
   if (!rpcUrl) {
     throw new Error(`RPC URL missing for network "${networkName}".`);
   }

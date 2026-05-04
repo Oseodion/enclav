@@ -1,5 +1,13 @@
 import { ethers, type InterfaceAbi, type TransactionReceipt } from "ethers";
 import type { WalletClient } from "viem";
+import {
+  getAristotleChainId,
+  getGalileoChainId,
+  resolveGalileoExplorerUrl,
+  resolveGalileoRpcUrl,
+  resolveOgExplorerUrl,
+  resolveOgRpcUrl,
+} from "@/lib/og-env";
 import EnclavAbi from "./enclav-abi.json";
 
 const INFT_CONTRACT_DEFAULT = "0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5";
@@ -15,20 +23,17 @@ function resolveInftContractAddress(): string {
 }
 
 export const INFT_CONTRACT_ADDRESS = resolveInftContractAddress();
-export const OG_RPC_URL =
-  process.env.NEXT_PUBLIC_OG_RPC_URL ??
-  process.env.OG_RPC_URL ??
-  "https://evmrpc.0g.ai";
-const CHAINSCAN_BASE_URL =
-  process.env.NEXT_PUBLIC_OG_EXPLORER ??
-  process.env.OG_EXPLORER ??
-  "https://chainscan.0g.ai";
-/** Preferred chain when switching from a non-0G network (Galileo testnet or Aristotle mainnet). */
+export const OG_RPC_URL = resolveOgRpcUrl();
+const CHAINSCAN_BASE_URL = resolveOgExplorerUrl();
+/** Preferred chain when switching from a non-0G network (Galileo or Aristotle). */
 const OG_SWITCH_TARGET_CHAIN_ID = Number(
-  process.env.NEXT_PUBLIC_OG_CHAIN_ID ?? process.env.OG_CHAIN_ID ?? "16661",
+  process.env.NEXT_PUBLIC_OG_CHAIN_ID ?? process.env.OG_CHAIN_ID ?? String(getAristotleChainId()),
 );
 
-const VALID_OG_CHAIN_IDS = new Set([16602, 16661]);
+const VALID_OG_CHAIN_IDS = new Set<number>([
+  getGalileoChainId(),
+  getAristotleChainId(),
+]);
 
 function toEip155ChainIdHex(chainId: number): string {
   return `0x${BigInt(chainId).toString(16)}`;
@@ -40,20 +45,22 @@ function chainAddParamsFor(chainId: number): {
   rpcUrl: string;
   explorerUrl: string;
 } {
-  if (chainId === 16602) {
+  const galId = getGalileoChainId();
+  const arId = getAristotleChainId();
+  if (chainId === galId) {
     return {
-      chainIdHex: toEip155ChainIdHex(16602),
+      chainIdHex: toEip155ChainIdHex(galId),
       chainName: "0G Galileo Testnet",
-      rpcUrl: "https://evmrpc-testnet.0g.ai",
-      explorerUrl: "https://chainscan-galileo.0g.ai",
+      rpcUrl: resolveGalileoRpcUrl(),
+      explorerUrl: resolveGalileoExplorerUrl(),
     };
   }
-  if (chainId === 16661) {
+  if (chainId === arId) {
     return {
-      chainIdHex: toEip155ChainIdHex(16661),
+      chainIdHex: toEip155ChainIdHex(arId),
       chainName: "0G Aristotle Mainnet",
-      rpcUrl: "https://evmrpc.0g.ai",
-      explorerUrl: "https://chainscan.0g.ai",
+      rpcUrl: OG_RPC_URL,
+      explorerUrl: CHAINSCAN_BASE_URL,
     };
   }
   return {
@@ -173,7 +180,7 @@ function isOnAllowedOGNetwork(ethDecimal: number, wagmiChainId?: number): boolea
 }
 
 /**
- * Ensures the wallet is on **0G Galileo (16602)** or **0G Aristotle (16661)**.
+ * Ensures the wallet is on configured Galileo or Aristotle chain IDs (see `og-env`).
  * Does not switch if already on either network. If on another chain, switches toward
  * `NEXT_PUBLIC_OG_CHAIN_ID` / `OG_CHAIN_ID` (default Aristotle mainnet).
  */
@@ -184,7 +191,7 @@ export async function ensureWalletOnOGNetwork(
   const snap = await readWalletChainIdFromProvider(injectedProvider);
   const switchTarget = VALID_OG_CHAIN_IDS.has(OG_SWITCH_TARGET_CHAIN_ID)
     ? OG_SWITCH_TARGET_CHAIN_ID
-    : 16661;
+    : getAristotleChainId();
   const targetMeta = chainAddParamsFor(switchTarget);
 
   console.log("[ensureWalletOnOGNetwork] chain snapshot", {
@@ -249,7 +256,7 @@ export async function ensureWalletOnOGNetwork(
   const after = await readWalletChainIdFromProvider(injectedProvider);
   if (!isOnAllowedOGNetwork(after.decimal, wagmiChainId)) {
     throw new Error(
-      `Wallet must be on 0G Galileo (16602) or Aristotle (16661). eth_chainId is ${after.normalizedHex} (decimal ${after.decimal}).`,
+      `Wallet must be on 0G Galileo (${getGalileoChainId()}) or Aristotle (${getAristotleChainId()}). eth_chainId is ${after.normalizedHex} (decimal ${after.decimal}).`,
     );
   }
 }

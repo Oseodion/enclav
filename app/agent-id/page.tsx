@@ -16,22 +16,24 @@ import {
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { WalletConnect } from "@/components/ui/WalletConnect";
+import { INFT_CONTRACT_ADDRESS } from "@/lib/0g/inft";
+import { resolveOgExplorerUrl, resolveOgRpcUrl } from "@/lib/og-env";
+import { ogNetworkLabel } from "@/lib/og-network-label";
 import { ethers } from "ethers";
-import { useAccount, useConnect } from "wagmi";
+import { useAccount, useChainId, useConnect } from "wagmi";
 
-const EXPLORER_BASE = "https://chainscan-galileo.0g.ai";
-const PRIMARY_INFT_CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ??
-  "0x8E2225136CaAf9aD28dDBF86e9280DB326AB2464";
-const LEGACY_INFT_CONTRACT_ADDRESSES = [
-  "0x3052bed0971c6F21967ed8186d6B3B4D431F632f",
-  "0xE4B6b9f3628990ae769816c7ddE7c7bB33076b7c",
-];
+const LEGACY_INFT_CONTRACT_ADDRESSES =
+  process.env.NEXT_PUBLIC_LEGACY_INFT_CONTRACT_ADDRESSES?.split(",")
+    .map((s) => s.trim())
+    .filter((s) => ethers.isAddress(s))
+    .map((s) => ethers.getAddress(s)) ?? [];
+
 const INFT_CONTRACT_ADDRESSES = [
-  PRIMARY_INFT_CONTRACT_ADDRESS,
-  ...LEGACY_INFT_CONTRACT_ADDRESSES,
-].filter((address, index, all) => Boolean(address) && all.indexOf(address) === index);
-const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
+  INFT_CONTRACT_ADDRESS,
+  ...LEGACY_INFT_CONTRACT_ADDRESSES.filter((a) => a !== INFT_CONTRACT_ADDRESS),
+];
+
+const READ_RPC_URL = resolveOgRpcUrl();
 const INFT_READ_ABI = [
   "event CertificateMinted(uint256 indexed tokenId, address indexed recipient, string repoUrl, string reportHash)",
   "function getCertificate(uint256 tokenId) view returns ((string repoUrl,string scanDate,uint256 filesScanned,uint256 totalFindings,uint256 criticalCount,uint256 highCount,uint256 mediumCount,uint256 lowCount,string reportHash))",
@@ -78,12 +80,15 @@ function AgentIdPageContent() {
   const [hasFetchedCertificate, setHasFetchedCertificate] = useState(false);
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
+  const chainId = useChainId();
+  const networkLabel = ogNetworkLabel(chainId);
+  const explorerBase = resolveOgExplorerUrl();
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadCertificateByTokenId(tokenId: string) {
-      const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
+      const provider = new ethers.JsonRpcProvider(READ_RPC_URL);
       const tokenBn = BigInt(tokenId);
       for (const contractAddress of INFT_CONTRACT_ADDRESSES) {
         try {
@@ -127,7 +132,7 @@ function AgentIdPageContent() {
 
     async function loadCertificateFromWallet() {
       if (!address) return;
-      const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
+      const provider = new ethers.JsonRpcProvider(READ_RPC_URL);
       const iface = new ethers.Interface(INFT_READ_ABI);
       const allLogs: Array<{ log: ethers.Log; contractAddress: string }> = [];
       for (const contractAddress of INFT_CONTRACT_ADDRESSES) {
@@ -260,7 +265,7 @@ function AgentIdPageContent() {
   const onChainData = useMemo(() => {
     if (certificate) {
       return {
-        contract: PRIMARY_INFT_CONTRACT_ADDRESS,
+        contract: INFT_CONTRACT_ADDRESS,
         tokenId: certificate.tokenId,
         owner: certificate.owner,
         standard: "ERC-7857",
@@ -270,7 +275,7 @@ function AgentIdPageContent() {
     }
 
     return {
-      contract: PRIMARY_INFT_CONTRACT_ADDRESS,
+      contract: INFT_CONTRACT_ADDRESS,
       tokenId: "Not minted",
       owner: isConnected && address ? address : "Connect wallet",
       standard: "ERC-7857",
@@ -279,9 +284,9 @@ function AgentIdPageContent() {
     };
   }, [address, certificate, formattedScanDate, isConnected]);
 
-  const contractExplorerHref = `${EXPLORER_BASE}/address/${PRIMARY_INFT_CONTRACT_ADDRESS}`;
+  const contractExplorerHref = `${explorerBase}/address/${INFT_CONTRACT_ADDRESS}`;
   const txExplorerHref = certificate?.txHash ?? storedTxHash
-    ? `${EXPLORER_BASE}/tx/${certificate?.txHash ?? storedTxHash}`
+    ? `${explorerBase}/tx/${certificate?.txHash ?? storedTxHash}`
     : null;
   const hasCertificate = Boolean(certificate);
   const dynamicCapabilityTags = hasCertificate
@@ -363,7 +368,7 @@ function AgentIdPageContent() {
           Security Certificate
         </h1>
         <p className="mb-10 font-mono text-[11px] tracking-[0.06em] text-text-3">
-          ERC-7857 - 0G Chain Galileo - Issued after autonomous scan
+          ERC-7857 · {networkLabel} · Issued after autonomous scan
         </p>
 
         <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">

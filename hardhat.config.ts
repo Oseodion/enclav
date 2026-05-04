@@ -1,5 +1,11 @@
 import { config as loadEnv } from "dotenv";
 import { HardhatUserConfig } from "hardhat/config";
+import {
+  getAristotleChainId,
+  getGalileoChainId,
+  resolveGalileoRpcUrl,
+  resolveOgRpcUrl,
+} from "./lib/og-env";
 
 loadEnv({ path: ".env.local" });
 
@@ -23,14 +29,14 @@ const config: HardhatUserConfig = {
   networks: {
     ogGalileo: {
       type: "http",
-      url: "https://evmrpc-testnet.0g.ai",
-      chainId: 16602,
+      url: resolveGalileoRpcUrl(),
+      chainId: getGalileoChainId(),
       accounts: deployerPrivateKey ? [deployerPrivateKey] : [],
     },
     ogAristotle: {
       type: "http",
-      url: "https://evmrpc.0g.ai",
-      chainId: 16661,
+      url: resolveOgRpcUrl(),
+      chainId: getAristotleChainId(),
       accounts: deployerPrivateKey ? [deployerPrivateKey] : [],
     },
   },

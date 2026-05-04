@@ -36,15 +36,10 @@ import {
 } from "@/lib/0g/credits";
 import { INFT_CONTRACT_ADDRESS, mintFromWallet, type MintScanData } from "@/lib/0g/inft";
 import { normalizeRepoUrlForMemory } from "@/lib/0g/memory";
+import { ogNetworkLabel } from "@/lib/og-network-label";
+import { resolveOgExplorerUrl } from "@/lib/og-env";
 import { useWallet } from "@/lib/wallet";
 import { useAccount, useChainId, useDisconnect, useWalletClient } from "wagmi";
-
-/** Human-readable 0G chain label from EIP-155 chain id (wagmi `useChainId`). */
-function ogNetworkLabel(chainId: number): string {
-  if (chainId === 16661) return "0G Aristotle Mainnet";
-  if (chainId === 16602) return "0G Galileo Testnet";
-  return "0G Network";
-}
 
 type FindingSeverity = "Critical" | "High" | "Medium" | "Low";
 
@@ -83,8 +78,6 @@ type ScanHistoryEntry = {
 
 const panelClass =
   "relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']";
-const CHAINSCAN_GALILEO = "https://chainscan-galileo.0g.ai";
-
 /** Display strings aligned with on-chain SCAN_CREDIT_COST_WEI (0.05 OG) and typical mint gas. */
 const COST_LABEL_SCAN_OG = "0.05";
 const COST_LABEL_MINT_GAS_OG = "0.001";
@@ -714,7 +707,7 @@ export default function DashboardPage() {
         latestScanData,
         (txHash) => {
           console.log("[mint] wallet confirmed, tx submitted");
-          setCertificateExplorerUrl(`https://chainscan-galileo.0g.ai/tx/${txHash}`);
+          setCertificateExplorerUrl(`${resolveOgExplorerUrl()}/tx/${txHash}`);
           setMintStatus("minting");
           setMintStatusMessage("Minting certificate...");
         },
@@ -1969,10 +1962,13 @@ function SettingsTab({
   onWithdrawCreditsAll: () => void;
   creditsActionError: string | null;
 }) {
-  const explorerContractUrl = `${CHAINSCAN_GALILEO}/address/${INFT_CONTRACT_ADDRESS}`;
+  const settingsChainId = useChainId();
+  const settingsNetworkLabel = ogNetworkLabel(settingsChainId);
+  const explorerBase = resolveOgExplorerUrl();
+  const explorerContractUrl = `${explorerBase}/address/${INFT_CONTRACT_ADDRESS}`;
   const creditsAddr = getCreditsContractAddress();
   const creditsExplorerUrl =
-    creditsAddr.length > 0 ? `${CHAINSCAN_GALILEO}/address/${creditsAddr}` : "";
+    creditsAddr.length > 0 ? `${explorerBase}/address/${creditsAddr}` : "";
 
   return (
     <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-5 pb-24 pt-5 md:px-6 md:pb-28 md:pt-6`}>
@@ -2132,9 +2128,10 @@ function SettingsTab({
       <div className="mb-8 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-5 md:mb-6 md:p-4">
         <h3 className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#9B99B0]">Network</h3>
         <p className="mb-1 text-sm text-[#F0EEF8]">
-          Current network: <span className="font-mono text-[#A78BFA]">0G Galileo Testnet</span>
+          Current network:{" "}
+          <span className="font-mono text-[#A78BFA]">{settingsNetworkLabel}</span>
         </p>
-        <p className="mb-4 font-mono text-xs text-[#9B99B0]">Chain ID 16602</p>
+        <p className="mb-4 font-mono text-xs text-[#9B99B0]">Chain ID {settingsChainId}</p>
 
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="font-mono text-[10px] uppercase text-[#9B99B0]">INFT contract</span>

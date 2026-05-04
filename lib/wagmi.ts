@@ -2,9 +2,18 @@ import { QueryClient } from "@tanstack/react-query";
 import { http, defineChain } from "viem";
 import { createConfig } from "wagmi";
 import { injected } from "wagmi/connectors";
+import {
+  getAristotleChainId,
+  getGalileoChainId,
+  resolveGalileoRpcUrl,
+  resolveOgRpcUrl,
+} from "./og-env";
+
+const galileoRpc = resolveGalileoRpcUrl();
+const aristotleRpc = resolveOgRpcUrl();
 
 export const ogGalileo = defineChain({
-  id: 16602,
+  id: getGalileoChainId(),
   name: "0G Galileo",
   nativeCurrency: {
     name: "0G",
@@ -12,20 +21,23 @@ export const ogGalileo = defineChain({
     decimals: 18,
   },
   rpcUrls: {
-    default: { http: ["https://evmrpc-testnet.0g.ai"] },
-    public: { http: ["https://evmrpc-testnet.0g.ai"] },
+    default: { http: [galileoRpc] },
+    public: { http: [galileoRpc] },
   },
   blockExplorers: {
     default: {
       name: "0G Galileo Explorer",
-      url: "https://chainscan-galileo.0g.ai",
+      url:
+        process.env.NEXT_PUBLIC_OG_GALILEO_EXPLORER_URL ??
+        process.env.OG_GALILEO_EXPLORER_URL ??
+        "https://chainscan-galileo.0g.ai",
     },
   },
   testnet: true,
 });
 
 export const ogAristotle = defineChain({
-  id: 16661,
+  id: getAristotleChainId(),
   name: "0G Aristotle",
   nativeCurrency: {
     name: "0G",
@@ -33,24 +45,28 @@ export const ogAristotle = defineChain({
     decimals: 18,
   },
   rpcUrls: {
-    default: { http: ["https://evmrpc.0g.ai"] },
-    public: { http: ["https://evmrpc.0g.ai"] },
+    default: { http: [aristotleRpc] },
+    public: { http: [aristotleRpc] },
   },
   blockExplorers: {
     default: {
       name: "0G Explorer",
-      url: "https://chainscan.0g.ai",
+      url:
+        process.env.NEXT_PUBLIC_OG_EXPLORER ??
+        process.env.OG_EXPLORER ??
+        "https://chainscan.0g.ai",
     },
   },
   testnet: false,
 });
 
+/** Aristotle first so injected wallets default to mainnet when applicable. */
 export const wagmiConfig = createConfig({
   chains: [ogAristotle, ogGalileo],
   connectors: [injected()],
   transports: {
-    [ogAristotle.id]: http("https://evmrpc.0g.ai"),
-    [ogGalileo.id]: http("https://evmrpc-testnet.0g.ai"),
+    [ogAristotle.id]: http(aristotleRpc),
+    [ogGalileo.id]: http(galileoRpc),
   },
 });
 

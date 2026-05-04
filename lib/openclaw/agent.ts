@@ -4,6 +4,7 @@ import {
   scanFileForVulnerabilities,
   type Finding,
 } from "@/lib/0g/compute";
+import { resolveOgRpcUrl } from "@/lib/og-env";
 
 export type OpenClawFileInput = {
   path: string;
@@ -41,7 +42,7 @@ export function deduplicateFindingsByFileLineIssue<T extends { file: string; lin
 function getRuntimeConfig() {
   return {
     privateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",
-    rpcUrl: process.env.OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai",
+    rpcUrl: resolveOgRpcUrl(),
   };
 }
 

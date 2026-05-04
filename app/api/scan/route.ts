@@ -15,6 +15,7 @@ import {
 } from "@/lib/0g/memory";
 import { deduplicateFindingsByFileLineIssue, runSecurityScan } from "@/lib/openclaw/agent";
 import { downloadTextByRootHash, uploadFile } from "@/lib/0g/storage";
+import { resolveOgRpcUrl } from "@/lib/og-env";
 
 type ScanRequestBody = {
   repoUrl?: string;
@@ -291,7 +292,7 @@ export async function POST(request: Request) {
       > = [];
 
       try {
-        const provider = new ethers.JsonRpcProvider("https://evmrpc-testnet.0g.ai");
+        const provider = new ethers.JsonRpcProvider(resolveOgRpcUrl());
         const signer = new ethers.Wallet(deployerPrivateKey, provider);
         const broker = await initializeComputeAccount(signer);
         const runStorageUploadSequentially = createSequentialTaskRunner();
@@ -400,7 +401,7 @@ export async function POST(request: Request) {
       } finally {
         const completedAt = new Date().toISOString();
         try {
-          const provider = new ethers.JsonRpcProvider("https://evmrpc-testnet.0g.ai");
+          const provider = new ethers.JsonRpcProvider(resolveOgRpcUrl());
           if (deployerPrivateKey) {
             const signer = new ethers.Wallet(deployerPrivateKey, provider);
             const summaryReport = {

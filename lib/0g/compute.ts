@@ -1,5 +1,6 @@
 import * as ServingBroker from "@0glabs/0g-serving-broker";
 import { ethers } from "ethers";
+import { resolveOgRpcUrl, resolveOgStorageIndexerUrl } from "@/lib/og-env";
 
 type ChatRole = "system" | "user" | "assistant";
 
@@ -15,10 +16,8 @@ export type ComputeChatResult = {
   providerAddress: string;
 };
 
-const DEFAULT_OG_RPC_URL = "https://evmrpc.0g.ai";
-/** Default when `OG_COMPUTE_MODEL` is unset — aligns with 0G Aristotle mainnet TeeML catalog (not Galileo qwen). */
+/** Default when `OG_COMPUTE_MODEL` is unset — 0G Aristotle mainnet TeeML catalog. */
 const DEFAULT_OG_MODEL = "deepseek-chat-v3-0324";
-const COMPUTE_API_BASE_URL_DEFAULT = "https://indexer-storage-turbo.0g.ai";
 const SECURITY_SYSTEM_PROMPT =
   "IMPORTANT: You must respond in English only. Do not use any other language under any circumstances. You are a security auditor. Analyze this code for security vulnerabilities. Return ONLY a JSON array of findings. Each finding must have: severity (Critical/High/Medium/Low), file (string), line (number), issue (string), fix (string), vulnerableCode (string), suggestedCode (string). Keep vulnerableCode and suggestedCode short - maximum 5 lines each. If no issues found return empty array [].";
 
@@ -47,9 +46,9 @@ function getEnv() {
     providerAddress = ethers.getAddress(rawProvider);
   }
   return {
-    rpcUrl: process.env.OG_RPC_URL ?? DEFAULT_OG_RPC_URL,
+    rpcUrl: resolveOgRpcUrl(),
     computeApiBaseUrl:
-      process.env.OG_COMPUTE_API_BASE_URL ?? COMPUTE_API_BASE_URL_DEFAULT,
+      process.env.OG_COMPUTE_API_BASE_URL ?? resolveOgStorageIndexerUrl(),
     providerAddress,
     model: process.env.OG_COMPUTE_MODEL ?? DEFAULT_OG_MODEL,
     privateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",

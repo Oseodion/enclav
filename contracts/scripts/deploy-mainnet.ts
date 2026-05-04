@@ -2,8 +2,7 @@ import hre from "hardhat";
 import { ethers } from "ethers";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-
-const ARISTOTLE_RPC_URL = "https://evmrpc.0g.ai";
+import { resolveOgRpcUrl } from "../../lib/og-env";
 
 async function confirmMainnetDeploy(): Promise<void> {
   const rl = readline.createInterface({ input, output });
@@ -27,7 +26,7 @@ async function main() {
     throw new Error("DEPLOYER_PRIVATE_KEY is required in .env.local");
   }
 
-  const provider = new ethers.JsonRpcProvider(ARISTOTLE_RPC_URL);
+  const provider = new ethers.JsonRpcProvider(resolveOgRpcUrl());
   const signer = new ethers.Wallet(privateKey, provider);
   const artifact = await hre.artifacts.readArtifact("Enclav");
   const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, signer);

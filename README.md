@@ -162,7 +162,7 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 
 ## How judges can test
 
-1. **Wallet** — Install **MetaMask** (or any injected EVM wallet). For test runs, add **0G Galileo**: chain ID **16602**, RPC `https://evmrpc-testnet.0g.ai`, explorer `https://chainscan-galileo.0g.ai`.
+1. **Wallet** — Install **MetaMask** (or any injected EVM wallet). Default app config targets **0G Aristotle** (`NEXT_PUBLIC_OG_CHAIN_ID=16661`, RPC/explorer from `.env.example`). To use **Galileo**, set env overrides such as `NEXT_PUBLIC_OG_GALILEO_RPC_URL` / `NEXT_PUBLIC_OG_RPC_URL` and matching chain IDs.
 2. **Test account / faucet** — Get testnet OG from [https://faucet.0g.ai](https://faucet.0g.ai) and fund the same wallet you will use in the app.
 3. **Credits** — Open **Dashboard → Settings**. Deposit native **OG** into **EnclavCredits** so your balance covers **0.05 OG per scan** (plus gas for deposit/mint).
 4. **Operator wallet** — The maintainer’s `.env.local` must include a funded **`DEPLOYER_PRIVATE_KEY`** on the same chain as **`OG_RPC_URL`**. Set **`OG_COMPUTE_PROVIDER`** if you need a known model: e.g. **`qwen/qwen-2.5-7b-instruct`** on **Galileo** is **`0xa48f01287233509FD694a22Bf840225062E67836`**. On **Aristotle**, the default **`OG_COMPUTE_MODEL`** (`deepseek-chat-v3-0324`) is served at **`0x1B3AAef3ae5050EEE04ea38cD4B087472BD85EB0`** (on-chain list; catalog changes over time).
