@@ -1,10 +1,12 @@
 import { Indexer, MemData } from "@0gfoundation/0g-ts-sdk";
 import { ethers } from "ethers";
 
-const DEFAULT_STORAGE_INDEXER_URL = "https://indexer-storage-testnet-turbo.0g.ai";
-const DEFAULT_STORAGE_RPC_URL = "https://evmrpc-testnet.0g.ai";
+const DEFAULT_STORAGE_INDEXER_URL = "https://indexer-storage-turbo.0g.ai";
+const DEFAULT_STORAGE_RPC_URL = "https://evmrpc.0g.ai";
 const STORAGE_INDEXER_URL =
-  process.env.OG_STORAGE_INDEXER_URL ?? DEFAULT_STORAGE_INDEXER_URL;
+  process.env.OG_STORAGE_INDEXER_URL ??
+  process.env.OG_STORAGE_INDEXER ??
+  DEFAULT_STORAGE_INDEXER_URL;
 const STORAGE_RPC_URL = process.env.OG_RPC_URL ?? DEFAULT_STORAGE_RPC_URL;
 const MAX_UPLOAD_RETRIES = 3;
 const BASE_GAS_PRICE_GWEI = BigInt(100);

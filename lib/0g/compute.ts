@@ -15,9 +15,9 @@ export type ComputeChatResult = {
   providerAddress: string;
 };
 
-const TESTNET_RPC = "https://evmrpc-testnet.0g.ai";
-const TESTNET_MODEL = "qwen/qwen-2.5-7b-instruct";
-const COMPUTE_API_BASE_URL_DEFAULT = "https://indexer-storage-testnet-turbo.0g.ai";
+const DEFAULT_OG_RPC_URL = "https://evmrpc.0g.ai";
+const DEFAULT_OG_MODEL = "deepseek-chat-v3-0324";
+const COMPUTE_API_BASE_URL_DEFAULT = "https://indexer-storage-turbo.0g.ai";
 const SECURITY_SYSTEM_PROMPT =
   "IMPORTANT: You must respond in English only. Do not use any other language under any circumstances. You are a security auditor. Analyze this code for security vulnerabilities. Return ONLY a JSON array of findings. Each finding must have: severity (Critical/High/Medium/Low), file (string), line (number), issue (string), fix (string), vulnerableCode (string), suggestedCode (string). Keep vulnerableCode and suggestedCode short - maximum 5 lines each. If no issues found return empty array [].";
 
@@ -40,17 +40,17 @@ function getEnv() {
   if (rawProvider) {
     if (!ethers.isAddress(rawProvider)) {
       throw new Error(
-        `OG_COMPUTE_PROVIDER must be a valid hex address (ENS is not supported on 0G Galileo).`,
+        "OG_COMPUTE_PROVIDER must be a valid hex address.",
       );
     }
     providerAddress = ethers.getAddress(rawProvider);
   }
   return {
-    rpcUrl: process.env.OG_RPC_URL ?? TESTNET_RPC,
+    rpcUrl: process.env.OG_RPC_URL ?? DEFAULT_OG_RPC_URL,
     computeApiBaseUrl:
       process.env.OG_COMPUTE_API_BASE_URL ?? COMPUTE_API_BASE_URL_DEFAULT,
     providerAddress,
-    model: process.env.OG_COMPUTE_MODEL ?? TESTNET_MODEL,
+    model: process.env.OG_COMPUTE_MODEL ?? DEFAULT_OG_MODEL,
     privateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",
   };
 }
@@ -71,7 +71,7 @@ async function resolveProviderAddress(
   if (configured) {
     if (!ethers.isAddress(configured)) {
       throw new Error(
-        `OG_COMPUTE_PROVIDER must be a valid hex address (got "${configured}"). ENS is not supported on 0G Galileo.`,
+        `OG_COMPUTE_PROVIDER must be a valid hex address (got "${configured}").`,
       );
     }
     return ethers.getAddress(configured);
@@ -213,7 +213,7 @@ export async function scanFileForVulnerabilities(
     const service =
       await sdkBroker.inference.getServiceMetadata(resolvedProviderAddress);
     const payload = {
-      model: model || service.model || TESTNET_MODEL,
+      model: model || service.model || DEFAULT_OG_MODEL,
       messages: [
         { role: "system", content: systemContent },
         {
@@ -326,7 +326,7 @@ export async function inferWithTeeML(
   );
   const service = await broker.inference.getServiceMetadata(resolvedProviderAddress);
   const payload = {
-    model: model || service.model || TESTNET_MODEL,
+    model: model || service.model || DEFAULT_OG_MODEL,
     messages,
   };
 
@@ -379,7 +379,7 @@ export async function inferWithTeeML(
   return {
     content,
     attestationHash,
-    model: payload.model ?? TESTNET_MODEL,
+    model: payload.model ?? DEFAULT_OG_MODEL,
     providerAddress: resolvedProviderAddress,
   };
 }

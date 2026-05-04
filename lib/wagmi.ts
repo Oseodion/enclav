@@ -46,11 +46,11 @@ export const ogAristotle = defineChain({
 });
 
 export const wagmiConfig = createConfig({
-  chains: [ogGalileo, ogAristotle],
+  chains: [ogAristotle, ogGalileo],
   connectors: [injected()],
   transports: {
-    [ogGalileo.id]: http("https://evmrpc-testnet.0g.ai"),
     [ogAristotle.id]: http("https://evmrpc.0g.ai"),
+    [ogGalileo.id]: http("https://evmrpc-testnet.0g.ai"),
   },
 });
 
