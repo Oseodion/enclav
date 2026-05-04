@@ -70,6 +70,34 @@ const EXCLUDED_REPO_PATH_SEGMENTS = new Set([
   ".next",
   "design-templates",
 ]);
+
+/** Enclav-specific paths (only exist when scanning this repo); safe no-ops elsewhere. */
+const EXCLUDED_INFRASTRUCTURE_PATH_PREFIXES = ["contracts/scripts/"] as const;
+const EXCLUDED_INFRASTRUCTURE_PATH_EXACT = new Set([
+  "hardhat.config.ts",
+  "contracts/enclav.sol",
+  "contracts/enclavcredits.sol",
+  "lib/0g/compute.ts",
+  "lib/0g/storage.ts",
+  "lib/0g/inft.ts",
+  "lib/0g/credits.ts",
+  "lib/0g/memory.ts",
+  "lib/og-env.ts",
+  "lib/og-network-label.ts",
+  "lib/wagmi.ts",
+  "lib/wallet.ts",
+  "lib/openclaw/agent.ts",
+  "lib/openclaw/skills/0g-deploy.ts",
+  "components/ui/walletconnect.tsx",
+  "components/providers.tsx",
+]);
+
+function isExcludedInfrastructurePath(filePathLower: string): boolean {
+  if (EXCLUDED_INFRASTRUCTURE_PATH_EXACT.has(filePathLower)) return true;
+  return EXCLUDED_INFRASTRUCTURE_PATH_PREFIXES.some((prefix) =>
+    filePathLower.startsWith(prefix),
+  );
+}
 const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
@@ -277,6 +305,8 @@ export async function POST(request: Request) {
     const segments = filePath.split("/");
     if (segments.some((seg) => EXCLUDED_REPO_PATH_SEGMENTS.has(seg))) return false;
 
+    if (isExcludedInfrastructurePath(filePath)) return false;
+
     return SCANNABLE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   }) as GithubBlobFile[];
 
@@ -385,8 +415,8 @@ export async function POST(request: Request) {
           }
         };
 
-        const SCAN_BATCH_SIZE = 3;
-        const SCAN_BATCH_DELAY_MS = 5000;
+        const SCAN_BATCH_SIZE = 2;
+        const SCAN_BATCH_DELAY_MS = 10_000;
         for (let i = 0; i < files.length; i += SCAN_BATCH_SIZE) {
           if (i > 0) {
             await sleep(SCAN_BATCH_DELAY_MS);
