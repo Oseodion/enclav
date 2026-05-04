@@ -98,6 +98,48 @@ function isExcludedInfrastructurePath(filePathLower: string): boolean {
     filePathLower.startsWith(prefix),
   );
 }
+
+/** Basename substring matches — highest priority tier. */
+const SECURITY_FILENAME_KEYWORDS = [
+  "auth",
+  "api",
+  "route",
+  "contract",
+  "wallet",
+  "payment",
+  "key",
+  "secret",
+  "token",
+  "config",
+] as const;
+
+const MAX_PRIORITY_SCAN_FILES = 25;
+
+function fileSecurityPriorityScore(relativePath: string): number {
+  const lower = relativePath.toLowerCase();
+  const base = lower.split("/").pop() ?? lower;
+  for (const kw of SECURITY_FILENAME_KEYWORDS) {
+    if (base.includes(kw)) return 3;
+  }
+  if (!lower.includes("/")) return 2;
+  if (lower.startsWith("src/")) return 2;
+  return 1;
+}
+
+function limitToTopPriorityFiles(
+  files: GithubBlobFile[],
+  maxFiles: number,
+): GithubBlobFile[] {
+  if (files.length <= maxFiles) return files;
+  return [...files]
+    .map((f) => ({ f, score: fileSecurityPriorityScore(f.path) }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.f.path.localeCompare(b.f.path);
+    })
+    .slice(0, maxFiles)
+    .map((row) => row.f);
+}
 const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
@@ -310,6 +352,13 @@ export async function POST(request: Request) {
     return SCANNABLE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   }) as GithubBlobFile[];
 
+  let scanFiles: GithubBlobFile[] = files;
+  let largeRepoPriorityLimited = false;
+  if (files.length > MAX_PRIORITY_SCAN_FILES) {
+    largeRepoPriorityLimited = true;
+    scanFiles = limitToTopPriorityFiles(files, MAX_PRIORITY_SCAN_FILES);
+  }
+
   const stream = new ReadableStream<Uint8Array>({
     start: async (controller) => {
       let totalFindings = 0;
@@ -343,6 +392,13 @@ export async function POST(request: Request) {
               });
             }
           }
+        }
+
+        if (largeRepoPriorityLimited) {
+          streamChunk(controller, {
+            type: "notice",
+            message: "Large repo — scanning 25 most security-relevant files",
+          });
         }
 
         const scanSingleFile = async (file: GithubBlobFile) => {
@@ -417,11 +473,11 @@ export async function POST(request: Request) {
 
         const SCAN_BATCH_SIZE = 2;
         const SCAN_BATCH_DELAY_MS = 10_000;
-        for (let i = 0; i < files.length; i += SCAN_BATCH_SIZE) {
+        for (let i = 0; i < scanFiles.length; i += SCAN_BATCH_SIZE) {
           if (i > 0) {
             await sleep(SCAN_BATCH_DELAY_MS);
           }
-          const batch = files.slice(i, i + SCAN_BATCH_SIZE);
+          const batch = scanFiles.slice(i, i + SCAN_BATCH_SIZE);
           await Promise.all(batch.map((f) => scanSingleFile(f)));
         }
       } catch (error) {
@@ -437,7 +493,7 @@ export async function POST(request: Request) {
             const summaryReport = {
               repoUrl,
               scanDate: completedAt,
-              totalFiles: files.length,
+              totalFiles: scanFiles.length,
               processedFiles,
               failedFiles,
               findings: aggregatedFindings,
@@ -486,7 +542,7 @@ export async function POST(request: Request) {
           streamChunk(controller, { type: "error", message });
         }
 
-        if (files.length > 0 && deployerPrivateKey) {
+        if (scanFiles.length > 0 && deployerPrivateKey) {
           try {
             await deductCreditsFromServer(
               normalizedWallet,
@@ -518,7 +574,7 @@ export async function POST(request: Request) {
 
         streamChunk(controller, {
           type: "complete",
-          totalFiles: files.length,
+          totalFiles: scanFiles.length,
           processedFiles,
           failedFiles,
           totalFindings,
@@ -544,7 +600,7 @@ export async function POST(request: Request) {
     headers: {
       "Content-Type": "application/x-ndjson; charset=utf-8",
       "Cache-Control": "no-cache",
-      "X-Total-Files": String(files.length),
+      "X-Total-Files": String(scanFiles.length),
     },
   });
 }

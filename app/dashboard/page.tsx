@@ -59,6 +59,8 @@ type Finding = {
 type ScanNotice = {
   id: string;
   message: string;
+  /** Large-repo info — muted line in Live Scan Feed */
+  variant?: "info";
 };
 type ActiveTab = "scanner" | "findings" | "history" | "settings";
 type SeverityFilter = "All" | FindingSeverity;
@@ -645,7 +647,19 @@ export default function DashboardPage() {
                 previousFindingCount: number;
                 message: string;
               }
-            | { type: "error"; message: string };
+            | { type: "error"; message: string }
+            | { type: "notice"; message: string };
+
+          if (event.type === "notice") {
+            setScanNotices((prev) => [
+              {
+                id: `notice-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                message: event.message,
+                variant: "info",
+              },
+              ...prev.slice(0, 8),
+            ]);
+          }
 
           if (event.type === "memory") {
             setScanLogs((prev) => [event.message, ...prev.slice(0, 8)]);
@@ -1460,7 +1474,11 @@ function LiveScanFeed({
         {notices.map((notice) => (
           <div
             key={notice.id}
-            className="break-words rounded-md border border-white/5 bg-[rgba(255,255,255,0.02)] px-3 py-2 font-mono text-[10px] text-[#2E2C3E]"
+            className={
+              notice.variant === "info"
+                ? "break-words px-1 py-1 font-mono text-[10px] leading-snug text-[#9B99B0]"
+                : "break-words rounded-md border border-white/5 bg-[rgba(255,255,255,0.02)] px-3 py-2 font-mono text-[10px] text-[#2E2C3E]"
+            }
             title={
               notice.message.includes("timed out")
                 ? "Storage uploads may timeout on testnet - this does not affect scan results"
