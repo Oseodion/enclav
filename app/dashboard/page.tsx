@@ -6,7 +6,6 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
-  Coins,
   Copy,
   ExternalLink,
   Info,
@@ -38,7 +37,8 @@ import {
 import { INFT_CONTRACT_ADDRESS, mintFromWallet, type MintScanData } from "@/lib/0g/inft";
 import { normalizeRepoUrlForMemory } from "@/lib/0g/memory";
 import { useWallet } from "@/lib/wallet";
-import { useChainId, useDisconnect, useWalletClient } from "wagmi";
+import { ogAristotle, ogGalileo } from "@/lib/wagmi";
+import { useAccount, useChainId, useDisconnect, useWalletClient } from "wagmi";
 
 type FindingSeverity = "Critical" | "High" | "Medium" | "Low";
 
@@ -91,26 +91,31 @@ function CreditsDepositModal({
   open,
   onClose,
   balanceLabel,
-  balanceWei,
   depositOg,
   onDepositOgChange,
   onDeposit,
   depositBusy,
-  scanCostLabel,
   errorMessage,
 }: {
   open: boolean;
   onClose: () => void;
   balanceLabel: string;
-  balanceWei: bigint | null;
   depositOg: string;
   onDepositOgChange: (value: string) => void;
   onDeposit: () => void;
   depositBusy: boolean;
-  scanCostLabel: string;
   errorMessage: string | null;
 }) {
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
+  const networkName = useMemo(() => {
+    if (chainId === ogAristotle.id) return ogAristotle.name;
+    if (chainId === ogGalileo.id) return ogGalileo.name;
+    return `Chain ${chainId}`;
+  }, [chainId]);
+
   if (!open) return null;
+
   return (
     <div
       className="fixed inset-0 z-[200] flex items-end justify-center bg-black/70 p-4 pb-8 backdrop-blur-sm sm:items-center sm:pb-4"
@@ -136,111 +141,53 @@ function CreditsDepositModal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-white/[0.06] bg-[rgba(255,255,255,0.02)] px-3 py-2">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5A5768]" strokeWidth={1.5} aria-hidden />
-          <p className="font-mono text-[10px] leading-relaxed text-[#6B6880]">
-            Scan: {COST_LABEL_SCAN_OG} OG · Mint: ~{COST_LABEL_MINT_GAS_OG} OG · Credits refundable · Supports public
-            GitHub repos
-          </p>
-        </div>
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-white/[0.06] bg-[rgba(255,255,255,0.02)] px-3 py-2">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5A5768]" strokeWidth={1.5} aria-hidden />
-          <p className="font-mono text-[10px] leading-relaxed text-[#6B6880]">
-            AI-assisted findings · Always verify with your security team
-          </p>
-        </div>
-        <AddScanCreditsPanel
-          balanceLabel={balanceLabel}
-          balanceWei={balanceWei}
-          depositOg={depositOg}
-          onDepositOgChange={onDepositOgChange}
-          onDeposit={onDeposit}
-          depositBusy={depositBusy}
-          scanCostLabel={scanCostLabel}
-          errorMessage={errorMessage}
-          hideOuterTitle
-        />
-      </div>
-    </div>
-  );
-}
 
-function AddScanCreditsPanel({
-  balanceLabel,
-  balanceWei,
-  depositOg,
-  onDepositOgChange,
-  onDeposit,
-  depositBusy,
-  scanCostLabel,
-  errorMessage,
-  hideOuterTitle = false,
-}: {
-  balanceLabel: string;
-  balanceWei: bigint | null;
-  depositOg: string;
-  onDepositOgChange: (value: string) => void;
-  onDeposit: () => void;
-  depositBusy: boolean;
-  scanCostLabel: string;
-  errorMessage: string | null;
-  hideOuterTitle?: boolean;
-}) {
-  const scansRemaining =
-    balanceWei !== null ? scansRemainingCount(balanceWei).toString() : "—";
-
-  return (
-    <div className="rounded-xl border border-[rgba(167,139,250,0.35)] bg-[rgba(124,58,237,0.08)] p-4 md:p-3">
-      {hideOuterTitle ? null : (
-        <div className="mb-3 flex items-center gap-2">
-          <Coins className="h-4 w-4 text-[#A78BFA]" strokeWidth={1.5} aria-hidden />
-          <h3 className="font-geist text-sm font-semibold tracking-tight text-[#F0EEF8]">
-            Add scan credits
-          </h3>
+        <p className="mb-3 font-mono text-[10px] text-[#6B6880]">
+          Deposit native OG on {networkName}
+        </p>
+        <p className="mb-3 font-mono text-[10px] text-[#9B99B0]">
+          1 scan = {COST_LABEL_SCAN_OG} OG · ~10 scans per 0.5 OG
+        </p>
+        <p className="mb-3 font-mono text-xs text-[#9B99B0]">
+          Current balance: <span className="text-[#6EE7B7]">{balanceLabel} OG</span>
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label
+              htmlFor="deposit-og-amount"
+              className="mb-1 block font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]"
+            >
+              Amount (OG)
+            </label>
+            <input
+              id="deposit-og-amount"
+              type="text"
+              inputMode="decimal"
+              value={depositOg}
+              onChange={(e) => onDepositOgChange(e.target.value)}
+              disabled={depositBusy}
+              className="w-full rounded-lg border border-white/10 bg-[rgba(255,255,255,0.05)] px-3 py-2 font-mono text-sm text-[#F0EEF8] outline-none focus:border-[#A78BFA]/50 disabled:opacity-60"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => void onDeposit()}
+            disabled={depositBusy || !isConnected}
+            className="min-h-[44px] shrink-0 rounded-full border border-[rgba(167,139,250,0.55)] bg-[rgba(124,58,237,0.45)] px-5 py-2.5 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition hover:bg-[rgba(124,58,237,0.6)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {depositBusy ? "Confirm in wallet…" : "DEPOSIT OG"}
+          </button>
         </div>
-      )}
-      <ul className="mb-3 space-y-1 font-mono text-[10px] leading-relaxed text-[#6B6880]">
-        <li>1 scan = {COST_LABEL_SCAN_OG} OG</li>
-        <li>Suggested: 0.5 OG covers ~10 scans</li>
-        <li>
-          Scans remaining at current balance:{" "}
-          <span className="text-[#9B99B0]">{scansRemaining}</span>
-        </li>
-      </ul>
-      <p className="mb-3 font-mono text-[11px] leading-relaxed text-[#C4BDD9]">
-        Deposit native OG on 0G Galileo to your Enclav credit balance. Each completed scan uses{" "}
-        <span className="text-[#A78BFA]">{scanCostLabel} OG</span> from your balance.
-      </p>
-      <p className="mb-3 font-mono text-xs text-[#9B99B0]">
-        Current balance: <span className="text-[#6EE7B7]">{balanceLabel} OG</span>
-      </p>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1">
-          <label htmlFor="deposit-og-amount" className="mb-1 block font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
-            Amount (OG)
-          </label>
-          <input
-            id="deposit-og-amount"
-            type="text"
-            inputMode="decimal"
-            value={depositOg}
-            onChange={(e) => onDepositOgChange(e.target.value)}
-            disabled={depositBusy}
-            className="w-full rounded-lg border border-white/10 bg-[rgba(255,255,255,0.05)] px-3 py-2 font-mono text-sm text-[#F0EEF8] outline-none focus:border-[#A78BFA]/50 disabled:opacity-60"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => void onDeposit()}
-          disabled={depositBusy}
-          className="min-h-[44px] shrink-0 rounded-full border border-[rgba(167,139,250,0.55)] bg-[rgba(124,58,237,0.45)] px-5 py-2.5 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition hover:bg-[rgba(124,58,237,0.6)] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {depositBusy ? "Confirm in wallet…" : "Deposit OG"}
-        </button>
+        {!isConnected ? (
+          <p className="mt-2 font-mono text-[11px] text-[#9B99B0]">Connect a wallet first.</p>
+        ) : null}
+        {errorMessage ? (
+          <p className="mt-2 font-mono text-[11px] text-[#FCA5A5]">{errorMessage}</p>
+        ) : null}
+        <p className="mt-4 font-mono text-[10px] text-[#5A5768]">
+          AI-assisted findings · Always verify with your security team
+        </p>
       </div>
-      {errorMessage ? (
-        <p className="mt-2 font-mono text-[11px] text-[#FCA5A5]">{errorMessage}</p>
-      ) : null}
     </div>
   );
 }
@@ -258,6 +205,11 @@ export default function DashboardPage() {
   const effectiveConnected = walletUiReady && isConnected;
   const effectiveAddress = walletUiReady ? (address ?? null) : null;
   const chainId = useChainId();
+  const connectedChainName = useMemo(() => {
+    if (chainId === ogAristotle.id) return ogAristotle.name;
+    if (chainId === ogGalileo.id) return ogGalileo.name;
+    return `Chain ${chainId}`;
+  }, [chainId]);
   const { data: walletClient } = useWalletClient();
   const { disconnect } = useDisconnect();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -302,7 +254,7 @@ export default function DashboardPage() {
   const [creditsLoading, setCreditsLoading] = useState(false);
   const [creditsError, setCreditsError] = useState<string | null>(null);
   const [creditsActionError, setCreditsActionError] = useState<string | null>(null);
-  const [depositCreditsOg, setDepositCreditsOg] = useState("0.1");
+  const [depositCreditsOg, setDepositCreditsOg] = useState("0.5");
   const [depositBusy, setDepositBusy] = useState(false);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [creditsModalOpen, setCreditsModalOpen] = useState(false);
@@ -417,7 +369,7 @@ export default function DashboardPage() {
     !effectiveConnected || !creditsContractConfigured || !creditsReadFailed;
 
   const handleDepositCredits = async () => {
-    if (!walletClient) {
+    if (!effectiveConnected || !address) {
       setCreditsActionError("Connect a wallet first.");
       return;
     }
@@ -441,7 +393,7 @@ export default function DashboardPage() {
   };
 
   const handleWithdrawCreditsAll = async () => {
-    if (!walletClient) {
+    if (!effectiveConnected || !address) {
       setCreditsActionError("Connect a wallet first.");
       return;
     }
@@ -459,7 +411,7 @@ export default function DashboardPage() {
   };
 
   const handleWithdrawCreditsPartial = async () => {
-    if (!walletClient) {
+    if (!effectiveConnected || !address) {
       setCreditsActionError("Connect a wallet first.");
       return;
     }
@@ -1039,7 +991,7 @@ export default function DashboardPage() {
                 ) : needsCreditsDeposit ? (
                   <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
                     <p className="min-w-0 truncate font-mono text-[10px] text-[#6B6880] sm:text-[11px]">
-                      No credits — add OG to scan
+                      No credits - add OG to scan
                     </p>
                     <button
                       type="button"
@@ -1265,7 +1217,7 @@ export default function DashboardPage() {
           <footer
             className={`${panelClass} pointer-events-auto relative z-[5] mx-auto flex min-h-[44px] w-full flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden rounded-xl bg-[rgba(255,255,255,0.02)] px-4 py-3 font-mono text-[10px] text-[#9B99B0] md:py-2`}
           >
-            <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value="0G Galileo" />
+            <StatusItem iconColor="bg-[#7C3AED]" label="0G Chain" value={connectedChainName} />
             <StatusItem
               iconColor={isScanning ? "bg-[#10B981]" : "bg-[#6B7280]"}
               label="Inference"
@@ -1278,12 +1230,10 @@ export default function DashboardPage() {
         open={creditsModalOpen}
         onClose={() => setCreditsModalOpen(false)}
         balanceLabel={scanCreditsWei !== null ? formatOgFromWei(scanCreditsWei) : "0"}
-        balanceWei={scanCreditsWei}
         depositOg={depositCreditsOg}
         onDepositOgChange={setDepositCreditsOg}
         onDeposit={() => void handleDepositCredits()}
         depositBusy={depositBusy}
-        scanCostLabel={formatOgFromWei(SCAN_CREDIT_COST_WEI)}
         errorMessage={creditsActionError}
       />
       <style jsx global>{`

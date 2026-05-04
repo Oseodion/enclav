@@ -2,7 +2,7 @@ import { ethers, type InterfaceAbi, type TransactionReceipt } from "ethers";
 import type { WalletClient } from "viem";
 import EnclavAbi from "./enclav-abi.json";
 
-const INFT_CONTRACT_DEFAULT = "0x8E2225136CaAf9aD28dDBF86e9280DB326AB2464";
+const INFT_CONTRACT_DEFAULT = "0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5";
 
 function resolveInftContractAddress(): string {
   const raw = (process.env.NEXT_PUBLIC_INFT_CONTRACT_ADDRESS ?? "").trim();
@@ -15,12 +15,54 @@ function resolveInftContractAddress(): string {
 }
 
 export const INFT_CONTRACT_ADDRESS = resolveInftContractAddress();
-export const OG_RPC_URL = process.env.NEXT_PUBLIC_OG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
-const CHAINSCAN_BASE_URL = "https://chainscan-galileo.0g.ai";
-const OG_GALILEO_CHAIN_ID = 16602;
-/** EIP-155 chain id for wallet RPC (16602). */
-const OG_GALILEO_CHAIN_ID_HEX = "0x40DA";
-const GALILEO_HTTP_RPC = "https://evmrpc-testnet.0g.ai";
+export const OG_RPC_URL =
+  process.env.NEXT_PUBLIC_OG_RPC_URL ??
+  process.env.OG_RPC_URL ??
+  "https://evmrpc.0g.ai";
+const CHAINSCAN_BASE_URL =
+  process.env.NEXT_PUBLIC_OG_EXPLORER ??
+  process.env.OG_EXPLORER ??
+  "https://chainscan.0g.ai";
+/** Preferred chain when switching from a non-0G network (Galileo testnet or Aristotle mainnet). */
+const OG_SWITCH_TARGET_CHAIN_ID = Number(
+  process.env.NEXT_PUBLIC_OG_CHAIN_ID ?? process.env.OG_CHAIN_ID ?? "16661",
+);
+
+const VALID_OG_CHAIN_IDS = new Set([16602, 16661]);
+
+function toEip155ChainIdHex(chainId: number): string {
+  return `0x${BigInt(chainId).toString(16)}`;
+}
+
+function chainAddParamsFor(chainId: number): {
+  chainIdHex: string;
+  chainName: string;
+  rpcUrl: string;
+  explorerUrl: string;
+} {
+  if (chainId === 16602) {
+    return {
+      chainIdHex: toEip155ChainIdHex(16602),
+      chainName: "0G Galileo Testnet",
+      rpcUrl: "https://evmrpc-testnet.0g.ai",
+      explorerUrl: "https://chainscan-galileo.0g.ai",
+    };
+  }
+  if (chainId === 16661) {
+    return {
+      chainIdHex: toEip155ChainIdHex(16661),
+      chainName: "0G Aristotle Mainnet",
+      rpcUrl: "https://evmrpc.0g.ai",
+      explorerUrl: "https://chainscan.0g.ai",
+    };
+  }
+  return {
+    chainIdHex: toEip155ChainIdHex(chainId),
+    chainName: "0G Chain",
+    rpcUrl: OG_RPC_URL,
+    explorerUrl: CHAINSCAN_BASE_URL,
+  };
+}
 
 const ENCLAV_ABI = EnclavAbi as InterfaceAbi;
 
@@ -46,7 +88,7 @@ export type MintCertificateResult = {
 };
 
 export type MintFromWalletOptions = {
-  /** From wagmi `useChainId()` - used with `eth_chainId` to detect Galileo reliably. */
+  /** From wagmi `useChainId()` - used with `eth_chainId` to detect target chain reliably. */
   wagmiChainId?: number;
 };
 
@@ -116,37 +158,50 @@ async function readWalletChainIdFromProvider(injectedProvider: ethers.Eip1193Pro
   return { rawRpcValue, normalizedHex, decimal };
 }
 
-function isGalileoChain(ethDecimal: number, wagmiChainId?: number): boolean {
-  const ethOk = ethDecimal === OG_GALILEO_CHAIN_ID;
-  const wagmiOk =
+function isOnAllowedOGNetwork(ethDecimal: number, wagmiChainId?: number): boolean {
+  if (Number.isFinite(ethDecimal) && VALID_OG_CHAIN_IDS.has(ethDecimal)) {
+    return true;
+  }
+  if (
     typeof wagmiChainId === "number" &&
     Number.isFinite(wagmiChainId) &&
-    wagmiChainId === OG_GALILEO_CHAIN_ID;
-  return ethOk || wagmiOk;
+    VALID_OG_CHAIN_IDS.has(wagmiChainId)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**
- * Forces the injected wallet onto 0G Galileo (16602) before any mint RPC.
+ * Ensures the wallet is on **0G Galileo (16602)** or **0G Aristotle (16661)**.
+ * Does not switch if already on either network. If on another chain, switches toward
+ * `NEXT_PUBLIC_OG_CHAIN_ID` / `OG_CHAIN_ID` (default Aristotle mainnet).
  */
-export async function ensureWalletOnGalileo(
+export async function ensureWalletOnOGNetwork(
   injectedProvider: ethers.Eip1193Provider,
   wagmiChainId?: number,
 ): Promise<void> {
   const snap = await readWalletChainIdFromProvider(injectedProvider);
-  console.log("[ensureWalletOnGalileo] chain snapshot", {
+  const switchTarget = VALID_OG_CHAIN_IDS.has(OG_SWITCH_TARGET_CHAIN_ID)
+    ? OG_SWITCH_TARGET_CHAIN_ID
+    : 16661;
+  const targetMeta = chainAddParamsFor(switchTarget);
+
+  console.log("[ensureWalletOnOGNetwork] chain snapshot", {
     ethChainIdHex: snap.normalizedHex,
     ethChainIdDecimal: snap.decimal,
     wagmiChainId,
-    expected: OG_GALILEO_CHAIN_ID,
+    allowedChains: [...VALID_OG_CHAIN_IDS],
+    switchTargetIfNeeded: switchTarget,
   });
 
-  if (isGalileoChain(snap.decimal, wagmiChainId)) {
+  if (isOnAllowedOGNetwork(snap.decimal, wagmiChainId)) {
     if (
       typeof wagmiChainId === "number" &&
       Number.isFinite(wagmiChainId) &&
       snap.decimal !== wagmiChainId
     ) {
-      console.warn("[ensureWalletOnGalileo] eth_chainId decimal vs wagmi useChainId differ", {
+      console.warn("[ensureWalletOnOGNetwork] eth_chainId decimal vs wagmi useChainId differ", {
         eth_chainId_decimal: snap.decimal,
         wagmiChainId,
       });
@@ -157,7 +212,7 @@ export async function ensureWalletOnGalileo(
   try {
     await injectedProvider.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: OG_GALILEO_CHAIN_ID_HEX }],
+      params: [{ chainId: targetMeta.chainIdHex }],
     });
   } catch (switchError) {
     const code = getWalletRpcErrorCode(switchError);
@@ -166,25 +221,25 @@ export async function ensureWalletOnGalileo(
         method: "wallet_addEthereumChain",
         params: [
           {
-            chainId: OG_GALILEO_CHAIN_ID_HEX,
-            chainName: "0G Galileo Testnet",
+            chainId: targetMeta.chainIdHex,
+            chainName: targetMeta.chainName,
             nativeCurrency: {
               name: "0G",
               symbol: "OG",
               decimals: 18,
             },
-            rpcUrls: [GALILEO_HTTP_RPC],
-            blockExplorerUrls: [CHAINSCAN_BASE_URL],
+            rpcUrls: [targetMeta.rpcUrl],
+            blockExplorerUrls: [targetMeta.explorerUrl],
           },
         ],
       });
       await injectedProvider.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: OG_GALILEO_CHAIN_ID_HEX }],
+        params: [{ chainId: targetMeta.chainIdHex }],
       });
     } else if (code === 4001) {
       throw new Error(
-        "Wallet rejected switching to 0G Galileo testnet (chain 16602). Approve the network switch to mint.",
+        `Wallet rejected switching to 0G network (chain ${switchTarget}). Approve the network switch to continue.`,
       );
     } else {
       throw switchError;
@@ -192,9 +247,9 @@ export async function ensureWalletOnGalileo(
   }
 
   const after = await readWalletChainIdFromProvider(injectedProvider);
-  if (after.decimal !== OG_GALILEO_CHAIN_ID) {
+  if (!isOnAllowedOGNetwork(after.decimal, wagmiChainId)) {
     throw new Error(
-      `Wallet must be on 0G Galileo testnet (chain ID ${OG_GALILEO_CHAIN_ID}) to mint. eth_chainId is ${after.normalizedHex} (decimal ${after.decimal}).`,
+      `Wallet must be on 0G Galileo (16602) or Aristotle (16661). eth_chainId is ${after.normalizedHex} (decimal ${after.decimal}).`,
     );
   }
 }
@@ -220,7 +275,7 @@ export async function mintFromWallet(
   ).ethereum;
   if (!injectedProvider) throw new Error("No injected wallet provider found.");
 
-  await ensureWalletOnGalileo(injectedProvider, wagmiChainId);
+  await ensureWalletOnOGNetwork(injectedProvider, wagmiChainId);
 
   const provider = new ethers.BrowserProvider(injectedProvider);
   await provider.send("eth_requestAccounts", []);
@@ -249,7 +304,7 @@ export async function mintFromWallet(
 
   if (!hasContractBytecode) {
     throw new Error(
-      `No contract bytecode at ${INFT_CONTRACT_ADDRESS} on this network. Check NEXT_PUBLIC_INFT_CONTRACT_ADDRESS and that the wallet is on 0G Galileo.`,
+      `No contract bytecode at ${INFT_CONTRACT_ADDRESS} on this network. Check NEXT_PUBLIC_INFT_CONTRACT_ADDRESS and that the wallet is on the configured 0G chain.`,
     );
   }
 

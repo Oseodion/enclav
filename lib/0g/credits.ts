@@ -1,21 +1,21 @@
 import { ethers, type InterfaceAbi } from "ethers";
 import type { WalletClient } from "viem";
-import { ensureWalletOnGalileo, OG_RPC_URL } from "@/lib/0g/inft";
+import { ensureWalletOnOGNetwork, OG_RPC_URL } from "@/lib/0g/inft";
 
-/** Galileo EnclavCredits deployment (override with env in production). */
-const DEFAULT_CREDITS_CONTRACT_GALILEO =
-  "0x502f013010F0229199dFb937C5c783337C5De3EE";
+/** Default EnclavCredits deployment (override with env in production). */
+const DEFAULT_CREDITS_CONTRACT =
+  "0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073";
 
 /** Resolved credits contract (server may set CREDITS_CONTRACT_ADDRESS; client needs NEXT_PUBLIC_*). */
 export function getCreditsContractAddress(): string {
   const raw =
     process.env.CREDITS_CONTRACT_ADDRESS?.trim() ??
     process.env.NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS?.trim() ??
-    DEFAULT_CREDITS_CONTRACT_GALILEO;
+    DEFAULT_CREDITS_CONTRACT;
   try {
     return ethers.getAddress(raw);
   } catch {
-    return ethers.getAddress(DEFAULT_CREDITS_CONTRACT_GALILEO);
+    return ethers.getAddress(DEFAULT_CREDITS_CONTRACT);
   }
 }
 
@@ -90,7 +90,7 @@ export async function depositCredits(
   const injectedProvider = (globalThis as { ethereum?: ethers.Eip1193Provider }).ethereum;
   if (!injectedProvider) throw new Error("No injected wallet provider found.");
 
-  await ensureWalletOnGalileo(injectedProvider, options?.wagmiChainId);
+  await ensureWalletOnOGNetwork(injectedProvider, options?.wagmiChainId);
 
   const provider = new ethers.BrowserProvider(injectedProvider);
   await provider.send("eth_requestAccounts", []);
@@ -111,7 +111,7 @@ export async function withdrawCredits(
   const injectedProvider = (globalThis as { ethereum?: ethers.Eip1193Provider }).ethereum;
   if (!injectedProvider) throw new Error("No injected wallet provider found.");
 
-  await ensureWalletOnGalileo(injectedProvider, options?.wagmiChainId);
+  await ensureWalletOnOGNetwork(injectedProvider, options?.wagmiChainId);
 
   const provider = new ethers.BrowserProvider(injectedProvider);
   await provider.send("eth_requestAccounts", []);
@@ -141,7 +141,7 @@ export async function withdrawCreditsAmount(
   const injectedProvider = (globalThis as { ethereum?: ethers.Eip1193Provider }).ethereum;
   if (!injectedProvider) throw new Error("No injected wallet provider found.");
 
-  await ensureWalletOnGalileo(injectedProvider, options?.wagmiChainId);
+  await ensureWalletOnOGNetwork(injectedProvider, options?.wagmiChainId);
 
   const provider = new ethers.BrowserProvider(injectedProvider);
   await provider.send("eth_requestAccounts", []);
