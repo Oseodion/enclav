@@ -13,7 +13,11 @@ import {
   parseRepoMemoryJson,
   type EnclavRepoMemoryV1,
 } from "@/lib/0g/memory";
-import { deduplicateFindingsByFileLineIssue, runSecurityScan } from "@/lib/openclaw/agent";
+import {
+  deduplicateFindingsByFileLineIssue,
+  runSecurityScan,
+  type OpenClawFileInput,
+} from "@/lib/openclaw/agent";
 import { downloadTextByRootHash, uploadFile } from "@/lib/0g/storage";
 import { resolveOgRpcUrl } from "@/lib/og-env";
 
@@ -99,52 +103,148 @@ function isExcludedInfrastructurePath(filePathLower: string): boolean {
   );
 }
 
-/** Basename substring matches — highest priority tier. */
-const SECURITY_FILENAME_KEYWORDS = [
+/** Tier 1 (critical): filename stem matches these keywords (word-aware). Scanned in full. */
+const TIER1_FILENAME_KEYWORDS = [
   "auth",
-  "api",
-  "route",
-  "contract",
+  "login",
+  "password",
+  "token",
+  "secret",
+  "key",
   "wallet",
   "payment",
-  "key",
-  "secret",
-  "token",
-  "config",
+  "contract",
+  "admin",
+  "api",
 ] as const;
 
-const MAX_PRIORITY_SCAN_FILES = 25;
+/** Tier 2 (high): paths under these folders; scan up to this many (tier 1 excluded). */
+const MAX_HIGH_TIER_SCAN_FILES = 15;
 
-function fileSecurityPriorityScore(relativePath: string): number {
-  const lower = relativePath.toLowerCase();
-  const base = lower.split("/").pop() ?? lower;
-  for (const kw of SECURITY_FILENAME_KEYWORDS) {
-    if (base.includes(kw)) return 3;
-  }
-  if (!lower.includes("/")) return 2;
-  if (lower.startsWith("src/")) return 2;
-  return 1;
+const HIGH_RISK_PATH_MARKERS = [
+  "src/",
+  "app/",
+  "pages/",
+  "routes/",
+  "controllers/",
+  "api/",
+] as const;
+
+function escapeRegexChar(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function limitToTopPriorityFiles(
-  files: GithubBlobFile[],
-  maxFiles: number,
-): GithubBlobFile[] {
-  if (files.length <= maxFiles) return files;
-  return [...files]
-    .map((f) => ({ f, score: fileSecurityPriorityScore(f.path) }))
+/** Returns tier-1 keyword stems matched in the file basename (no extension). */
+function tier1KeywordsMatchedInBasename(relativePath: string): string[] {
+  const fileName = relativePath.split("/").pop() ?? relativePath;
+  const stem = fileName.replace(/\.[^.]+$/, "");
+  const matched: string[] = [];
+  for (const kw of TIER1_FILENAME_KEYWORDS) {
+    const re = new RegExp(`(^|[^a-z0-9])${escapeRegexChar(kw)}([^a-z0-9]|$)`, "i");
+    if (re.test(stem)) matched.push(kw);
+  }
+  return matched;
+}
+
+function isTier1CriticalPath(relativePath: string): boolean {
+  return tier1KeywordsMatchedInBasename(relativePath).length > 0;
+}
+
+function isHighRiskFolderPath(relativePath: string): boolean {
+  const lower = relativePath.toLowerCase();
+  for (const m of HIGH_RISK_PATH_MARKERS) {
+    if (lower.startsWith(m) || lower.includes(`/${m}`)) return true;
+  }
+  return false;
+}
+
+function formatTier1KeywordLabel(kw: string): string {
+  if (kw === "contract") return "contracts";
+  return kw;
+}
+
+function describeHighTierLocation(paths: string[]): string {
+  if (paths.length === 0) return "in application folders";
+  const lowerPaths = paths.map((p) => p.toLowerCase());
+  const apiLike = lowerPaths.filter(
+    (p) => p.includes("/api/") || p.startsWith("api/"),
+  );
+  if (apiLike.length >= Math.ceil(paths.length * 0.5)) return "in API routes";
+  return "in application folders (src, app, pages, routes)";
+}
+
+/** Prefer api/routes/controllers paths when tier 2 must be capped. */
+function highTierPathPriorityScore(relativePath: string): number {
+  const lower = relativePath.toLowerCase();
+  let s = 0;
+  if (lower.includes("/api/") || lower.startsWith("api/")) s += 5;
+  if (lower.includes("/routes/") || lower.startsWith("routes/")) s += 4;
+  if (lower.includes("/controllers/") || lower.startsWith("controllers/")) s += 4;
+  if (lower.includes("/app/") || lower.startsWith("app/")) s += 3;
+  if (lower.includes("/pages/") || lower.startsWith("pages/")) s += 3;
+  if (lower.startsWith("src/")) s += 2;
+  return s;
+}
+
+function selectHighTierFilesToScan(pool: GithubBlobFile[]): GithubBlobFile[] {
+  if (pool.length <= MAX_HIGH_TIER_SCAN_FILES) {
+    return [...pool].sort((a, b) => a.path.localeCompare(b.path));
+  }
+  return [...pool]
+    .map((f) => ({ f, score: highTierPathPriorityScore(f.path) }))
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       return a.f.path.localeCompare(b.f.path);
     })
-    .slice(0, maxFiles)
-    .map((row) => row.f);
+    .slice(0, MAX_HIGH_TIER_SCAN_FILES)
+    .map((row) => row.f)
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+type RepoTierPartition = {
+  tier1Critical: GithubBlobFile[];
+  tier2HighPool: GithubBlobFile[];
+  tier2Capped: boolean;
+  tier3Skipped: GithubBlobFile[];
+  scanQueue: GithubBlobFile[];
+};
+
+function partitionRepoFilesForScan(files: GithubBlobFile[]): RepoTierPartition {
+  const tier1Critical: GithubBlobFile[] = [];
+  const tier2HighPool: GithubBlobFile[] = [];
+  const tier3Skipped: GithubBlobFile[] = [];
+
+  for (const f of files) {
+    if (isTier1CriticalPath(f.path)) {
+      tier1Critical.push(f);
+    } else if (isHighRiskFolderPath(f.path)) {
+      tier2HighPool.push(f);
+    } else {
+      tier3Skipped.push(f);
+    }
+  }
+
+  tier1Critical.sort((a, b) => a.path.localeCompare(b.path));
+  const tier2Capped = tier2HighPool.length > MAX_HIGH_TIER_SCAN_FILES;
+  const tier2Selected = selectHighTierFilesToScan(tier2HighPool);
+  const scanQueue = [...tier1Critical, ...tier2Selected];
+
+  return {
+    tier1Critical,
+    tier2HighPool,
+    tier2Capped,
+    tier3Skipped,
+    scanQueue,
+  };
 }
 const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
 const STORAGE_UPLOAD_TIMEOUT_MS = 30_000;
-const COMPUTE_SCAN_TIMEOUT_MS = 45_000;
+/** One TeeML call may include multiple files — allow extra wall time. */
+const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 90_000;
+const INFERENCE_CHUNK_SIZE = 3;
+const CHUNK_INFERENCE_DELAY_MS = 8_000;
 const SUMMARY_UPLOAD_TIMEOUT_MS = 30_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -352,12 +452,13 @@ export async function POST(request: Request) {
     return SCANNABLE_EXTENSIONS.some((ext) => filePath.endsWith(ext));
   }) as GithubBlobFile[];
 
-  let scanFiles: GithubBlobFile[] = files;
-  let largeRepoPriorityLimited = false;
-  if (files.length > MAX_PRIORITY_SCAN_FILES) {
-    largeRepoPriorityLimited = true;
-    scanFiles = limitToTopPriorityFiles(files, MAX_PRIORITY_SCAN_FILES);
-  }
+  const {
+    tier1Critical,
+    tier2HighPool,
+    tier2Capped,
+    tier3Skipped,
+    scanQueue: scanFiles,
+  } = partitionRepoFilesForScan(files);
 
   const stream = new ReadableStream<Uint8Array>({
     start: async (controller) => {
@@ -394,91 +495,159 @@ export async function POST(request: Request) {
           }
         }
 
-        if (largeRepoPriorityLimited) {
+        const uniqueTier1Labels = new Set<string>();
+        for (const f of tier1Critical) {
+          for (const kw of tier1KeywordsMatchedInBasename(f.path)) {
+            uniqueTier1Labels.add(formatTier1KeywordLabel(kw));
+          }
+        }
+        const tier1LabelStr = [...uniqueTier1Labels].sort().join(", ");
+
+        if (tier1Critical.length > 0) {
+          const labelPart = tier1LabelStr ? ` (${tier1LabelStr})` : "";
           streamChunk(controller, {
             type: "notice",
-            message: "Large repo — scanning 25 most security-relevant files",
+            message: `Found ${tier1Critical.length} critical-risk file${tier1Critical.length === 1 ? "" : "s"}${labelPart} — scanning all`,
           });
         }
 
-        const scanSingleFile = async (file: GithubBlobFile) => {
-          if (!file.path || !file.url) return;
-          const filePath = file.path;
-          const fileUrl = file.url;
-
-          streamChunk(controller, { type: "file", filename: filePath });
-
-          const blobRes = await fetch(fileUrl, {
-            headers: githubHeaders,
+        if (tier2HighPool.length > 0) {
+          const where = describeHighTierLocation(tier2HighPool.map((f) => f.path));
+          const scanVerb =
+            tier2Capped
+              ? `scanning ${MAX_HIGH_TIER_SCAN_FILES} highest-priority paths`
+              : "scanning all";
+          streamChunk(controller, {
+            type: "notice",
+            message: `Found ${tier2HighPool.length} high-risk file${tier2HighPool.length === 1 ? "" : "s"} ${where} — ${scanVerb}`,
           });
-          if (!blobRes.ok) return;
+        }
 
-          const blobJson = (await blobRes.json()) as {
-            content?: string;
-            encoding?: string;
-          };
-          if (!blobJson.content) return;
+        if (tier3Skipped.length > 0) {
+          streamChunk(controller, {
+            type: "notice",
+            message: `Skipped ${tier3Skipped.length} low-risk utility file${tier3Skipped.length === 1 ? "" : "s"}`,
+          });
+        }
 
-          const decodedContent =
-            blobJson.encoding === "base64"
-              ? Buffer.from(blobJson.content.replace(/\n/g, ""), "base64").toString("utf8")
-              : blobJson.content;
+        for (let chunkIdx = 0; chunkIdx < scanFiles.length; chunkIdx += INFERENCE_CHUNK_SIZE) {
+          if (chunkIdx > 0) {
+            await sleep(CHUNK_INFERENCE_DELAY_MS);
+          }
+          const chunk = scanFiles.slice(chunkIdx, chunkIdx + INFERENCE_CHUNK_SIZE);
+          const inputs: OpenClawFileInput[] = [];
+
+          for (const file of chunk) {
+            if (!file.path || !file.url) continue;
+            const filePath = file.path;
+            const fileUrl = file.url;
+
+            streamChunk(controller, { type: "file", filename: filePath });
+
+            const blobRes = await fetch(fileUrl, {
+              headers: githubHeaders,
+            });
+            if (!blobRes.ok) {
+              failedFiles += 1;
+              processedFiles += 1;
+              streamChunk(controller, {
+                type: "error",
+                message: `${filePath}: Failed to fetch file from GitHub.`,
+              });
+              continue;
+            }
+
+            const blobJson = (await blobRes.json()) as {
+              content?: string;
+              encoding?: string;
+            };
+            if (!blobJson.content) {
+              failedFiles += 1;
+              processedFiles += 1;
+              streamChunk(controller, {
+                type: "error",
+                message: `${filePath}: Empty file content.`,
+              });
+              continue;
+            }
+
+            const decodedContent =
+              blobJson.encoding === "base64"
+                ? Buffer.from(blobJson.content.replace(/\n/g, ""), "base64").toString("utf8")
+                : blobJson.content;
+
+            try {
+              await runStorageUploadSequentially(() =>
+                withTimeout(
+                  uploadFile(decodedContent, filePath, signer),
+                  STORAGE_UPLOAD_TIMEOUT_MS,
+                  `Storage upload for ${filePath}`,
+                ),
+              );
+              inputs.push({ path: filePath, content: decodedContent });
+            } catch (error) {
+              failedFiles += 1;
+              processedFiles += 1;
+              const message =
+                error instanceof Error ? error.message : `Failed preparing ${filePath}.`;
+              streamChunk(controller, {
+                type: "error",
+                message: `${filePath}: ${message}`,
+              });
+            }
+          }
+
+          if (inputs.length === 0) continue;
 
           try {
-            await runStorageUploadSequentially(() =>
-              withTimeout(
-                uploadFile(decodedContent, filePath, signer),
-                STORAGE_UPLOAD_TIMEOUT_MS,
-                `Storage upload for ${filePath}`,
-              ),
+            const scanResults = await withTimeout(
+              runSecurityScan(repoUrl, inputs, {
+                broker,
+                memoryContext,
+                chunkSize: INFERENCE_CHUNK_SIZE,
+              }),
+              COMPUTE_CHUNK_SCAN_TIMEOUT_MS,
+              `Compute scan for chunk (${inputs.map((i) => i.path).join(", ")})`,
             );
-            const result = await withTimeout(
-              runSecurityScan(
-                repoUrl,
-                [{ path: filePath, content: decodedContent }],
-                { broker, memoryContext },
-              ).then((items) => items[0]),
-              COMPUTE_SCAN_TIMEOUT_MS,
-              `Compute scan for ${filePath}`,
-            );
-            if (!result) {
-              throw new Error("OpenClaw scan returned no result.");
-            }
 
-            const uniqueForFile = deduplicateFindingsByFileLineIssue(result.findings);
-            for (const finding of uniqueForFile) {
-              totalFindings += 1;
-              aggregatedFindings.push({
-                ...finding,
-                attestationHash: result.attestationHash,
-              });
-              streamChunk(controller, {
-                type: "finding",
-                finding,
-                attestationHash: result.attestationHash,
-              });
+            for (const result of scanResults) {
+              processedFiles += 1;
+              const uniqueForFile = deduplicateFindingsByFileLineIssue(result.findings);
+              for (const finding of uniqueForFile) {
+                totalFindings += 1;
+                aggregatedFindings.push({
+                  severity: finding.severity,
+                  file: finding.file,
+                  line: finding.line,
+                  issue: finding.issue,
+                  fix: finding.fix,
+                  attestationHash: result.attestationHash,
+                });
+                streamChunk(controller, {
+                  type: "finding",
+                  finding: {
+                    severity: finding.severity,
+                    file: finding.file,
+                    line: finding.line,
+                    issue: finding.issue,
+                    fix: finding.fix,
+                  },
+                  attestationHash: result.attestationHash,
+                });
+              }
             }
           } catch (error) {
-            failedFiles += 1;
             const message =
-              error instanceof Error ? error.message : `Failed scanning ${filePath}.`;
-            streamChunk(controller, {
-              type: "error",
-              message: `${filePath}: ${message}`,
-            });
-          } finally {
-            processedFiles += 1;
+              error instanceof Error ? error.message : "Chunk scan failed.";
+            for (const input of inputs) {
+              failedFiles += 1;
+              processedFiles += 1;
+              streamChunk(controller, {
+                type: "error",
+                message: `${input.path}: ${message}`,
+              });
+            }
           }
-        };
-
-        const SCAN_BATCH_SIZE = 2;
-        const SCAN_BATCH_DELAY_MS = 10_000;
-        for (let i = 0; i < scanFiles.length; i += SCAN_BATCH_SIZE) {
-          if (i > 0) {
-            await sleep(SCAN_BATCH_DELAY_MS);
-          }
-          const batch = scanFiles.slice(i, i + SCAN_BATCH_SIZE);
-          await Promise.all(batch.map((f) => scanSingleFile(f)));
         }
       } catch (error) {
         const message =
