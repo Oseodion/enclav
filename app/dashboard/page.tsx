@@ -34,10 +34,15 @@ import {
   withdrawCredits,
   withdrawCreditsAmount,
 } from "@/lib/0g/credits";
-import { INFT_CONTRACT_ADDRESS, mintFromWallet, type MintScanData } from "@/lib/0g/inft";
+import {
+  ensureWalletOnAristotleMainnet,
+  INFT_CONTRACT_ADDRESS,
+  mintFromWallet,
+  type MintScanData,
+} from "@/lib/0g/inft";
 import { normalizeRepoUrlForMemory } from "@/lib/0g/memory";
+import { getAristotleChainId, resolveOgExplorerUrl } from "@/lib/og-env";
 import { ogNetworkLabel } from "@/lib/og-network-label";
-import { resolveOgExplorerUrl } from "@/lib/og-env";
 import { useWallet } from "@/lib/wallet";
 import { useAccount, useChainId, useDisconnect, useWalletClient } from "wagmi";
 
@@ -108,12 +113,45 @@ function CreditsDepositModal({
   const { isConnected } = useAccount();
   const chainId = useChainId();
   const networkName = ogNetworkLabel(chainId);
+  const aristotleChainId = useMemo(() => getAristotleChainId(), []);
+  const onAristotleMainnet = chainId === aristotleChainId;
+  const [switchNetworkBusy, setSwitchNetworkBusy] = useState(false);
+  const [switchNetworkError, setSwitchNetworkError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       console.log("[CreditsDepositModal] wagmi chainId", chainId);
     }
   }, [open, chainId]);
+
+  useEffect(() => {
+    if (open) {
+      setSwitchNetworkError(null);
+    }
+  }, [open]);
+
+  const handleSwitchToAristotle = async () => {
+    setSwitchNetworkError(null);
+    const injected =
+      typeof window !== "undefined"
+        ? (window as Window & { ethereum?: ethers.Eip1193Provider }).ethereum
+        : undefined;
+    if (!injected) {
+      setSwitchNetworkError("No injected wallet found.");
+      return;
+    }
+    setSwitchNetworkBusy(true);
+    try {
+      await ensureWalletOnAristotleMainnet(injected);
+    } catch (e) {
+      setSwitchNetworkError(e instanceof Error ? e.message : "Could not switch network.");
+    } finally {
+      setSwitchNetworkBusy(false);
+    }
+  };
+
+  const depositDisabled =
+    depositBusy || !isConnected || !onAristotleMainnet || switchNetworkBusy;
 
   if (!open) return null;
 
@@ -152,6 +190,24 @@ function CreditsDepositModal({
         <p className="mb-3 font-mono text-xs text-[#9B99B0]">
           Current balance: <span className="text-[#6EE7B7]">{balanceLabel} OG</span>
         </p>
+        {isConnected && !onAristotleMainnet ? (
+          <div className="mb-4 rounded-lg border border-[rgba(251,191,36,0.35)] bg-[rgba(251,191,36,0.08)] px-3 py-2.5">
+            <p className="mb-2 font-mono text-[11px] leading-relaxed text-[#FDE68A]">
+              You are on {networkName}. Switch to 0G Aristotle Mainnet to deposit credits.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleSwitchToAristotle()}
+              disabled={switchNetworkBusy}
+              className="rounded-full border border-[rgba(251,191,36,0.5)] bg-[rgba(245,158,11,0.2)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[#FDE68A] transition hover:bg-[rgba(245,158,11,0.3)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {switchNetworkBusy ? "Confirm in wallet…" : "Switch Network"}
+            </button>
+            {switchNetworkError ? (
+              <p className="mt-2 font-mono text-[10px] text-[#FCA5A5]">{switchNetworkError}</p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
             <label
@@ -173,7 +229,7 @@ function CreditsDepositModal({
           <button
             type="button"
             onClick={() => void onDeposit()}
-            disabled={depositBusy || !isConnected}
+            disabled={depositDisabled}
             className="min-h-[44px] shrink-0 rounded-full border border-[rgba(167,139,250,0.55)] bg-[rgba(124,58,237,0.45)] px-5 py-2.5 font-mono text-xs uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition hover:bg-[rgba(124,58,237,0.6)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {depositBusy ? "Confirm in wallet…" : "DEPOSIT OG"}

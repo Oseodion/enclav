@@ -125,6 +125,73 @@ function getWalletRpcErrorCode(error: unknown): number | undefined {
   return undefined;
 }
 
+async function requestSwitchToChain(
+  injectedProvider: ethers.Eip1193Provider,
+  targetChainId: number,
+): Promise<void> {
+  const targetMeta = chainAddParamsFor(targetChainId);
+  try {
+    await injectedProvider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: targetMeta.chainIdHex }],
+    });
+  } catch (switchError) {
+    const code = getWalletRpcErrorCode(switchError);
+    if (code === 4902) {
+      await injectedProvider.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: targetMeta.chainIdHex,
+            chainName: targetMeta.chainName,
+            nativeCurrency: {
+              name: "0G",
+              symbol: "OG",
+              decimals: 18,
+            },
+            rpcUrls: [targetMeta.rpcUrl],
+            blockExplorerUrls: [targetMeta.explorerUrl],
+          },
+        ],
+      });
+      await injectedProvider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: targetMeta.chainIdHex }],
+      });
+    } else if (code === 4001) {
+      throw new Error(
+        `Wallet rejected switching to 0G network (chain ${targetChainId}). Approve the network switch to continue.`,
+      );
+    } else {
+      throw switchError;
+    }
+  }
+}
+
+/**
+ * Same chain-add flow as {@link ensureWalletOnOGNetwork}, but always targets **0G Aristotle**
+ * (credits / mainnet). Use this when the user must be on mainnet; `ensureWalletOnOGNetwork` also
+ * accepts Galileo and will not switch away from it.
+ */
+export async function ensureWalletOnAristotleMainnet(
+  injectedProvider: ethers.Eip1193Provider,
+): Promise<void> {
+  const arId = getAristotleChainId();
+  const snap = await readWalletChainIdFromProvider(injectedProvider);
+  if (Number.isFinite(snap.decimal) && snap.decimal === arId) {
+    return;
+  }
+  console.log("[ensureWalletOnAristotleMainnet] switching to Aristotle", {
+    ethChainIdDecimal: snap.decimal,
+    target: arId,
+  });
+  await requestSwitchToChain(injectedProvider, arId);
+  const after = await readWalletChainIdFromProvider(injectedProvider);
+  if (!Number.isFinite(after.decimal) || after.decimal !== arId) {
+    throw new Error(`Wallet must be on 0G Aristotle Mainnet (chain ${arId}).`);
+  }
+}
+
 /**
  * Normalizes `eth_chainId` responses (hex string, plain hex, decimal string, or number).
  */
@@ -192,7 +259,6 @@ export async function ensureWalletOnOGNetwork(
   const switchTarget = VALID_OG_CHAIN_IDS.has(OG_SWITCH_TARGET_CHAIN_ID)
     ? OG_SWITCH_TARGET_CHAIN_ID
     : getAristotleChainId();
-  const targetMeta = chainAddParamsFor(switchTarget);
 
   console.log("[ensureWalletOnOGNetwork] chain snapshot", {
     ethChainIdHex: snap.normalizedHex,
@@ -216,42 +282,7 @@ export async function ensureWalletOnOGNetwork(
     return;
   }
 
-  try {
-    await injectedProvider.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: targetMeta.chainIdHex }],
-    });
-  } catch (switchError) {
-    const code = getWalletRpcErrorCode(switchError);
-    if (code === 4902) {
-      await injectedProvider.request({
-        method: "wallet_addEthereumChain",
-        params: [
-          {
-            chainId: targetMeta.chainIdHex,
-            chainName: targetMeta.chainName,
-            nativeCurrency: {
-              name: "0G",
-              symbol: "OG",
-              decimals: 18,
-            },
-            rpcUrls: [targetMeta.rpcUrl],
-            blockExplorerUrls: [targetMeta.explorerUrl],
-          },
-        ],
-      });
-      await injectedProvider.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: targetMeta.chainIdHex }],
-      });
-    } else if (code === 4001) {
-      throw new Error(
-        `Wallet rejected switching to 0G network (chain ${switchTarget}). Approve the network switch to continue.`,
-      );
-    } else {
-      throw switchError;
-    }
-  }
+  await requestSwitchToChain(injectedProvider, switchTarget);
 
   const after = await readWalletChainIdFromProvider(injectedProvider);
   if (!isOnAllowedOGNetwork(after.decimal, wagmiChainId)) {
