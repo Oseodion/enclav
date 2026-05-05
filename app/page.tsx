@@ -225,9 +225,9 @@ export default function Home() {
 
       {/* Hero */}
       <section className="relative z-[1] flex min-h-screen flex-col items-center justify-center px-6 pb-20 pt-[120px] text-center md:px-12">
-        <div className="glass-blur-sm mb-9 inline-flex animate-fade-up items-center gap-2 rounded-full border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.1)] px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-purple-bright">
-          <span className="h-1.5 w-1.5 animate-pulse-soft rounded-full bg-purple-bright" />
-          Autonomous Security Agent · Built on 0G
+        <div className="glass-blur-sm mb-9 inline-flex max-w-full animate-fade-up items-center justify-center gap-2 whitespace-nowrap rounded-full border border-[rgba(139,92,246,0.25)] bg-[rgba(139,92,246,0.1)] px-3 py-1.5 font-mono text-[clamp(8px,2.5vw,11px)] uppercase tracking-[0.07em] text-purple-bright sm:px-4 sm:tracking-[0.1em]">
+          <span className="h-1.5 w-1.5 shrink-0 animate-pulse-soft rounded-full bg-purple-bright" />
+          <span className="text-center">Autonomous Security Agent · Built on 0G</span>
         </div>
 
         <h1 className="animate-fade-up-d1 mb-7 max-w-[min(100%,920px)] text-[clamp(30px,10vw,96px)] font-extrabold leading-[0.93] tracking-[-0.04em] md:text-[clamp(40px,10vw,72px)] lg:text-[clamp(48px,8vw,96px)]">
