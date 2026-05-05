@@ -1,7 +1,5 @@
 import * as ServingBroker from "@0glabs/0g-serving-broker";
 import { ethers } from "ethers";
-import OpenAI from "openai";
-import { APIError } from "openai";
 import { resolveOgRpcUrl, resolveOgStorageIndexerUrl } from "@/lib/og-env";
 
 type InferenceBroker = {
@@ -31,138 +29,8 @@ export type ComputeChatResult = {
   providerAddress: string;
 };
 
-/** Default model for OpenAI-compatible 0G proxy (Qwen / GLM — less rate-limited than DeepSeek on mainnet). */
-const DEFAULT_OPENAI_MODEL = "qwen3.6-plus";
-
-const DEFAULT_OPENAI_BASE_URL = "https://integratenetwork.work/v1/proxy";
-
-const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
-
-type CachedZeroGToken = {
-  apiKey: string;
-  expiresAt: number;
-};
-
-const openAiTokenByProvider = new Map<string, CachedZeroGToken>();
-const openAiTokenInflight = new Map<string, Promise<string>>();
-
-function decodeExpiryFromApiKey(apiKey: string): number {
-  try {
-    const stripped = apiKey.replace(/^app-sk-/, "");
-    const payloadB64 = stripped.split("|")[0];
-    if (!payloadB64) return Date.now() + 23 * 60 * 60 * 1000;
-    const json = Buffer.from(payloadB64, "base64").toString();
-    const decoded = JSON.parse(json) as { expiresAt?: number };
-    if (typeof decoded.expiresAt === "number") return decoded.expiresAt;
-  } catch {
-    /* fall through */
-  }
-  return Date.now() + 23 * 60 * 60 * 1000;
-}
-
-function providerCacheKey(address: string): string {
-  return ethers.getAddress(address);
-}
-
-/** Log Authorization as Bearer prefix…suffix only (never full token). */
-function sanitizeHeadersForLog(raw: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    const lk = k.toLowerCase();
-    if (lk === "authorization") {
-      const trimmed = v.replace(/^Bearer\s+/i, "").trim();
-      out[k] =
-        trimmed.length > 16
-          ? `Bearer ${trimmed.slice(0, 10)}…${trimmed.slice(-4)}`
-          : "Bearer [redacted]";
-    } else {
-      out[k] = v;
-    }
-  }
-  return out;
-}
-
-function headersInitToRecord(init: HeadersInit | undefined): Record<string, string> {
-  if (!init) return {};
-  if (typeof Headers !== "undefined" && init instanceof Headers) {
-    return Object.fromEntries(init.entries());
-  }
-  if (Array.isArray(init)) {
-    return Object.fromEntries(init as Iterable<[string, string]>);
-  }
-  return { ...(init as Record<string, string>) };
-}
-
-export function clearOpenAiCompatibleTokenCache(providerAddress?: string): void {
-  if (providerAddress) {
-    openAiTokenByProvider.delete(providerCacheKey(providerAddress));
-  } else {
-    openAiTokenByProvider.clear();
-  }
-}
-
-/**
- * Mint a fresh Bearer token via the broker for the OpenAI-compatible proxy (Emmanuel / 0G pattern).
- */
-async function getOpenAiCompatibleApiKey(
-  broker: InferenceBroker,
-  providerAddress: string,
-  payloadJson: string,
-): Promise<string> {
-  const key = providerCacheKey(providerAddress);
-  const hit = openAiTokenByProvider.get(key);
-  if (hit && Date.now() < hit.expiresAt - TOKEN_REFRESH_BUFFER_MS) {
-    return hit.apiKey;
-  }
-  let inflight = openAiTokenInflight.get(key);
-  if (inflight) return inflight;
-
-  inflight = (async () => {
-    try {
-      const headers = await broker.inference.getRequestHeaders(providerAddress, payloadJson);
-      const headersObj = headers as Record<string, string>;
-      console.log("[compute] broker getRequestHeaders (token mint for OpenAI proxy)", {
-        provider: providerAddress,
-        layer: "broker-sdk",
-        sanitizedHeaders: sanitizeHeadersForLog(headersObj),
-      });
-      const auth = headersObj.Authorization ?? headersObj.authorization ?? "";
-      const apiKey = auth.replace(/^Bearer\s+/i, "").trim();
-      if (!apiKey) {
-        throw new Error("0G broker returned empty Authorization header for OpenAI-compatible inference.");
-      }
-      const expiresAt = decodeExpiryFromApiKey(apiKey);
-      openAiTokenByProvider.set(key, { apiKey, expiresAt });
-      return apiKey;
-    } catch (err) {
-      console.error("[compute] broker getRequestHeaders failed (not OpenAI proxy yet)", {
-        provider: providerAddress,
-        layer: "broker-sdk",
-        error: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
-    }
-  })();
-
-  openAiTokenInflight.set(key, inflight);
-  try {
-    return await inflight;
-  } finally {
-    openAiTokenInflight.delete(key);
-  }
-}
-
-function getOpenAiBaseUrl(): string {
-  return (process.env.OPENAI_BASE_URL ?? DEFAULT_OPENAI_BASE_URL).replace(/\/$/, "");
-}
-
-function getOpenAiModel(): string {
-  return (
-    process.env.OPENAI_MODEL?.trim() ||
-    process.env.OG_COMPUTE_MODEL?.trim() ||
-    DEFAULT_OPENAI_MODEL
-  );
-}
+/** Default when `OG_COMPUTE_MODEL` is unset — 0G Aristotle mainnet TeeML catalog. */
+const DEFAULT_OG_MODEL = "deepseek-chat-v3-0324";
 
 function getZeroGChainPrivateKey(): string {
   return (
@@ -216,7 +84,7 @@ function getEnv() {
     computeApiBaseUrl:
       process.env.OG_COMPUTE_API_BASE_URL ?? resolveOgStorageIndexerUrl(),
     providerAddress,
-    model: getOpenAiModel(),
+    model: process.env.OG_COMPUTE_MODEL ?? DEFAULT_OG_MODEL,
     privateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",
   };
 }
@@ -520,145 +388,66 @@ export type ScanChunkOptions = ScanFileOptions & {
   chunkIndex: number;
 };
 
-/**
- * OpenAI-compatible 0G proxy (integratenetwork.work) with broker-minted Bearer token + ZG-Res-Key from response.
- */
-async function runOpenAiCompatibleChatCompletion(
-  broker: InferenceBroker,
-  resolvedProviderAddress: string,
-  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-): Promise<{ rawContent: string; attestationHash: string }> {
-  const model = getOpenAiModel();
-  const baseURL = getOpenAiBaseUrl();
-
-  const send = async (): Promise<{ rawContent: string; attestationHash: string }> => {
-    console.log("[compute] using OpenAI-compatible path — HTTP inference targets OPENAI_BASE_URL only", {
-      provider: resolvedProviderAddress,
-      model,
-      baseURL,
-      openAiChatUrl: `${baseURL}/chat/completions`,
-    });
-    console.log(
-      "[compute] broker direct inference path (broker service.endpoint /chat/completions): NOT USED — broker is only used for getRequestHeaders token mint + processResponse",
-    );
-
-    const payloadJson = JSON.stringify({ model, messages });
-    const apiKey = await getOpenAiCompatibleApiKey(broker, resolvedProviderAddress, payloadJson);
-    let zgKey: string | null = null;
-    const scopedFetch: typeof fetch = async (input, init) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : (input as Request).url;
-      const reqHeaders = sanitizeHeadersForLog(headersInitToRecord(init?.headers as HeadersInit));
-      console.log("[compute] OpenAI-compatible HTTP request (via OpenAI SDK fetch)", {
-        layer: "openai-proxy",
-        url,
-        method: init?.method ?? "POST",
-        sanitizedRequestHeaders: reqHeaders,
-      });
-
-      const res = await fetch(input as RequestInfo, init as RequestInit);
-      zgKey = res.headers.get("ZG-Res-Key") ?? zgKey;
-
-      if (!res.ok) {
-        let bodyPreview = "";
-        try {
-          bodyPreview = (await res.clone().text()).slice(0, 1200);
-        } catch {
-          bodyPreview = "(could not read body)";
-        }
-        const rateHint =
-          res.status === 429 ? "likely rate limit at OpenAI-compatible proxy upstream" : "HTTP error from OpenAI-compatible proxy";
-        console.error("[compute] OpenAI-compatible HTTP non-OK response", {
-          layer: "openai-proxy",
-          url,
-          status: res.status,
-          statusText: res.statusText,
-          rateHint,
-          bodyPreview,
-        });
-      }
-
-      return res;
-    };
-    const client = new OpenAI({
-      apiKey,
-      baseURL,
-      fetch: scopedFetch,
-    });
-    let completion;
-    try {
-      completion = await client.chat.completions.create({
-        model,
-        messages,
-      });
-    } catch (err) {
-      if (err instanceof APIError) {
-        const status = err.status ?? 500;
-        const detail = {
-          layer: "openai-sdk",
-          mapsToProxy: "errors usually originate from OPENAI_BASE_URL /chat/completions",
-          status,
-          code: err.code ?? null,
-          type: err.type ?? null,
-          message: err.message,
-          rateLimited: status === 429,
-        };
-        if (status === 429) {
-          console.error("[compute] rate limited — OpenAI SDK error (upstream is OPENAI_BASE_URL proxy)", detail);
-        } else {
-          console.error("[compute] OpenAI SDK chat.completions error", detail);
-        }
-        throw new ComputeHttpError(status, err.message);
-      }
-      console.error("[compute] non-APIError during chat.completions.create", {
-        layer: "unknown",
-        error: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
-    }
-    const rawContent = completion.choices[0]?.message?.content?.trim() ?? "[]";
-    const attestationHash = zgKey ?? completion.id ?? "";
-    if (!attestationHash) {
-      throw new Error("Missing TeeML attestation hash in scan response.");
-    }
-    await broker.inference.processResponse(
-      resolvedProviderAddress,
-      attestationHash,
-      completion.usage ? JSON.stringify(completion.usage) : undefined,
-    );
-    return { rawContent, attestationHash };
-  };
-
-  try {
-    return await send();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/session token expired|token expired/i.test(msg)) {
-      console.warn("[compute] session/token expired — clearing cache and retrying once", {
-        provider: resolvedProviderAddress,
-      });
-      clearOpenAiCompatibleTokenCache(resolvedProviderAddress);
-      return await send();
-    }
-    throw err;
-  }
-}
-
 async function executeSecurityScanCompletion(
   broker: unknown,
   resolvedProviderAddress: string,
   systemContent: string,
   userContent: string,
 ): Promise<{ rawContent: string; attestationHash: string }> {
+  const { model } = getEnv();
   const sdkBroker = broker as InferenceBroker;
-  return runOpenAiCompatibleChatCompletion(sdkBroker, resolvedProviderAddress, [
-    { role: "system", content: systemContent },
-    { role: "user", content: userContent },
-  ]);
+
+  const service = await sdkBroker.inference.getServiceMetadata(resolvedProviderAddress);
+  const payload = {
+    model: model || service.model || DEFAULT_OG_MODEL,
+    messages: [
+      { role: "system", content: systemContent },
+      { role: "user", content: userContent },
+    ],
+  };
+  const billingHeaders = await sdkBroker.inference.getRequestHeaders(
+    resolvedProviderAddress,
+    JSON.stringify(payload),
+  );
+
+  const response = await fetch(`${service.endpoint}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...billingHeaders,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new ComputeHttpError(response.status, errorBody);
+  }
+
+  const responseJson = (await response.json()) as {
+    id?: string;
+    usage?: unknown;
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+    }>;
+  };
+
+  const rawContent = responseJson.choices?.[0]?.message?.content?.trim() ?? "[]";
+  const attestationHash = response.headers.get("ZG-Res-Key") ?? responseJson.id;
+
+  if (!attestationHash) {
+    throw new Error("Missing TeeML attestation hash in scan response.");
+  }
+
+  await sdkBroker.inference.processResponse(
+    resolvedProviderAddress,
+    attestationHash,
+    responseJson.usage ? JSON.stringify(responseJson.usage) : undefined,
+  );
+
+  return { rawContent, attestationHash };
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -697,7 +486,6 @@ async function executeSecurityScanWithProviderRotation(
             provider,
             status: e.status,
             bodyPreview: e.body.slice(0, 800),
-            note: "429 surfaced as ComputeHttpError (usually from OpenAI SDK / OPENAI_BASE_URL proxy, not broker HTTP)",
           });
           continue;
         }
@@ -859,25 +647,68 @@ export async function scanChunkForVulnerabilities(
 export async function inferWithTeeML(
   messages: ComputeChatMessage[],
 ): Promise<ComputeChatResult> {
-  const { providerAddress } = getEnv();
+  const { providerAddress, model } = getEnv();
   const broker = (await getBroker()) as InferenceBroker;
   const resolvedProviderAddress = await resolveProviderAddress(
     broker,
     providerAddress,
   );
-  const mapped = messages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  })) as Array<{ role: "system" | "user" | "assistant"; content: string }>;
-  const { rawContent, attestationHash } = await runOpenAiCompatibleChatCompletion(
-    broker,
+  const service = await broker.inference.getServiceMetadata(resolvedProviderAddress);
+  const payload = {
+    model: model || service.model || DEFAULT_OG_MODEL,
+    messages,
+  };
+
+  const billingHeaders = await broker.inference.getRequestHeaders(
     resolvedProviderAddress,
-    mapped,
+    JSON.stringify(payload),
   );
-  return {
-    content: rawContent,
+
+  const response = await fetch(`${service.endpoint}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...billingHeaders,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(
+      `0G Compute request failed (${response.status}): ${errorBody}`,
+    );
+  }
+
+  const responseJson = (await response.json()) as {
+    id?: string;
+    usage?: unknown;
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+    }>;
+  };
+
+  const content =
+    responseJson.choices?.[0]?.message?.content?.trim() ??
+    "No response content returned.";
+  const attestationHash = response.headers.get("ZG-Res-Key") ?? responseJson.id;
+
+  if (!attestationHash) {
+    throw new Error("Missing TeeML attestation hash in compute response.");
+  }
+
+  await broker.inference.processResponse(
+    resolvedProviderAddress,
     attestationHash,
-    model: getOpenAiModel(),
+    responseJson.usage ? JSON.stringify(responseJson.usage) : undefined,
+  );
+
+  return {
+    content,
+    attestationHash,
+    model: payload.model ?? DEFAULT_OG_MODEL,
     providerAddress: resolvedProviderAddress,
   };
 }
