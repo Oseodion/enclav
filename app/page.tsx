@@ -65,7 +65,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-black font-geist text-text-1">
+    <div className="relative min-h-screen overflow-x-hidden bg-black pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] md:pb-0 font-geist text-text-1">
       {/* Ambient orbs */}
       <div
         className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
