@@ -873,7 +873,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-x-hidden overflow-y-visible bg-black pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] font-geist text-[#F0EEF8]">
+    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-x-hidden overflow-y-visible bg-black pb-[calc(env(safe-area-inset-bottom,0px)+9rem)] font-geist text-[#F0EEF8]">
       <AmbientGlow />
       <header className="relative z-10 flex min-h-[56px] shrink-0 items-center border-b border-white/10 bg-black/80 px-4 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -1700,7 +1700,7 @@ function RightPanelSummary({
 }) {
   return (
     <aside className={`${panelClass} flex min-w-0 flex-col overflow-visible md:h-full md:min-h-0 md:overflow-hidden`}>
-      <div className="flex flex-1 flex-col overflow-visible md:min-h-0 md:overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="flex flex-1 flex-col overflow-visible pb-12 md:min-h-0 md:overflow-y-auto md:pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="shrink-0 border-b border-white/10 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
@@ -2070,7 +2070,7 @@ function SettingsTab({
     creditsAddr.length > 0 ? `${explorerBase}/address/${creditsAddr}` : "";
 
   return (
-    <section className={`${panelClass} min-w-0 max-w-full overflow-visible px-5 pb-6 pt-5 md:h-full md:min-h-0 md:overflow-x-hidden md:overflow-y-auto md:px-6 md:pb-28 md:pt-6`}>
+    <section className={`${panelClass} min-w-0 max-w-full overflow-visible px-5 pb-14 pt-5 md:h-full md:min-h-0 md:overflow-x-hidden md:overflow-y-auto md:px-6 md:pb-36 md:pt-6`}>
       <h2 className="mb-8 break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Settings</h2>
 
       <div className="mb-8 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-5 md:mb-6 md:p-4">

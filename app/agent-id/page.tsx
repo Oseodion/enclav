@@ -316,7 +316,7 @@ function AgentIdPageContent() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-black pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] md:pb-0 font-geist text-text-1">
+    <main className="relative min-h-screen overflow-x-hidden bg-black pb-[calc(env(safe-area-inset-bottom,0px)+4rem)] md:pb-[calc(env(safe-area-inset-bottom,0px)+2.5rem)] font-geist text-text-1">
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="absolute left-1/2 top-[-150px] h-[600px] w-[600px] -translate-x-1/2 animate-drift rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.18),transparent_65%)]" />
         <div className="absolute -bottom-20 -right-20 h-[400px] w-[400px] animate-drift-slow rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.1),transparent_65%)]" />
@@ -806,7 +806,7 @@ function TimelineSkeleton() {
 
 function AgentIdPageSkeleton() {
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-black pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] md:pb-0 font-geist text-text-1">
+    <main className="relative min-h-screen overflow-x-hidden bg-black pb-[calc(env(safe-area-inset-bottom,0px)+4rem)] md:pb-[calc(env(safe-area-inset-bottom,0px)+2.5rem)] font-geist text-text-1">
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="absolute left-1/2 top-[-150px] h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.12),transparent_65%)]" />
       </div>
