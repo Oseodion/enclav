@@ -246,7 +246,6 @@ const GITHUB_REPO_URL_PATTERN =
 const encoder = new TextEncoder();
 const CHAIN_ID = Number(process.env.OG_CHAIN_ID ?? process.env.NEXT_PUBLIC_OG_CHAIN_ID ?? 16661);
 const IS_MAINNET = CHAIN_ID === 16661;
-const STORAGE_UPLOAD_TIMEOUT_MS = IS_MAINNET ? 180_000 : 30_000;
 /** One TeeML call may include multiple files — allow extra wall time. */
 const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 90_000;
 const INFERENCE_CHUNK_SIZE = 3;
@@ -283,6 +282,10 @@ function createSequentialTaskRunner() {
     );
     return run;
   };
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function parseRepoUrl(repoUrl: string) {
@@ -474,6 +477,7 @@ export async function POST(request: Request) {
       let rootHash: string | null = null;
       let memoryRootHash: string | null = null;
       let skipBilling = false;
+      const backgroundUploads: Promise<void>[] = [];
       const aggregatedFindings: Array<
         StreamFinding & { attestationHash: string }
       > = [];
@@ -607,38 +611,33 @@ export async function POST(request: Request) {
                 ? Buffer.from(blobJson.content.replace(/\n/g, ""), "base64").toString("utf8")
                 : blobJson.content;
 
-            try {
-              await runStorageUploadSequentially(() =>
-                withTimeout(
-                  uploadFile(decodedContent, filePath, signer),
-                  STORAGE_UPLOAD_TIMEOUT_MS,
-                  `Storage upload for ${filePath}`,
-                ),
-              );
-              inputs.push({ path: filePath, content: decodedContent });
-            } catch (error) {
-              const message =
-                error instanceof Error ? error.message : `Failed preparing ${filePath}.`;
-              const lower = message.toLowerCase();
-              const isUploadPendingNotice =
-                lower.includes("upload timed out") &&
-                lower.includes("stored locally") &&
-                lower.includes("blockchain confirmation pending");
-              if (isUploadPendingNotice) {
+            streamChunk(controller, {
+              type: "notice",
+              message: `${filePath}: Uploading to 0G Storage...`,
+            });
+            const backgroundUpload = runStorageUploadSequentially(async () => {
+              try {
+                await uploadFile(decodedContent, filePath, signer);
+              } catch (error) {
+                const message = toErrorMessage(error);
+                if (
+                  message.toLowerCase().includes("upload timed out") &&
+                  message.toLowerCase().includes("stored locally")
+                ) {
+                  streamChunk(controller, {
+                    type: "error",
+                    message: `${filePath}: upload timed out — stored locally — blockchain confirmation pending`,
+                  });
+                  return;
+                }
                 streamChunk(controller, {
-                  type: "error",
-                  message: `${filePath}: upload timed out — stored locally — blockchain confirmation pending`,
+                  type: "notice",
+                  message: `${filePath}: 0G Storage upload pending (${message})`,
                 });
-                inputs.push({ path: filePath, content: decodedContent });
-                continue;
               }
-              failedFiles += 1;
-              processedFiles += 1;
-              streamChunk(controller, {
-                type: "error",
-                message: `${filePath}: ${message}`,
-              });
-            }
+            });
+            backgroundUploads.push(backgroundUpload);
+            inputs.push({ path: filePath, content: decodedContent });
           }
 
           if (inputs.length === 0) continue;
@@ -772,6 +771,13 @@ export async function POST(request: Request) {
               message: `Billing: ${billingMessage}`,
             });
           }
+        }
+
+        if (backgroundUploads.length > 0) {
+          streamChunk(controller, {
+            type: "notice",
+            message: `Background 0G Storage uploads running: ${backgroundUploads.length}`,
+          });
         }
 
         const severityCounts = aggregatedFindings.reduce(

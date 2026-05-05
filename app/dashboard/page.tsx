@@ -295,6 +295,8 @@ export default function DashboardPage() {
   const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
   const [scannedFiles, setScannedFiles] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
+  const [scanStartedAtMs, setScanStartedAtMs] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [mintedTokenId, setMintedTokenId] = useState<string | null>(null);
   const [hasMinted, setHasMinted] = useState(false);
   const [certificateExplorerUrl, setCertificateExplorerUrl] = useState<string | null>(null);
@@ -411,6 +413,21 @@ export default function DashboardPage() {
 
   const progressPercent =
     totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
+  const estimatedMinutes =
+    totalFiles > 0 ? Math.max(1, Math.round((totalFiles * 12) / 60)) : null;
+
+  useEffect(() => {
+    if (!isScanning || !scanStartedAtMs) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const tick = () => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - scanStartedAtMs) / 1000)));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [isScanning, scanStartedAtMs]);
 
   const needsCreditsDeposit =
     effectiveConnected &&
@@ -553,6 +570,8 @@ export default function DashboardPage() {
     setMintStatusMessage(null);
     setCurrentFile("Initializing scanner...");
     setScanLogs(["Repository queued. Starting autonomous scan..."]);
+    setScanStartedAtMs(Date.now());
+    setElapsedSeconds(0);
     setIsScanning(true);
 
     const normRepo = normalizeRepoUrlForMemory(trimmedRepoUrl);
@@ -739,6 +758,7 @@ export default function DashboardPage() {
       setScanLogs((prev) => [`Scan failed: ${message}`, ...prev.slice(0, 6)]);
     } finally {
       setIsScanning(false);
+      setScanStartedAtMs(null);
     }
   };
 
@@ -1193,6 +1213,8 @@ export default function DashboardPage() {
                 logs={scanLogs}
                 isScanning={isScanning}
                 scanCompleted={scanCompleted}
+                estimatedMinutes={estimatedMinutes}
+                elapsedSeconds={elapsedSeconds}
               />
               <RightPanelSummary
                 scannedFiles={scannedFiles}
@@ -1593,6 +1615,8 @@ function ScanStatus({
   logs,
   isScanning,
   scanCompleted,
+  estimatedMinutes,
+  elapsedSeconds,
 }: {
   className?: string;
   currentFile: string;
@@ -1602,7 +1626,12 @@ function ScanStatus({
   logs: string[];
   isScanning: boolean;
   scanCompleted: boolean;
+  estimatedMinutes: number | null;
+  elapsedSeconds: number;
 }) {
+  const elapsedLabel = `${Math.floor(elapsedSeconds / 60)
+    .toString()
+    .padStart(2, "0")}:${(elapsedSeconds % 60).toString().padStart(2, "0")}`;
   return (
     <section className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-hidden ${className ?? ""}`}>
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5 sm:px-5">
@@ -1612,6 +1641,14 @@ function ScanStatus({
         </span>
       </div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 pb-24 sm:p-5 sm:pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+            Time
+          </p>
+          <p className="font-mono text-xs text-[#F0EEF8]">
+            {estimatedMinutes ? `Est. ~${estimatedMinutes} min` : "Est. ~—"} · Elapsed {elapsedLabel}
+          </p>
+        </div>
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Current file

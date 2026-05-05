@@ -288,6 +288,9 @@ function AgentIdPageContent() {
   const txExplorerHref = certificate?.txHash ?? storedTxHash
     ? `${explorerBase}/tx/${certificate?.txHash ?? storedTxHash}`
     : null;
+  const tokenMetadataHref = certificate?.tokenId
+    ? `/api/inft-metadata/${certificate.tokenId}`
+    : null;
   const hasCertificate = Boolean(certificate);
   const dynamicCapabilityTags = hasCertificate
     ? [
@@ -536,6 +539,24 @@ function AgentIdPageContent() {
                   />
                   <ChainRow label="Standard" value={onChainData.standard} />
                   <ChainRow label="Minted" value={onChainData.minted} />
+                  <ChainRow
+                    label="Token URI"
+                    value={tokenMetadataHref ?? "Mint certificate to generate metadata"}
+                    muted={!hasCertificate}
+                    truncateValue
+                    actionButton={
+                      tokenMetadataHref ? (
+                        <a
+                          href={tokenMetadataHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-[11px] text-[#A78BFA] hover:underline"
+                        >
+                          Open
+                        </a>
+                      ) : undefined
+                    }
+                  />
                   <ChainRow
                     label="Report Hash"
                     value={
