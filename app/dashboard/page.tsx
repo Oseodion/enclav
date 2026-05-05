@@ -98,18 +98,35 @@ function mintDataFromHistoryEntry(entry: ScanHistoryEntry): MintScanData {
   };
 }
 
+function coerceScanDateString(value: unknown): string {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+  if (value != null && String(value).trim()) return String(value).trim();
+  return new Date(0).toISOString();
+}
+
 function normalizeScanHistoryEntries(raw: unknown): ScanHistoryEntry[] {
   if (!Array.isArray(raw)) return [];
   const out: ScanHistoryEntry[] = [];
   for (let index = 0; index < raw.length; index++) {
-    const e = raw[index] as Partial<ScanHistoryEntry>;
-    if (typeof e.repoUrl !== "string" || !e.repoUrl.trim()) continue;
-    if (typeof e.scanDate !== "string" || !e.scanDate.trim()) continue;
+    const e = raw[index] as Partial<ScanHistoryEntry> & {
+      repoUrl?: unknown;
+      scanDate?: unknown;
+    };
+    const repoUrl =
+      typeof e.repoUrl === "string"
+        ? e.repoUrl.trim()
+        : String(e.repoUrl ?? "").trim();
+    if (!repoUrl) continue;
+
+    const scanDate = coerceScanDateString(e.scanDate);
     const findings: Finding[] = Array.isArray(e.findings) ? e.findings : [];
     out.push({
-      id: typeof e.id === "string" && e.id.trim() ? e.id : `scan-${index}-${e.scanDate}`,
-      repoUrl: e.repoUrl,
-      scanDate: e.scanDate,
+      id: typeof e.id === "string" && e.id.trim() ? e.id : `scan-${index}-${scanDate}`,
+      repoUrl,
+      scanDate,
       filesScanned: Number(e.filesScanned ?? 0),
       totalFindings: Number(e.totalFindings ?? 0),
       criticalCount: Number(e.criticalCount ?? 0),
@@ -406,10 +423,17 @@ export default function DashboardPage() {
       const walletRaw = localStorage.getItem(walletHistoryKey);
       if (walletRaw) {
         const parsed = JSON.parse(walletRaw) as unknown;
+        const parsedArr = Array.isArray(parsed) ? parsed : [];
         const normalized = normalizeScanHistoryEntries(parsed);
         setScanHistory(normalized);
         try {
-          if (JSON.stringify(normalized) !== walletRaw) {
+          const persistSafe =
+            normalized.length >= parsedArr.length ||
+            parsedArr.length === 0;
+          if (
+            persistSafe &&
+            JSON.stringify(normalized) !== walletRaw
+          ) {
             localStorage.setItem(walletHistoryKey, JSON.stringify(normalized));
           }
         } catch {
@@ -421,9 +445,19 @@ export default function DashboardPage() {
       // One-time migration from legacy global key.
       const legacyRaw = localStorage.getItem(SCAN_HISTORY_KEY);
       if (legacyRaw) {
-        const migrated = normalizeScanHistoryEntries(JSON.parse(legacyRaw) as unknown);
-        localStorage.setItem(walletHistoryKey, JSON.stringify(migrated));
+        const legacyParsed = JSON.parse(legacyRaw) as unknown;
+        const legacyArr = Array.isArray(legacyParsed) ? legacyParsed : [];
+        const migrated = normalizeScanHistoryEntries(legacyParsed);
         setScanHistory(migrated);
+        try {
+          if (migrated.length > 0) {
+            localStorage.setItem(walletHistoryKey, JSON.stringify(migrated));
+          } else if (legacyArr.length === 0) {
+            localStorage.setItem(walletHistoryKey, JSON.stringify([]));
+          }
+        } catch {
+          /* ignore */
+        }
         return;
       }
 
