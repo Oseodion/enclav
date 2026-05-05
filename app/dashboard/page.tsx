@@ -1420,7 +1420,8 @@ export default function DashboardPage() {
                 <div className="flex gap-2.5">
                   <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#FBBF24]" strokeWidth={2} aria-hidden />
                   <p id="scan-notice-title" className="min-w-0 text-balance">
-                    Scan in progress - do not navigate away or the scan will stop
+                    Scanning 5 most security-critical files — do not navigate away or the scan will
+                    stop
                   </p>
                 </div>
               </div>

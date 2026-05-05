@@ -25,8 +25,9 @@ import {
 import { downloadTextByRootHash, uploadFile } from "@/lib/0g/storage";
 import { resolveOgRpcUrl } from "@/lib/og-env";
 
-/** Allow long streaming scans on Vercel (raise further on Pro if needed). */
-export const maxDuration = 300;
+/** Vercel Hobby / free plan serverless function limit. */
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
 
 type ScanRequestBody = {
   repoUrl?: string;
@@ -126,7 +127,10 @@ const TIER1_FILENAME_KEYWORDS = [
 ] as const;
 
 /** Tier 2 (high): paths under these folders; scan up to this many (tier 1 excluded). */
-const MAX_HIGH_TIER_SCAN_FILES = 15;
+const MAX_HIGH_TIER_SCAN_FILES = 5;
+
+/** Final cap: only the top N files from the prioritized queue (Vercel 60s window). */
+const MAX_SCAN_FILES = 5;
 
 const HIGH_RISK_PATH_MARKERS = [
   "src/",
@@ -250,9 +254,9 @@ const encoder = new TextEncoder();
 const CHAIN_ID = Number(process.env.OG_CHAIN_ID ?? process.env.NEXT_PUBLIC_OG_CHAIN_ID ?? 16661);
 const IS_MAINNET = CHAIN_ID === 16661;
 /** One TeeML call may include multiple files — allow extra wall time. */
-const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 90_000;
-const INFERENCE_CHUNK_SIZE = 3;
-const CHUNK_INFERENCE_DELAY_MS = 15_000;
+const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 45_000;
+const INFERENCE_CHUNK_SIZE = 5;
+const CHUNK_INFERENCE_DELAY_MS = 3_000;
 const SUMMARY_UPLOAD_TIMEOUT_MS = IS_MAINNET ? 180_000 : 30_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -465,8 +469,9 @@ export async function POST(request: Request) {
     tier2HighPool,
     tier2Capped,
     tier3Skipped,
-    scanQueue: scanFiles,
+    scanQueue: fullScanQueue,
   } = partitionRepoFilesForScan(files);
+  const scanFiles = fullScanQueue.slice(0, MAX_SCAN_FILES);
 
   const stream = new ReadableStream<Uint8Array>({
     start: async (controller) => {
@@ -560,6 +565,13 @@ export async function POST(request: Request) {
           streamChunk(controller, {
             type: "notice",
             message: `Skipped ${tier3Skipped.length} low-risk utility file${tier3Skipped.length === 1 ? "" : "s"}`,
+          });
+        }
+
+        if (scanFiles.length > 0) {
+          streamChunk(controller, {
+            type: "notice",
+            message: "Scanning 5 most security-critical files",
           });
         }
 
