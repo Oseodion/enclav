@@ -48,6 +48,12 @@ import { useAccount, useChainId, useDisconnect, useWalletClient } from "wagmi";
 
 type FindingSeverity = "Critical" | "High" | "Medium" | "Low";
 
+function formatElapsedMmSs(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 type Finding = {
   severity: FindingSeverity;
   file: string;
@@ -345,6 +351,7 @@ export default function DashboardPage() {
   ]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const findingsRef = useRef<Finding[]>([]);
+  const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     findingsRef.current = findings;
   }, [findings]);
@@ -500,20 +507,24 @@ export default function DashboardPage() {
 
   const progressPercent =
     totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
-  const estimatedSeconds =
-    totalFiles > 0 ? Math.round((totalFiles / 3) * 45 + 30) : null;
-  const estimatedMinutes =
-    estimatedSeconds !== null ? Math.max(1, Math.round(estimatedSeconds / 60)) : null;
 
   useEffect(() => {
     if (!isScanning) {
-      setElapsedSeconds(0);
+      if (elapsedIntervalRef.current) {
+        clearInterval(elapsedIntervalRef.current);
+        elapsedIntervalRef.current = null;
+      }
       return;
     }
-    const id = setInterval(() => {
+    elapsedIntervalRef.current = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
-    return () => clearInterval(id);
+    return () => {
+      if (elapsedIntervalRef.current) {
+        clearInterval(elapsedIntervalRef.current);
+        elapsedIntervalRef.current = null;
+      }
+    };
   }, [isScanning]);
 
   const needsCreditsDeposit =
@@ -725,6 +736,7 @@ export default function DashboardPage() {
       const decoder = new TextDecoder();
       let buffer = "";
       const streamedFindings: Finding[] = [];
+      let sawComplete = false;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -808,6 +820,7 @@ export default function DashboardPage() {
           }
 
           if (event.type === "complete") {
+            sawComplete = true;
             setTotalFiles(event.totalFiles);
             setCurrentFile("Completed");
             setScanCompleted(true);
@@ -840,6 +853,13 @@ export default function DashboardPage() {
             }
           }
         }
+      }
+
+      if (!sawComplete) {
+        setScanError((prev) =>
+          prev ??
+          "Scan ended before completion — connection closed or server limit reached. Try again.",
+        );
       }
     } catch (error) {
       const message =
@@ -1309,7 +1329,6 @@ export default function DashboardPage() {
                 logs={scanLogs}
                 isScanning={isScanning}
                 scanCompleted={scanCompleted}
-                estimatedMinutes={estimatedMinutes}
                 elapsedSeconds={elapsedSeconds}
               />
               <RightPanelSummary
@@ -1318,6 +1337,9 @@ export default function DashboardPage() {
                 progressPercent={progressPercent}
                 findingsSummary={findingsSummary}
                 mintedTokenId={mintedTokenId}
+                isScanning={isScanning}
+                scanCompleted={scanCompleted}
+                elapsedSeconds={elapsedSeconds}
               />
             </div>
           ) : null}
@@ -1711,7 +1733,6 @@ function ScanStatus({
   logs,
   isScanning,
   scanCompleted,
-  estimatedMinutes,
   elapsedSeconds,
 }: {
   className?: string;
@@ -1722,12 +1743,9 @@ function ScanStatus({
   logs: string[];
   isScanning: boolean;
   scanCompleted: boolean;
-  estimatedMinutes: number | null;
   elapsedSeconds: number;
 }) {
-  const elapsedLabel = `${Math.floor(elapsedSeconds / 60)
-    .toString()
-    .padStart(2, "0")}:${(elapsedSeconds % 60).toString().padStart(2, "0")}`;
+  const elapsedLabel = formatElapsedMmSs(elapsedSeconds);
   return (
     <section className={`${panelClass} flex min-w-0 flex-col overflow-visible md:h-full md:min-h-0 md:overflow-hidden ${className ?? ""}`}>
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5 sm:px-5">
@@ -1736,28 +1754,26 @@ function ScanStatus({
           {isScanning ? "Running" : scanCompleted ? "Complete" : "Waiting"}
         </span>
       </div>
-      <div className="flex-1 space-y-5 overflow-visible p-4 pb-6 sm:p-5 sm:pb-8 md:min-h-0 md:overflow-y-auto md:pb-8 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
-        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
-          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
-            Time
-          </p>
-          <p className="font-mono text-xs text-[#F0EEF8]">
-            {estimatedMinutes ? `Est. ~${estimatedMinutes} min` : "Estimating..."} · Elapsed{" "}
-            {elapsedLabel}
-          </p>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden p-4 pb-6 sm:p-5 sm:pb-8 md:pb-8">
+        <div className="shrink-0 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Current file
           </p>
           <p className="break-words font-mono text-xs text-[#F0EEF8]">{currentFile}</p>
         </div>
 
-        <div>
-          <div className="mb-1.5 flex items-center justify-between font-mono text-[10px] text-[#9B99B0]">
+        <div className="shrink-0">
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 font-mono text-[10px] text-[#9B99B0]">
             <span>Progress</span>
-            <span>
-              {scannedFiles}/{totalFiles} ({progressPercent}%)
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>
+                {scannedFiles}/{totalFiles} ({progressPercent}%)
+              </span>
+              {isScanning ? (
+                <span className="text-[#F0EEF8]">Scanning... {elapsedLabel}</span>
+              ) : scanCompleted ? (
+                <span className="text-[#6EE7B7]">Completed in {elapsedLabel}</span>
+              ) : null}
             </span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-[rgba(255,255,255,0.08)]">
@@ -1768,20 +1784,24 @@ function ScanStatus({
           </div>
         </div>
 
-        <div className="space-y-2 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3 md:min-h-[120px]">
+          <p className="mb-2 shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Live events
           </p>
-          {logs.map((log, index) => (
-            <div key={`${log}-${index}`} className="flex min-w-0 items-start gap-2 text-xs text-[#9B99B0]">
-              <Timer className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A78BFA]" />
-              <span className="min-w-0 break-words">{log}</span>
+          <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+            <div className="space-y-2 pr-1">
+              {logs.map((log, index) => (
+                <div key={`${log}-${index}`} className="flex min-w-0 items-start gap-2 text-xs text-[#9B99B0]">
+                  <Timer className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A78BFA]" />
+                  <span className="min-w-0 break-words">{log}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
 
         {scanCompleted ? (
-          <div className="rounded-xl border border-[rgba(16,185,129,0.2)] bg-[rgba(16,185,129,0.08)] p-3 text-xs text-[#6EE7B7]">
+          <div className="shrink-0 rounded-xl border border-[rgba(16,185,129,0.2)] bg-[rgba(16,185,129,0.08)] p-3 text-xs text-[#6EE7B7]">
             <div className="mb-1 flex items-center gap-1.5 font-semibold">
               <CheckCircle2 className="h-4 w-4" />
               Scan complete
@@ -1800,16 +1820,23 @@ function RightPanelSummary({
   progressPercent,
   findingsSummary,
   mintedTokenId,
+  isScanning,
+  scanCompleted,
+  elapsedSeconds,
 }: {
   scannedFiles: number;
   totalFiles: number;
   progressPercent: number;
   findingsSummary: Record<FindingSeverity, number>;
   mintedTokenId: string | null;
+  isScanning: boolean;
+  scanCompleted: boolean;
+  elapsedSeconds: number;
 }) {
+  const elapsedLabel = formatElapsedMmSs(elapsedSeconds);
   return (
     <aside className={`${panelClass} flex min-w-0 flex-col overflow-visible md:h-full md:min-h-0 md:overflow-hidden`}>
-      <div className="flex flex-1 flex-col overflow-visible pb-12 md:min-h-0 md:overflow-y-auto md:pb-8 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="flex flex-1 flex-col overflow-hidden pb-12 md:min-h-0 md:pb-8">
         <div className="shrink-0 border-b border-white/10 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
@@ -1842,9 +1869,16 @@ function RightPanelSummary({
           <h4 className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Scan Progress
           </h4>
-          <p className="mb-2 font-mono text-xs text-[#9B99B0]">
-            {scannedFiles}/{totalFiles} files scanned
-          </p>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 font-mono text-xs">
+            <span className="text-[#9B99B0]">
+              {scannedFiles}/{totalFiles} files scanned
+            </span>
+            {isScanning ? (
+              <span className="text-[#F0EEF8]">Scanning... {elapsedLabel}</span>
+            ) : scanCompleted ? (
+              <span className="text-[#6EE7B7]">Completed in {elapsedLabel}</span>
+            ) : null}
+          </div>
           <div className="h-2 overflow-hidden rounded-full bg-[rgba(255,255,255,0.08)]">
             <div
               className="h-full rounded-full bg-[rgba(124,58,237,0.6)] transition-all duration-500"

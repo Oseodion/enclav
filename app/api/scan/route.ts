@@ -25,6 +25,9 @@ import {
 import { downloadTextByRootHash, uploadFile } from "@/lib/0g/storage";
 import { resolveOgRpcUrl } from "@/lib/og-env";
 
+/** Allow long streaming scans on Vercel (raise further on Pro if needed). */
+export const maxDuration = 300;
+
 type ScanRequestBody = {
   repoUrl?: string;
   walletAddress?: string;
