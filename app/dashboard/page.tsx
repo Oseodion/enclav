@@ -366,6 +366,8 @@ export default function DashboardPage() {
   const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
   const [scannedFiles, setScannedFiles] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
+  /** All scannable extension files in the repo tree (from scan API header). */
+  const [repoScannableTotal, setRepoScannableTotal] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [mintedTokenId, setMintedTokenId] = useState<string | null>(null);
   const [hasMinted, setHasMinted] = useState(false);
@@ -668,6 +670,7 @@ export default function DashboardPage() {
     setLatestScanData(null);
     setScannedFiles(0);
     setTotalFiles(0);
+    setRepoScannableTotal(null);
     setScanCompleted(false);
     setMintedTokenId(null);
     setHasMinted(false);
@@ -726,6 +729,10 @@ export default function DashboardPage() {
       const totalFromHeader = Number(response.headers.get("X-Total-Files") ?? "0");
       if (Number.isFinite(totalFromHeader) && totalFromHeader > 0) {
         setTotalFiles(totalFromHeader);
+      }
+      const repoTotalFromHeader = Number(response.headers.get("X-Repo-Scannable-Total") ?? "");
+      if (Number.isFinite(repoTotalFromHeader)) {
+        setRepoScannableTotal(repoTotalFromHeader);
       }
 
       if (!response.body) {
@@ -1337,9 +1344,6 @@ export default function DashboardPage() {
                 progressPercent={progressPercent}
                 findingsSummary={findingsSummary}
                 mintedTokenId={mintedTokenId}
-                isScanning={isScanning}
-                scanCompleted={scanCompleted}
-                elapsedSeconds={elapsedSeconds}
               />
             </div>
           ) : null}
@@ -1420,8 +1424,9 @@ export default function DashboardPage() {
                 <div className="flex gap-2.5">
                   <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#FBBF24]" strokeWidth={2} aria-hidden />
                   <p id="scan-notice-title" className="min-w-0 text-balance">
-                    Scanning 5 most security-critical files — do not navigate away or the scan will
-                    stop
+                    {totalFiles > 0 && repoScannableTotal !== null
+                      ? `Scanning ${totalFiles} most security-critical files from ${repoScannableTotal} total — do not navigate away or the scan will stop`
+                      : "Scanning — preparing file list — do not navigate away or the scan will stop"}
                   </p>
                 </div>
               </div>
@@ -1821,20 +1826,13 @@ function RightPanelSummary({
   progressPercent,
   findingsSummary,
   mintedTokenId,
-  isScanning,
-  scanCompleted,
-  elapsedSeconds,
 }: {
   scannedFiles: number;
   totalFiles: number;
   progressPercent: number;
   findingsSummary: Record<FindingSeverity, number>;
   mintedTokenId: string | null;
-  isScanning: boolean;
-  scanCompleted: boolean;
-  elapsedSeconds: number;
 }) {
-  const elapsedLabel = formatElapsedMmSs(elapsedSeconds);
   return (
     <aside className={`${panelClass} flex min-w-0 flex-col overflow-visible md:h-full md:min-h-0 md:overflow-hidden`}>
       <div className="flex flex-1 flex-col overflow-hidden pb-12 md:min-h-0 md:pb-8">
@@ -1870,16 +1868,9 @@ function RightPanelSummary({
           <h4 className="mb-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Scan Progress
           </h4>
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 font-mono text-xs">
-            <span className="text-[#9B99B0]">
-              {scannedFiles}/{totalFiles} files scanned
-            </span>
-            {isScanning ? (
-              <span className="text-[#F0EEF8]">Scanning... {elapsedLabel}</span>
-            ) : scanCompleted ? (
-              <span className="text-[#6EE7B7]">Completed in {elapsedLabel}</span>
-            ) : null}
-          </div>
+          <p className="mb-2 font-mono text-xs text-[#9B99B0]">
+            {scannedFiles}/{totalFiles} files scanned
+          </p>
           <div className="h-2 overflow-hidden rounded-full bg-[rgba(255,255,255,0.08)]">
             <div
               className="h-full rounded-full bg-[rgba(124,58,237,0.6)] transition-all duration-500"

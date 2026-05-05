@@ -251,13 +251,10 @@ function partitionRepoFilesForScan(files: GithubBlobFile[]): RepoTierPartition {
 const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
-const CHAIN_ID = Number(process.env.OG_CHAIN_ID ?? process.env.NEXT_PUBLIC_OG_CHAIN_ID ?? 16661);
-const IS_MAINNET = CHAIN_ID === 16661;
 /** One TeeML call may include multiple files — allow extra wall time. */
 const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 45_000;
 const INFERENCE_CHUNK_SIZE = 5;
 const CHUNK_INFERENCE_DELAY_MS = 3_000;
-const SUMMARY_UPLOAD_TIMEOUT_MS = IS_MAINNET ? 180_000 : 30_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -277,18 +274,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
         reject(error);
       });
   });
-}
-
-function createSequentialTaskRunner() {
-  let lastTask = Promise.resolve();
-  return async <T>(task: () => Promise<T>): Promise<T> => {
-    const run = lastTask.then(task, task);
-    lastTask = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
-  };
 }
 
 function parseRepoUrl(repoUrl: string) {
@@ -478,10 +463,7 @@ export async function POST(request: Request) {
       let totalFindings = 0;
       let processedFiles = 0;
       let failedFiles = 0;
-      let rootHash: string | null = null;
-      let memoryRootHash: string | null = null;
       let skipBilling = false;
-      const backgroundUploads: Promise<void>[] = [];
       const aggregatedFindings: Array<
         StreamFinding & { attestationHash: string }
       > = [];
@@ -513,7 +495,6 @@ export async function POST(request: Request) {
         } else {
           await initializeComputeAccount(broker, computeProviders);
         }
-        const runStorageUploadSequentially = createSequentialTaskRunner();
 
         let memoryContext: string | undefined;
         const prevHash = body.previousMemoryRootHash?.trim();
@@ -571,7 +552,7 @@ export async function POST(request: Request) {
         if (scanFiles.length > 0) {
           streamChunk(controller, {
             type: "notice",
-            message: "Scanning 5 most security-critical files",
+            message: `Scanning ${MAX_SCAN_FILES} most security-critical files from ${files.length} total`,
           });
         }
 
@@ -622,20 +603,16 @@ export async function POST(request: Request) {
                 ? Buffer.from(blobJson.content.replace(/\n/g, ""), "base64").toString("utf8")
                 : blobJson.content;
 
-            const backgroundUpload = runStorageUploadSequentially(async () => {
-              try {
-                await uploadFile(decodedContent, filePath, signer);
-              } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                if (
-                  message.toLowerCase().includes("upload timed out") &&
-                  message.toLowerCase().includes("stored locally")
-                ) {
-                  return;
-                }
+            void uploadFile(decodedContent, filePath, signer).catch((error: unknown) => {
+              const message = error instanceof Error ? error.message : String(error);
+              if (
+                message.toLowerCase().includes("upload timed out") &&
+                message.toLowerCase().includes("stored locally")
+              ) {
+                return;
               }
+              console.error("[scan] per-file storage upload failed", message);
             });
-            backgroundUploads.push(backgroundUpload);
             inputs.push({ path: filePath, content: decodedContent });
           }
 
@@ -711,83 +688,6 @@ export async function POST(request: Request) {
         streamChunk(controller, { type: "error", message });
       } finally {
         const completedAt = new Date().toISOString();
-        try {
-          const provider = new ethers.JsonRpcProvider(resolveOgRpcUrl());
-          if (deployerPrivateKey) {
-            const signer = new ethers.Wallet(deployerPrivateKey, provider);
-            const summaryReport = {
-              repoUrl,
-              scanDate: completedAt,
-              totalFiles: scanFiles.length,
-              processedFiles,
-              failedFiles,
-              findings: aggregatedFindings,
-              totalFindings,
-            };
-            rootHash = await withTimeout(
-              uploadFile(
-                JSON.stringify(summaryReport, null, 2),
-                `scan-report-${owner}-${repo}-${Date.now()}.json`,
-                signer,
-              ),
-              SUMMARY_UPLOAD_TIMEOUT_MS,
-              "Summary report upload",
-            );
-
-            const memoryKey = enclavMemoryObjectKey(repoUrl);
-            const slimFindings = aggregatedFindings.map((f) => ({
-              severity: f.severity,
-              file: f.file,
-              line: f.line,
-              issue: f.issue,
-              fix: f.fix,
-            }));
-            const memoryDoc: EnclavRepoMemoryV1 = {
-              version: 1,
-              key: memoryKey,
-              repoUrl,
-              repoUrlHash: hashRepoUrl(repoUrl),
-              scanDate: completedAt,
-              totalFindings: aggregatedFindings.length,
-              aggregatedFindings: slimFindings,
-            };
-            memoryRootHash = await withTimeout(
-              uploadFile(
-                JSON.stringify(memoryDoc, null, 2),
-                `${memoryKey}.json`,
-                signer,
-              ),
-              SUMMARY_UPLOAD_TIMEOUT_MS,
-              "Long-context memory upload",
-            );
-          }
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Failed to store summary report.";
-          console.error("[storage] failed to store summary report", message);
-        }
-
-        if (scanFiles.length > 0 && deployerPrivateKey && !skipBilling) {
-          try {
-            await deductCreditsFromServer(
-              normalizedWallet,
-              SCAN_CREDIT_COST_WEI,
-              deployerPrivateKey,
-            );
-          } catch (billingError) {
-            const billingMessage =
-              billingError instanceof Error ? billingError.message : "Credit deduction failed.";
-            streamChunk(controller, {
-              type: "error",
-              message: `Billing: ${billingMessage}`,
-            });
-          }
-        }
-
-        if (backgroundUploads.length > 0) {
-          /* background uploads are intentionally fire-and-forget */
-        }
-
         const severityCounts = aggregatedFindings.reduce(
           (acc, item) => {
             acc[item.severity] += 1;
@@ -816,11 +716,74 @@ export async function POST(request: Request) {
             highCount: severityCounts.High,
             mediumCount: severityCounts.Medium,
             lowCount: severityCounts.Low,
-            reportHash: rootHash ?? "",
-            ...(memoryRootHash ? { memoryRootHash } : {}),
+            reportHash: "",
           },
         });
         controller.close();
+
+        if (deployerPrivateKey) {
+          const bgProvider = new ethers.JsonRpcProvider(resolveOgRpcUrl());
+          const bgSigner = new ethers.Wallet(deployerPrivateKey, bgProvider);
+          const summaryReport = {
+            repoUrl,
+            scanDate: completedAt,
+            totalFiles: scanFiles.length,
+            processedFiles,
+            failedFiles,
+            findings: aggregatedFindings,
+            totalFindings,
+          };
+          void uploadFile(
+            JSON.stringify(summaryReport, null, 2),
+            `scan-report-${owner}-${repo}-${Date.now()}.json`,
+            bgSigner,
+          ).catch((error: unknown) => {
+            console.error(
+              "[storage] summary report upload",
+              error instanceof Error ? error.message : error,
+            );
+          });
+
+          const memoryKey = enclavMemoryObjectKey(repoUrl);
+          const slimFindings = aggregatedFindings.map((f) => ({
+            severity: f.severity,
+            file: f.file,
+            line: f.line,
+            issue: f.issue,
+            fix: f.fix,
+          }));
+          const memoryDoc: EnclavRepoMemoryV1 = {
+            version: 1,
+            key: memoryKey,
+            repoUrl,
+            repoUrlHash: hashRepoUrl(repoUrl),
+            scanDate: completedAt,
+            totalFindings: aggregatedFindings.length,
+            aggregatedFindings: slimFindings,
+          };
+          void uploadFile(
+            JSON.stringify(memoryDoc, null, 2),
+            `${memoryKey}.json`,
+            bgSigner,
+          ).catch((error: unknown) => {
+            console.error(
+              "[storage] memory upload",
+              error instanceof Error ? error.message : error,
+            );
+          });
+        }
+
+        if (scanFiles.length > 0 && deployerPrivateKey && !skipBilling) {
+          void deductCreditsFromServer(
+            normalizedWallet,
+            SCAN_CREDIT_COST_WEI,
+            deployerPrivateKey,
+          ).catch((billingError: unknown) => {
+            const billingMessage =
+              billingError instanceof Error ? billingError.message : "Credit deduction failed.";
+            console.error("[billing]", billingMessage);
+          });
+        }
       }
     },
   });
@@ -830,6 +793,7 @@ export async function POST(request: Request) {
       "Content-Type": "application/x-ndjson; charset=utf-8",
       "Cache-Control": "no-cache",
       "X-Total-Files": String(scanFiles.length),
+      "X-Repo-Scannable-Total": String(files.length),
     },
   });
 }
