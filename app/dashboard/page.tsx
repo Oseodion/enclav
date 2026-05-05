@@ -873,7 +873,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-hidden bg-black pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] font-geist text-[#F0EEF8]">
+    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-x-hidden overflow-y-visible bg-black pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] font-geist text-[#F0EEF8]">
       <AmbientGlow />
       <header className="relative z-10 flex min-h-[56px] shrink-0 items-center border-b border-white/10 bg-black/80 px-4 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -934,7 +934,7 @@ export default function DashboardPage() {
           )}
         </nav>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2 overflow-visible">
           {effectiveConnected && creditsContractConfigured ? (
             <div
               className="hidden max-w-[8.5rem] truncate rounded-full border border-[rgba(167,139,250,0.25)] bg-[rgba(124,58,237,0.12)] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[#D4C4FF] sm:inline-flex sm:max-w-none sm:px-2.5 sm:py-1 sm:text-[10px]"
@@ -975,8 +975,8 @@ export default function DashboardPage() {
         </div>
       </div>
       {mobileMenuOpen ? (
-        <div className="relative z-20 border-b border-white/10 bg-black/95 px-4 py-3 md:hidden">
-          <div className="flex items-center justify-between gap-3">
+        <div className="relative z-20 overflow-visible border-b border-white/10 bg-black/95 px-4 py-3 md:hidden">
+          <div className="flex items-center justify-between gap-3 overflow-visible">
             <WalletConnect />
             <Link
               href="/agent-id"

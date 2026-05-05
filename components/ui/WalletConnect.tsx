@@ -23,7 +23,7 @@ export function WalletConnect() {
 
   if (mounted && isConnected) {
     return (
-      <div className="relative">
+      <div className="relative overflow-visible">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -35,7 +35,7 @@ export function WalletConnect() {
         </button>
 
         {open ? (
-          <div className="absolute right-0 top-full mt-2 z-[120] min-w-[160px] space-y-1 rounded-xl border border-[var(--glass-border)] bg-[rgba(10,8,18,0.94)] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          <div className="absolute right-0 top-full mt-2 z-[9999] min-w-[160px] space-y-1 rounded-xl border border-[var(--glass-border)] bg-[rgba(10,8,18,0.94)] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
             <button
               type="button"
               onClick={() => {
@@ -56,7 +56,7 @@ export function WalletConnect() {
   }
 
   return (
-    <div className="relative">
+    <div className="relative overflow-visible">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -68,7 +68,7 @@ export function WalletConnect() {
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full mt-2 z-[120] min-w-[180px] space-y-1 rounded-xl border border-[var(--glass-border)] bg-[rgba(10,8,18,0.94)] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <div className="absolute right-0 top-full mt-2 z-[9999] min-w-[180px] space-y-1 rounded-xl border border-[var(--glass-border)] bg-[rgba(10,8,18,0.94)] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
           {availableConnectors.map((connector, index) => (
             <button
               key={`${connector.name}-${index}`}
