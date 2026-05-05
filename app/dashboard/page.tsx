@@ -721,7 +721,7 @@ export default function DashboardPage() {
                 {
                   id: `${Date.now()}-${filePath}`,
                   message: isTimeoutNotice
-                    ? `${filePath} - upload timed out, scan continuing...`
+                    ? `${filePath} - upload timed out, stored locally — blockchain confirmation pending`
                     : `⚠ ${filePath} - rate limited, skipped`,
                 },
                 ...prev.slice(0, 8),

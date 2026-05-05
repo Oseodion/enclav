@@ -244,12 +244,14 @@ function partitionRepoFilesForScan(files: GithubBlobFile[]): RepoTierPartition {
 const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
-const STORAGE_UPLOAD_TIMEOUT_MS = 30_000;
+const CHAIN_ID = Number(process.env.OG_CHAIN_ID ?? process.env.NEXT_PUBLIC_OG_CHAIN_ID ?? 16661);
+const IS_MAINNET = CHAIN_ID === 16661;
+const STORAGE_UPLOAD_TIMEOUT_MS = IS_MAINNET ? 180_000 : 30_000;
 /** One TeeML call may include multiple files — allow extra wall time. */
 const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 90_000;
 const INFERENCE_CHUNK_SIZE = 3;
 const CHUNK_INFERENCE_DELAY_MS = 15_000;
-const SUMMARY_UPLOAD_TIMEOUT_MS = 30_000;
+const SUMMARY_UPLOAD_TIMEOUT_MS = IS_MAINNET ? 180_000 : 30_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -615,10 +617,23 @@ export async function POST(request: Request) {
               );
               inputs.push({ path: filePath, content: decodedContent });
             } catch (error) {
-              failedFiles += 1;
-              processedFiles += 1;
               const message =
                 error instanceof Error ? error.message : `Failed preparing ${filePath}.`;
+              const lower = message.toLowerCase();
+              const isUploadPendingNotice =
+                lower.includes("upload timed out") &&
+                lower.includes("stored locally") &&
+                lower.includes("blockchain confirmation pending");
+              if (isUploadPendingNotice) {
+                streamChunk(controller, {
+                  type: "error",
+                  message: `${filePath}: upload timed out — stored locally — blockchain confirmation pending`,
+                });
+                inputs.push({ path: filePath, content: decodedContent });
+                continue;
+              }
+              failedFiles += 1;
+              processedFiles += 1;
               streamChunk(controller, {
                 type: "error",
                 message: `${filePath}: ${message}`,

@@ -5,8 +5,30 @@ import { resolveOgRpcUrl, resolveOgStorageIndexerUrl } from "@/lib/og-env";
 const STORAGE_INDEXER_URL = resolveOgStorageIndexerUrl();
 const STORAGE_RPC_URL = resolveOgRpcUrl();
 const MAX_UPLOAD_RETRIES = 3;
+const MAINNET_CHAIN_ID = 16661;
+const DEFAULT_UPLOAD_TIMEOUT_MS = 30_000;
+const MAINNET_UPLOAD_TIMEOUT_MS = 180_000;
+const UPLOAD_TIMEOUT_RETRY_DELAY_MS = 10_000;
+const MAX_TIMEOUT_RETRY = 1;
 const BASE_GAS_PRICE_GWEI = BigInt(100);
 const BASE_PRIORITY_GWEI = BigInt(10);
+
+class StorageUploadTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StorageUploadTimeoutError";
+  }
+}
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function getStorageUploadTimeoutMs(): number {
+  const chainId = Number(
+    process.env.OG_CHAIN_ID ?? process.env.NEXT_PUBLIC_OG_CHAIN_ID ?? MAINNET_CHAIN_ID,
+  );
+  return chainId === MAINNET_CHAIN_ID ? MAINNET_UPLOAD_TIMEOUT_MS : DEFAULT_UPLOAD_TIMEOUT_MS;
+}
 
 class HighGasSigner extends ethers.AbstractSigner {
   private readonly inner: ethers.Signer;
@@ -122,20 +144,83 @@ export async function uploadFile(
         }
       | undefined;
     let uploadError: Error | null = null;
+    let timeoutRetried = 0;
+    let skippedBecauseFinalized = false;
+    const timeoutMs = getStorageUploadTimeoutMs();
 
     for (let attempt = 0; attempt < MAX_UPLOAD_RETRIES; attempt += 1) {
       const multiplier = BigInt(2) ** BigInt(attempt);
       const highGasSigner = new HighGasSigner(signer, provider, multiplier);
 
-      const [uploadResult, error] = await indexer.upload(
+      let skipMessageSeen = false;
+      let finalizedMessageSeen = false;
+      const uploadPromise = indexer.upload(
         memData,
         STORAGE_RPC_URL,
         highGasSigner,
+        {
+          skipIfFinalized: true,
+          onProgress: (message) => {
+            if (message.includes("Found existing file info")) {
+              skipMessageSeen = true;
+            }
+            if (message.includes("finalized: true")) {
+              finalizedMessageSeen = true;
+            }
+          },
+        },
       );
+
+      let uploadTuple:
+        | [
+            (
+              | { txHash: string; rootHash: string; txSeq: number }
+              | { txHashes: string[]; rootHashes: string[]; txSeqs: number[] }
+            ),
+            Error | null,
+          ]
+        | null = null;
+      try {
+        uploadTuple = await Promise.race([
+          uploadPromise,
+          new Promise<null>((_, reject) => {
+            setTimeout(() => {
+              reject(
+                new StorageUploadTimeoutError(
+                  `upload timed out after ${Math.floor(timeoutMs / 1000)}s`,
+                ),
+              );
+            }, timeoutMs);
+          }),
+        ]);
+      } catch (error) {
+        if (
+          error instanceof StorageUploadTimeoutError &&
+          timeoutRetried < MAX_TIMEOUT_RETRY
+        ) {
+          timeoutRetried += 1;
+          console.warn(
+            `[storage] upload timed out for "${filename}" — retrying once in ${Math.floor(UPLOAD_TIMEOUT_RETRY_DELAY_MS / 1000)}s`,
+          );
+          await sleep(UPLOAD_TIMEOUT_RETRY_DELAY_MS);
+          attempt -= 1;
+          continue;
+        }
+        throw error;
+      }
+
+      if (!uploadTuple) {
+        throw new Error(`Storage upload returned no result for "${filename}".`);
+      }
+      const [uploadResult, error] = uploadTuple;
+      skippedBecauseFinalized = skipMessageSeen && finalizedMessageSeen;
 
       if (!error) {
         result = uploadResult as typeof result;
         uploadError = null;
+        if (skippedBecauseFinalized) {
+          console.log(`[storage] ${filename} already on 0G Storage`);
+        }
         break;
       }
 
@@ -164,6 +249,11 @@ export async function uploadFile(
 
     return rootHash;
   } catch (error) {
+    if (error instanceof StorageUploadTimeoutError) {
+      throw new Error(
+        `Failed to upload "${filename}" to 0G Storage: upload timed out — stored locally — blockchain confirmation pending`,
+      );
+    }
     const message =
       error instanceof Error ? error.message : "Unknown upload error";
     throw new Error(`Failed to upload "${filename}" to 0G Storage: ${message}`);
