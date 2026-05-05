@@ -616,12 +616,8 @@ export async function POST(request: Request) {
                   message.toLowerCase().includes("upload timed out") &&
                   message.toLowerCase().includes("stored locally")
                 ) {
-                  console.warn(
-                    `[storage] ${filePath}: upload timed out — stored locally — blockchain confirmation pending`,
-                  );
                   return;
                 }
-                console.warn(`[storage] ${filePath}: 0G Storage upload pending (${message})`);
               }
             });
             backgroundUploads.push(backgroundUpload);
@@ -774,7 +770,7 @@ export async function POST(request: Request) {
         }
 
         if (backgroundUploads.length > 0) {
-          console.log(`[storage] background uploads running: ${backgroundUploads.length}`);
+          /* background uploads are intentionally fire-and-forget */
         }
 
         const severityCounts = aggregatedFindings.reduce(

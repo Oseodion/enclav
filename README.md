@@ -1,8 +1,8 @@
 # Enclav
 
 ## Quick Links For Judges
-- Live Demo: [coming soon - deploying to Vercel]
-- Demo Video: [coming soon]
+- Live Demo: [Coming soon - deploying to Vercel]
+- Demo Video: [Coming soon]
 - INFT Contract (Mainnet): https://chainscan.0g.ai/address/0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5
 - Credits Contract (Mainnet): https://chainscan.0g.ai/address/0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073
 - GitHub: https://github.com/Oseodion/enclav

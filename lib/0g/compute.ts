@@ -181,11 +181,6 @@ export async function listComputeProviders(broker: unknown): Promise<string[]> {
   return out;
 }
 
-function formatProviderLog(address: string): string {
-  if (address.length <= 12) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
 /** Preferred first (if present), then remaining providers; preferred may be prepended even if not in list. */
 export function orderProvidersForRotation(
   addresses: string[],
@@ -299,9 +294,6 @@ export async function initializeComputeAccount(
       message.includes("add-account") ||
       message.includes("does not exist")
     ) {
-      console.log(
-        "[compute] main ledger not found — creating with broker.ledger.addLedger(3) (3 OG minimum)",
-      );
       await ledgerApi.addLedger(3);
     } else {
       throw error;
@@ -346,13 +338,6 @@ export async function initializeComputeAccount(
     const addr = ethers.getAddress(raw);
     if (alreadyFunded.has(addr)) continue;
 
-    console.log("[compute] inference sub-account needs funds — broker.ledger.transferFund", {
-      provider: addr,
-      amountOg: INFERENCE_SUB_ACCOUNT_SEED_OG,
-      amountNeuron: amountNeuron.toString(),
-      note:
-        "Moves OG from your main compute ledger into this provider sub-account (on-chain ledger split, not native OG gas).",
-    });
     try {
       await transferFund(addr, "inference", amountNeuron);
     } catch (error) {
@@ -461,7 +446,6 @@ async function executeSecurityScanWithProviderRotation(
   orderedProviders: string[],
   systemContent: string,
   userContent: string,
-  chunkIndex: number,
 ): Promise<{ rawContent: string; attestationHash: string }> {
   if (orderedProviders.length === 0) {
     throw new Error("No compute providers available for rotation.");
@@ -476,17 +460,9 @@ async function executeSecurityScanWithProviderRotation(
           systemContent,
           userContent,
         );
-        console.log(
-          `[compute] using provider ${formatProviderLog(provider)} for chunk ${chunkIndex}`,
-        );
         return result;
       } catch (e) {
         if (e instanceof ComputeHttpError && e.status === 429) {
-          console.warn("[compute] rate limited — rotating to next provider", {
-            provider,
-            status: e.status,
-            bodyPreview: e.body.slice(0, 800),
-          });
           continue;
         }
         throw e;
@@ -591,7 +567,6 @@ export async function scanChunkForVulnerabilities(
     return { findings: [], attestationHash: "" };
   }
   const providers = options?.providers;
-  const chunkIndex = options?.chunkIndex ?? 1;
   if (!providers || providers.length === 0) {
     throw new Error("scanChunkForVulnerabilities requires options.providers from listComputeProviders.");
   }
@@ -611,7 +586,6 @@ export async function scanChunkForVulnerabilities(
       ordered,
       systemContent,
       userContent,
-      chunkIndex,
     );
 
     let parsed: unknown = [];
