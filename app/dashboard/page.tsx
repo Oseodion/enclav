@@ -83,6 +83,53 @@ type ScanHistoryEntry = {
   explorerUrl?: string | null;
 };
 
+function mintDataFromHistoryEntry(entry: ScanHistoryEntry): MintScanData {
+  return {
+    repoUrl: entry.repoUrl,
+    scanDate: entry.scanDate,
+    filesScanned: entry.filesScanned,
+    totalFindings: entry.totalFindings,
+    criticalCount: entry.criticalCount,
+    highCount: entry.highCount,
+    mediumCount: entry.mediumCount,
+    lowCount: entry.lowCount,
+    reportHash: entry.reportHash,
+    memoryRootHash: entry.memoryRootHash ?? undefined,
+  };
+}
+
+function normalizeScanHistoryEntries(raw: unknown): ScanHistoryEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ScanHistoryEntry[] = [];
+  for (let index = 0; index < raw.length; index++) {
+    const e = raw[index] as Partial<ScanHistoryEntry>;
+    if (typeof e.repoUrl !== "string" || !e.repoUrl.trim()) continue;
+    if (typeof e.scanDate !== "string" || !e.scanDate.trim()) continue;
+    const findings: Finding[] = Array.isArray(e.findings) ? e.findings : [];
+    out.push({
+      id: typeof e.id === "string" && e.id.trim() ? e.id : `scan-${index}-${e.scanDate}`,
+      repoUrl: e.repoUrl,
+      scanDate: e.scanDate,
+      filesScanned: Number(e.filesScanned ?? 0),
+      totalFindings: Number(e.totalFindings ?? 0),
+      criticalCount: Number(e.criticalCount ?? 0),
+      highCount: Number(e.highCount ?? 0),
+      mediumCount: Number(e.mediumCount ?? 0),
+      lowCount: Number(e.lowCount ?? 0),
+      reportHash: typeof e.reportHash === "string" ? e.reportHash : "",
+      findings,
+      memoryRootHash:
+        typeof e.memoryRootHash === "string" && e.memoryRootHash.length > 0
+          ? e.memoryRootHash
+          : null,
+      tokenId: e.tokenId ?? null,
+      txHash: e.txHash ?? null,
+      explorerUrl: e.explorerUrl ?? null,
+    });
+  }
+  return out.slice(0, 15);
+}
+
 const panelClass =
   "relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']";
 /** Display strings aligned with on-chain SCAN_CREDIT_COST_WEI (0.05 OG) and typical mint gas. */
@@ -358,16 +405,23 @@ export default function DashboardPage() {
     try {
       const walletRaw = localStorage.getItem(walletHistoryKey);
       if (walletRaw) {
-        const parsed = JSON.parse(walletRaw) as ScanHistoryEntry[];
-        setScanHistory(Array.isArray(parsed) ? parsed.slice(0, 15) : []);
+        const parsed = JSON.parse(walletRaw) as unknown;
+        const normalized = normalizeScanHistoryEntries(parsed);
+        setScanHistory(normalized);
+        try {
+          if (JSON.stringify(normalized) !== walletRaw) {
+            localStorage.setItem(walletHistoryKey, JSON.stringify(normalized));
+          }
+        } catch {
+          /* ignore quota / private mode */
+        }
         return;
       }
 
       // One-time migration from legacy global key.
       const legacyRaw = localStorage.getItem(SCAN_HISTORY_KEY);
       if (legacyRaw) {
-        const parsedLegacy = JSON.parse(legacyRaw) as ScanHistoryEntry[];
-        const migrated = Array.isArray(parsedLegacy) ? parsedLegacy.slice(0, 15) : [];
+        const migrated = normalizeScanHistoryEntries(JSON.parse(legacyRaw) as unknown);
         localStorage.setItem(walletHistoryKey, JSON.stringify(migrated));
         setScanHistory(migrated);
         return;
@@ -509,11 +563,19 @@ export default function DashboardPage() {
     }
   };
 
-  const mostRecentFindings = effectiveConnected
-    ? findings.length > 0
-      ? findings
-      : (scanHistory[0]?.findings ?? [])
-    : [];
+  const mostRecentFindings = useMemo(() => {
+    if (!effectiveConnected) return [];
+    if (findings.length > 0) return findings;
+    const stored = scanHistory[0]?.findings;
+    return Array.isArray(stored) ? stored : [];
+  }, [effectiveConnected, findings, scanHistory]);
+
+  const displayScanMetadataForFindings = useMemo((): MintScanData | null => {
+    if (latestScanData) return latestScanData;
+    const first = scanHistory[0];
+    if (!first) return null;
+    return mintDataFromHistoryEntry(first);
+  }, [latestScanData, scanHistory]);
 
   const saveCompletedScanToHistory = (scanData: MintScanData, scanFindings: Finding[]) => {
     const walletHistoryKey = getWalletHistoryKey(address);
@@ -1228,9 +1290,14 @@ export default function DashboardPage() {
           {activeTab === "findings" ? (
             <FindingsTab
               findings={mostRecentFindings}
-              latestScanData={latestScanData}
+              latestScanData={displayScanMetadataForFindings}
               hasScanData={mostRecentFindings.length > 0}
               canView={effectiveConnected}
+              historyHasSummaryButNoStoredFindings={
+                effectiveConnected &&
+                scanHistory.length > 0 &&
+                mostRecentFindings.length === 0
+              }
             />
           ) : null}
           {activeTab === "history" ? (
@@ -1794,11 +1861,14 @@ function FindingsTab({
   latestScanData,
   hasScanData,
   canView,
+  historyHasSummaryButNoStoredFindings = false,
 }: {
   findings: Finding[];
   latestScanData: MintScanData | null;
   hasScanData: boolean;
   canView: boolean;
+  /** Older local history entries may lack per-finding rows; show a clearer empty state. */
+  historyHasSummaryButNoStoredFindings?: boolean;
 }) {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1842,7 +1912,7 @@ function FindingsTab({
 
   return (
     <section className={`${panelClass} flex min-w-0 max-w-full flex-col overflow-visible md:h-full md:min-h-0 md:overflow-hidden`}>
-      <div className="min-w-0 max-w-full flex flex-1 flex-col overflow-visible px-5 pb-8 pt-5 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden md:px-6 md:pb-8 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="min-w-0 max-w-full flex flex-1 flex-col overflow-visible px-5 pb-[max(2rem,calc(env(safe-area-inset-bottom,0px)+5rem))] pt-5 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden md:px-6 md:pb-8 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="mb-8 min-w-0 max-w-full md:mb-6">
           <h2 className="break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:text-3xl">
             Security Findings
@@ -1866,7 +1936,11 @@ function FindingsTab({
         ) : !hasScanData ? (
           <div className="flex min-h-[clamp(280px,46vh,620px)] flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-[rgba(255,255,255,0.02)] px-6 py-16 text-center">
             <Shield className="mb-4 h-12 w-12 text-[#4A475C]" strokeWidth={1.25} />
-            <p className="max-w-sm font-mono text-sm text-[#9B99B0]">Run a scan to see findings</p>
+            <p className="max-w-sm font-mono text-sm text-[#9B99B0]">
+              {historyHasSummaryButNoStoredFindings
+                ? "This browser has past scan summaries without stored finding details. Run a new scan to list issues here."
+                : "Run a scan to see findings"}
+            </p>
           </div>
         ) : (
           <>
@@ -1962,7 +2036,7 @@ function HistoryTab({
   );
 
   return (
-    <section className={`${panelClass} min-w-0 max-w-full overflow-visible px-5 pb-10 pt-5 md:h-full md:min-h-0 md:overflow-x-hidden md:overflow-y-auto md:px-6 md:pb-8 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
+    <section className={`${panelClass} min-w-0 max-w-full overflow-visible px-5 pb-[max(2.5rem,calc(env(safe-area-inset-bottom,0px)+5.5rem))] pt-5 md:h-full md:min-h-0 md:overflow-x-hidden md:overflow-y-auto md:px-6 md:pb-8 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
       <h2 className="mb-8 break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Scan history</h2>
       {!canView ? (
         <div className="flex min-h-[clamp(240px,36vh,420px)] items-center rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 text-sm text-[#9B99B0]">
