@@ -993,9 +993,9 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4 pb-2 pt-4 md:px-3 md:pb-2 md:pt-3">
-          <div className={`${panelClass} sticky top-0 z-10 mb-4 max-w-full shrink-0 overflow-hidden p-4 md:mb-3 md:p-3`}>
+      <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-visible md:overflow-hidden">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-visible px-4 pb-2 pt-4 md:overflow-hidden md:px-3 md:pb-2 md:pt-3">
+          <div className={`${panelClass} sticky top-0 z-10 mb-4 max-w-full shrink-0 overflow-visible p-4 md:mb-3 md:overflow-hidden md:p-3`}>
             {effectiveConnected && creditsContractConfigured && creditsReadFailed ? (
               <div className="mb-3 rounded-lg border border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.08)] p-3">
                 <p className="font-mono text-[11px] text-[#FCA5A5]">{creditsError}</p>
@@ -1094,7 +1094,7 @@ export default function DashboardPage() {
             ) : null}
             {scanCompleted && latestScanData && !hasMinted ? (
               <div
-                className="mt-3 rounded-xl border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.1)] px-4 py-3 text-[#E6DBFF]"
+                className="mt-3 w-full rounded-xl border border-[rgba(167,139,250,0.45)] bg-[rgba(124,58,237,0.2)] px-4 py-3 text-[#E6DBFF] shadow-[0_0_22px_rgba(124,58,237,0.35)]"
                 style={{ animation: "borderPulse 2s ease-in-out infinite" }}
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1113,7 +1113,7 @@ export default function DashboardPage() {
                         mintStatus === "minting" ||
                         !effectiveConnected
                       }
-                      className="rounded-full border border-[rgba(167,139,250,0.55)] bg-[rgba(124,58,237,0.45)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-white shadow-[0_0_18px_rgba(124,58,237,0.5)] transition disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-full border border-[rgba(167,139,250,0.55)] bg-[rgba(124,58,237,0.55)] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-white shadow-[0_0_18px_rgba(124,58,237,0.5)] transition disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                       style={{ animation: "glowBreath 2.4s ease-in-out infinite" }}
                     >
                       {mintStatus === "awaiting_wallet"
@@ -1187,10 +1187,10 @@ export default function DashboardPage() {
             ) : null}
           </div>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-visible md:overflow-hidden">
           {activeTab === "scanner" ? (
             <div
-              className={`grid h-full min-h-0 min-w-0 flex-1 auto-rows-[minmax(0,1fr)] grid-cols-1 gap-4 overflow-hidden md:gap-3 lg:grid-cols-[1.2fr_0.9fr_280px] ${
+              className={`grid min-h-0 min-w-0 flex-1 auto-rows-[auto] grid-cols-1 gap-4 overflow-visible md:h-full md:auto-rows-[minmax(0,1fr)] md:overflow-hidden md:gap-3 lg:grid-cols-[1.2fr_0.9fr_280px] ${
                 isScanning
                   ? "rounded-2xl border border-transparent bg-[linear-gradient(rgba(0,0,0,0.75),rgba(0,0,0,0.75))_padding-box,linear-gradient(120deg,#A78BFA,#7C3AED,#EC4899)_border-box] p-[1px] animate-pulse"
                   : ""
@@ -1198,7 +1198,6 @@ export default function DashboardPage() {
             >
               <LiveScanFeed findings={findings} notices={scanNotices} isScanning={isScanning} />
               <ScanStatus
-                className="max-md:hidden"
                 currentFile={currentFile}
                 scannedFiles={scannedFiles}
                 totalFiles={totalFiles}
@@ -1467,7 +1466,7 @@ function LiveScanFeed({
   isScanning: boolean;
 }) {
   return (
-    <section className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']">
+    <section className="relative flex min-w-0 flex-col overflow-visible rounded-2xl border border-white/10 bg-[rgba(0,0,0,0.4)] shadow-[0_10px_30px_rgba(14,10,30,0.45)] backdrop-blur-[20px] md:h-full md:min-h-0 md:overflow-hidden before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:content-['']">
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5 sm:px-5">
         <div className="flex items-center gap-2">
           <ScanSearch className="h-4 w-4 text-[#7C3AED]" />
@@ -1485,7 +1484,7 @@ function LiveScanFeed({
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 pb-24 sm:p-5 sm:pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="flex-1 space-y-4 overflow-visible p-4 pb-6 sm:p-5 sm:pb-8 md:min-h-0 md:overflow-y-auto md:pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.4)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.4)] [&::-webkit-scrollbar-track]:bg-transparent">
         {notices.map((notice) => (
           <div
             key={notice.id}
@@ -1621,14 +1620,14 @@ function ScanStatus({
     .toString()
     .padStart(2, "0")}:${(elapsedSeconds % 60).toString().padStart(2, "0")}`;
   return (
-    <section className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-hidden ${className ?? ""}`}>
+    <section className={`${panelClass} flex min-w-0 flex-col overflow-visible md:h-full md:min-h-0 md:overflow-hidden ${className ?? ""}`}>
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5 sm:px-5">
         <h3 className="text-[15px] font-semibold text-[#F0EEF8] sm:text-base">Scan Status</h3>
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
           {isScanning ? "Running" : scanCompleted ? "Complete" : "Waiting"}
         </span>
       </div>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 pb-24 sm:p-5 sm:pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+      <div className="flex-1 space-y-5 overflow-visible p-4 pb-6 sm:p-5 sm:pb-8 md:min-h-0 md:overflow-y-auto md:pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#9B99B0]">
             Time
@@ -1700,8 +1699,8 @@ function RightPanelSummary({
   mintedTokenId: string | null;
 }) {
   return (
-    <aside className={`${panelClass} hidden h-full min-h-0 min-w-0 flex-col overflow-hidden xl:flex`}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+    <aside className={`${panelClass} flex min-w-0 flex-col overflow-visible md:h-full md:min-h-0 md:overflow-hidden`}>
+      <div className="flex flex-1 flex-col overflow-visible md:min-h-0 md:overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="shrink-0 border-b border-white/10 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
@@ -1834,8 +1833,8 @@ function FindingsTab({
   const scanWhen = latestScanData?.scanDate ? formatScanDate(latestScanData.scanDate) : "";
 
   return (
-    <section className={`${panelClass} flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden`}>
-      <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden px-5 pb-24 pt-5 md:px-6 md:pb-28 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
+    <section className={`${panelClass} flex min-w-0 max-w-full flex-col overflow-visible md:h-full md:min-h-0 md:overflow-hidden`}>
+      <div className="min-w-0 max-w-full flex-1 overflow-visible px-5 pb-6 pt-5 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden md:px-6 md:pb-28 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="mb-8 min-w-0 max-w-full md:mb-6">
           <h2 className="break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:text-3xl">
             Security Findings
@@ -1955,7 +1954,7 @@ function HistoryTab({
   );
 
   return (
-    <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-5 pb-24 pt-5 md:px-6 md:pb-28 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
+    <section className={`${panelClass} min-w-0 max-w-full overflow-visible px-5 pb-6 pt-5 md:h-full md:min-h-0 md:overflow-x-hidden md:overflow-y-auto md:px-6 md:pb-28 md:pt-6 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent]`}>
       <h2 className="mb-8 break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Scan history</h2>
       {!canView ? (
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 text-sm text-[#9B99B0]">
@@ -2071,7 +2070,7 @@ function SettingsTab({
     creditsAddr.length > 0 ? `${explorerBase}/address/${creditsAddr}` : "";
 
   return (
-    <section className={`${panelClass} h-full min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-5 pb-24 pt-5 md:px-6 md:pb-28 md:pt-6`}>
+    <section className={`${panelClass} min-w-0 max-w-full overflow-visible px-5 pb-6 pt-5 md:h-full md:min-h-0 md:overflow-x-hidden md:overflow-y-auto md:px-6 md:pb-28 md:pt-6`}>
       <h2 className="mb-8 break-words font-geist text-[22px] font-bold leading-tight tracking-tight text-[#F0EEF8] sm:text-2xl md:mb-6">Settings</h2>
 
       <div className="mb-8 rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-5 md:mb-6 md:p-4">
