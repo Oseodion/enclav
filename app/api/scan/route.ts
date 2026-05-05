@@ -284,10 +284,6 @@ function createSequentialTaskRunner() {
   };
 }
 
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function parseRepoUrl(repoUrl: string) {
   try {
     const url = new URL(repoUrl);
@@ -615,7 +611,7 @@ export async function POST(request: Request) {
               try {
                 await uploadFile(decodedContent, filePath, signer);
               } catch (error) {
-                const message = toErrorMessage(error);
+                const message = error instanceof Error ? error.message : String(error);
                 if (
                   message.toLowerCase().includes("upload timed out") &&
                   message.toLowerCase().includes("stored locally")
@@ -675,6 +671,18 @@ export async function POST(request: Request) {
           } catch (error) {
             const message =
               error instanceof Error ? error.message : "Chunk scan failed.";
+            const lowerMessage = message.toLowerCase();
+            const isChunkTimeout =
+              lowerMessage.includes("compute scan for chunk") &&
+              lowerMessage.includes("timed out");
+            if (isChunkTimeout) {
+              failedFiles += inputs.length;
+              processedFiles += inputs.length;
+              console.warn("[scan] chunk timed out; skipping chunk", {
+                chunkPaths: inputs.map((input) => input.path),
+              });
+              continue;
+            }
             for (const input of inputs) {
               failedFiles += 1;
               processedFiles += 1;

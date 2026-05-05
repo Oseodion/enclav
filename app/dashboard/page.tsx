@@ -412,8 +412,10 @@ export default function DashboardPage() {
 
   const progressPercent =
     totalFiles > 0 ? Math.round((scannedFiles / totalFiles) * 100) : 0;
+  const estimatedSeconds =
+    totalFiles > 0 ? Math.round((totalFiles / 3) * 45 + 30) : null;
   const estimatedMinutes =
-    totalFiles > 0 ? Math.max(1, Math.round((totalFiles * 12) / 60)) : null;
+    estimatedSeconds !== null ? Math.max(1, Math.round(estimatedSeconds / 60)) : null;
 
   useEffect(() => {
     if (!isScanning) {
@@ -666,13 +668,6 @@ export default function DashboardPage() {
             | { type: "notice"; message: string };
 
           if (event.type === "notice") {
-            const lowerNotice = event.message.toLowerCase();
-            const isStorageNotice =
-              lowerNotice.includes("0g storage") ||
-              lowerNotice.includes("stored locally") ||
-              lowerNotice.includes("summary report upload") ||
-              lowerNotice.includes("long-context memory upload");
-            if (isStorageNotice) continue;
             setScanNotices((prev) => [
               {
                 id: `notice-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -731,13 +726,6 @@ export default function DashboardPage() {
 
           if (event.type === "error") {
             const lowerMessage = event.message.toLowerCase();
-            const isStorageError =
-              lowerMessage.includes("0g storage") ||
-              lowerMessage.includes("stored locally") ||
-              lowerMessage.includes("summary report upload") ||
-              lowerMessage.includes("long-context memory upload") ||
-              lowerMessage.includes("failed to store summary report");
-            if (isStorageError) continue;
             const isRateLimitNotice =
               event.message.includes(":") &&
               (lowerMessage.includes("rate") ||
@@ -1506,11 +1494,6 @@ function LiveScanFeed({
                 ? "break-words px-1 py-1 font-mono text-[10px] leading-snug text-[#9B99B0]"
                 : "break-words rounded-md border border-white/5 bg-[rgba(255,255,255,0.02)] px-3 py-2 font-mono text-[10px] text-[#2E2C3E]"
             }
-            title={
-              notice.message.includes("timed out")
-                ? "Storage uploads may timeout on testnet - this does not affect scan results"
-                : undefined
-            }
           >
             {notice.message}
           </div>
@@ -1651,7 +1634,8 @@ function ScanStatus({
             Time
           </p>
           <p className="font-mono text-xs text-[#F0EEF8]">
-            {estimatedMinutes ? `Est. ~${estimatedMinutes} min` : "Est. ~—"} · Elapsed {elapsedLabel}
+            {estimatedMinutes ? `Est. ~${estimatedMinutes} min` : "Estimating..."} · Elapsed{" "}
+            {elapsedLabel}
           </p>
         </div>
         <div className="rounded-xl border border-white/10 bg-[rgba(255,255,255,0.04)] p-3">

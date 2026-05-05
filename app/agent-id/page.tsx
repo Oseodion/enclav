@@ -10,7 +10,6 @@ import {
   Lock,
   Menu,
   Orbit,
-  SendHorizontal,
   X,
 } from "lucide-react";
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -55,7 +54,7 @@ type CertificateData = {
   txHash: string;
 };
 
-type CopyTarget = "contract" | "owner" | "hash" | null;
+type CopyTarget = "contract" | "owner" | "hash" | "share" | null;
 const SCAN_HISTORY_KEY = "enclav-scan-history-v1";
 const getWalletHistoryKey = (walletAddress?: string) =>
   walletAddress ? `${SCAN_HISTORY_KEY}:${walletAddress.toLowerCase()}` : null;
@@ -288,8 +287,12 @@ function AgentIdPageContent() {
   const txExplorerHref = certificate?.txHash ?? storedTxHash
     ? `${explorerBase}/tx/${certificate?.txHash ?? storedTxHash}`
     : null;
+  const appBaseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
   const tokenMetadataHref = certificate?.tokenId
-    ? `/api/inft-metadata/${certificate.tokenId}`
+    ? `${appBaseUrl}/api/inft-metadata/${certificate.tokenId}`
+    : null;
+  const certificateShareHref = certificate?.tokenId
+    ? `${appBaseUrl}/agent-id?tokenId=${certificate.tokenId}`
     : null;
   const hasCertificate = Boolean(certificate);
   const dynamicCapabilityTags = hasCertificate
@@ -439,11 +442,16 @@ function AgentIdPageContent() {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  title="Transfer functionality coming soon"
+                  onClick={() => {
+                    if (certificateShareHref) {
+                      void copyValue("share", certificateShareHref);
+                    }
+                  }}
+                  disabled={!certificateShareHref}
                   className="glass-blur-sm flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-purple-bright/30 bg-purple/35 px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.06em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition hover:-translate-y-[1px] hover:bg-purple/50"
                 >
-                  <SendHorizontal className="h-3.5 w-3.5" />
-                  Transfer
+                  <Copy className="h-3.5 w-3.5" />
+                  {copied === "share" ? "Link copied!" : "Share Certificate"}
                 </button>
                 <a
                   href={txExplorerHref ?? "#"}
