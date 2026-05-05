@@ -295,7 +295,6 @@ export default function DashboardPage() {
   const [scanHistory, setScanHistory] = useState<ScanHistoryEntry[]>([]);
   const [scannedFiles, setScannedFiles] = useState(0);
   const [totalFiles, setTotalFiles] = useState(0);
-  const [scanStartedAtMs, setScanStartedAtMs] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [mintedTokenId, setMintedTokenId] = useState<string | null>(null);
   const [hasMinted, setHasMinted] = useState(false);
@@ -417,17 +416,15 @@ export default function DashboardPage() {
     totalFiles > 0 ? Math.max(1, Math.round((totalFiles * 12) / 60)) : null;
 
   useEffect(() => {
-    if (!isScanning || !scanStartedAtMs) {
+    if (!isScanning) {
       setElapsedSeconds(0);
       return;
     }
-    const tick = () => {
-      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - scanStartedAtMs) / 1000)));
-    };
-    tick();
-    const id = setInterval(tick, 1000);
+    const id = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
     return () => clearInterval(id);
-  }, [isScanning, scanStartedAtMs]);
+  }, [isScanning]);
 
   const needsCreditsDeposit =
     effectiveConnected &&
@@ -570,7 +567,6 @@ export default function DashboardPage() {
     setMintStatusMessage(null);
     setCurrentFile("Initializing scanner...");
     setScanLogs(["Repository queued. Starting autonomous scan..."]);
-    setScanStartedAtMs(Date.now());
     setElapsedSeconds(0);
     setIsScanning(true);
 
@@ -670,6 +666,13 @@ export default function DashboardPage() {
             | { type: "notice"; message: string };
 
           if (event.type === "notice") {
+            const lowerNotice = event.message.toLowerCase();
+            const isStorageNotice =
+              lowerNotice.includes("0g storage") ||
+              lowerNotice.includes("stored locally") ||
+              lowerNotice.includes("summary report upload") ||
+              lowerNotice.includes("long-context memory upload");
+            if (isStorageNotice) continue;
             setScanNotices((prev) => [
               {
                 id: `notice-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -728,20 +731,23 @@ export default function DashboardPage() {
 
           if (event.type === "error") {
             const lowerMessage = event.message.toLowerCase();
-            const isTimeoutNotice =
-              event.message.includes(":") && lowerMessage.includes("timed out");
+            const isStorageError =
+              lowerMessage.includes("0g storage") ||
+              lowerMessage.includes("stored locally") ||
+              lowerMessage.includes("summary report upload") ||
+              lowerMessage.includes("long-context memory upload") ||
+              lowerMessage.includes("failed to store summary report");
+            if (isStorageError) continue;
             const isRateLimitNotice =
               event.message.includes(":") &&
               (lowerMessage.includes("rate") ||
                 event.message.includes("Scan failed for this file"));
-            if (isTimeoutNotice || isRateLimitNotice) {
+            if (isRateLimitNotice) {
               const [filePath] = event.message.split(":");
               setScanNotices((prev) => [
                 {
                   id: `${Date.now()}-${filePath}`,
-                  message: isTimeoutNotice
-                    ? `${filePath} - upload timed out, stored locally — blockchain confirmation pending`
-                    : `⚠ ${filePath} - rate limited, skipped`,
+                  message: `⚠ ${filePath} - rate limited, skipped`,
                 },
                 ...prev.slice(0, 8),
               ]);
@@ -758,7 +764,6 @@ export default function DashboardPage() {
       setScanLogs((prev) => [`Scan failed: ${message}`, ...prev.slice(0, 6)]);
     } finally {
       setIsScanning(false);
-      setScanStartedAtMs(null);
     }
   };
 

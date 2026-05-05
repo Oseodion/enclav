@@ -611,10 +611,6 @@ export async function POST(request: Request) {
                 ? Buffer.from(blobJson.content.replace(/\n/g, ""), "base64").toString("utf8")
                 : blobJson.content;
 
-            streamChunk(controller, {
-              type: "notice",
-              message: `${filePath}: Uploading to 0G Storage...`,
-            });
             const backgroundUpload = runStorageUploadSequentially(async () => {
               try {
                 await uploadFile(decodedContent, filePath, signer);
@@ -624,16 +620,12 @@ export async function POST(request: Request) {
                   message.toLowerCase().includes("upload timed out") &&
                   message.toLowerCase().includes("stored locally")
                 ) {
-                  streamChunk(controller, {
-                    type: "error",
-                    message: `${filePath}: upload timed out — stored locally — blockchain confirmation pending`,
-                  });
+                  console.warn(
+                    `[storage] ${filePath}: upload timed out — stored locally — blockchain confirmation pending`,
+                  );
                   return;
                 }
-                streamChunk(controller, {
-                  type: "notice",
-                  message: `${filePath}: 0G Storage upload pending (${message})`,
-                });
+                console.warn(`[storage] ${filePath}: 0G Storage upload pending (${message})`);
               }
             });
             backgroundUploads.push(backgroundUpload);
@@ -753,7 +745,7 @@ export async function POST(request: Request) {
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "Failed to store summary report.";
-          streamChunk(controller, { type: "error", message });
+          console.error("[storage] failed to store summary report", message);
         }
 
         if (scanFiles.length > 0 && deployerPrivateKey && !skipBilling) {
@@ -774,10 +766,7 @@ export async function POST(request: Request) {
         }
 
         if (backgroundUploads.length > 0) {
-          streamChunk(controller, {
-            type: "notice",
-            message: `Background 0G Storage uploads running: ${backgroundUploads.length}`,
-          });
+          console.log(`[storage] background uploads running: ${backgroundUploads.length}`);
         }
 
         const severityCounts = aggregatedFindings.reduce(
