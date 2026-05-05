@@ -873,7 +873,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-x-hidden overflow-y-visible bg-black pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] md:pb-0 font-geist text-[#F0EEF8]">
+    <main className="relative flex min-h-dvh h-[100dvh] flex-col overflow-x-hidden overflow-y-visible bg-black pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] font-geist text-[#F0EEF8]">
       <AmbientGlow />
       <header className="relative z-10 flex min-h-[56px] shrink-0 items-center border-b border-white/10 bg-black/80 px-4 backdrop-blur-[24px] overflow-visible sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
@@ -1268,8 +1268,8 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <div className="relative z-[30] mt-4 px-4 pb-4 pt-2 md:sticky md:bottom-0 md:left-0 md:right-0 md:mt-auto md:px-3 md:pb-3">
-        <div className="relative mx-auto w-full max-w-[calc(100vw-2rem)] md:max-w-none">
+      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-[30] px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] pt-2 md:px-3 md:pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)]">
+        <div className="pointer-events-none relative mx-auto w-full max-w-[calc(100vw-2rem)] md:max-w-none">
           {isScanning && !scanNoticeDismissed ? (
             <div
               className="pointer-events-auto absolute bottom-full left-1/2 z-[20] mb-2 w-[min(100%,24rem)] -translate-x-1/2"
