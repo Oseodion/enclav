@@ -300,6 +300,7 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   console.log("[scan] starting scan on", process.env.NODE_ENV, "host:", request.headers.get("host"));
+  console.log(`[scan] MAX_SCAN_FILES: ${MAX_SCAN_FILES}`);
   const body = (await request.json()) as ScanRequestBody;
   const repoUrl = body.repoUrl?.trim();
   const walletAddress = body.walletAddress?.trim();

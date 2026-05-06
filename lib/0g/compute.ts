@@ -388,9 +388,19 @@ export async function initializeComputeAccount(
   const getAccount = ledgerApi.getAccount;
   if (getAccount) {
     try {
-      await getAccount(walletAddress, configuredProvider);
+      const account = await getAccount(walletAddress, configuredProvider);
+      console.log("[compute] getAccount existing sub-account response", {
+        walletAddress,
+        provider: configuredProvider,
+        account,
+      });
       return;
     } catch (error) {
+      console.log("[compute] getAccount threw while checking sub-account", {
+        walletAddress,
+        provider: configuredProvider,
+        error,
+      });
       const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
       const missingAccount =
         message.includes("does not exist") ||
