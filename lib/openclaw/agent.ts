@@ -94,6 +94,12 @@ export async function runSecurityScan(
     options.chunkSize !== undefined && options.chunkSize > 0 ? options.chunkSize : 3;
   const results: OpenClawScanResult[] = [];
   const computeProviders = options.computeProviders;
+  console.log("[openclaw] runSecurityScan starting", {
+    repoUrl,
+    fileCount: fileContents.length,
+    files: fileContents.map((f) => f.path),
+    chunkSize,
+  });
 
   for (let i = 0; i < fileContents.length; i += chunkSize) {
     const chunk = fileContents.slice(i, i + chunkSize);

@@ -242,7 +242,7 @@ const GITHUB_REPO_URL_PATTERN =
 const encoder = new TextEncoder();
 /** One TeeML call may include multiple files — allow extra wall time. */
 const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 45_000;
-const INFERENCE_CHUNK_SIZE = 15;
+const INFERENCE_CHUNK_SIZE = 3;
 const CHUNK_INFERENCE_DELAY_MS = 8_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));

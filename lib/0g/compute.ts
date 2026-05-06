@@ -639,6 +639,7 @@ export async function scanChunkForVulnerabilities(
   const userContent = buildChunkUserContent(files);
 
   try {
+    console.log("[compute] about to call inference for chunk with files:", chunkPaths);
     const { providerAddress } = getEnv();
     const ordered = orderProvidersForRotation(providers, providerAddress);
     const { rawContent, attestationHash } = await executeSecurityScanWithProviderRotation(
@@ -647,6 +648,7 @@ export async function scanChunkForVulnerabilities(
       systemContent,
       userContent,
     );
+    console.log("[compute] raw inference response string", rawContent);
     if ((options?.chunkIndex ?? 0) === 1) {
       console.log("[compute] first chunk raw inference response", {
         attestationHash,
@@ -679,6 +681,10 @@ export async function scanChunkForVulnerabilities(
 
     return { findings, attestationHash };
   } catch (error) {
+    console.error("[compute] scanChunkForVulnerabilities error details", {
+      paths: chunkPaths,
+      error,
+    });
     console.error("0G compute chunk scan failed", { paths: chunkPaths, error });
     throw new Error("Scan failed for this file - continuing");
   }
