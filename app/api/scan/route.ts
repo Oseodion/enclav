@@ -27,6 +27,12 @@ import { resolveOgRpcUrl } from "@/lib/og-env";
 
 export const dynamic = "force-dynamic";
 
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 type ScanRequestBody = {
   repoUrl?: string;
   walletAddress?: string;
@@ -167,21 +173,6 @@ function isHighRiskFolderPath(relativePath: string): boolean {
   return false;
 }
 
-function formatTier1KeywordLabel(kw: string): string {
-  if (kw === "contract") return "contracts";
-  return kw;
-}
-
-function describeHighTierLocation(paths: string[]): string {
-  if (paths.length === 0) return "in application folders";
-  const lowerPaths = paths.map((p) => p.toLowerCase());
-  const apiLike = lowerPaths.filter(
-    (p) => p.includes("/api/") || p.startsWith("api/"),
-  );
-  if (apiLike.length >= Math.ceil(paths.length * 0.5)) return "in API routes";
-  return "in application folders (src, app, pages, routes)";
-}
-
 /** Prefer api/routes/controllers paths when tier 2 must be capped. */
 function highTierPathPriorityScore(relativePath: string): number {
   const lower = relativePath.toLowerCase();
@@ -290,7 +281,25 @@ function streamChunk(controller: ReadableStreamDefaultController<Uint8Array>, ch
   controller.enqueue(encoder.encode(`${JSON.stringify(chunk)}\n`));
 }
 
+function jsonResponse(body: Record<string, unknown>, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...CORS_HEADERS,
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
 export async function POST(request: Request) {
+  console.log("[scan] starting scan on", process.env.NODE_ENV, "host:", request.headers.get("host"));
   const body = (await request.json()) as ScanRequestBody;
   const repoUrl = body.repoUrl?.trim();
   const walletAddress = body.walletAddress?.trim();
@@ -302,92 +311,62 @@ export async function POST(request: Request) {
   };
 
   if (!repoUrl || !walletAddress) {
-    return new Response(
-      JSON.stringify({ error: "repoUrl and walletAddress are required." }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ error: "repoUrl and walletAddress are required." }, 400);
   }
 
   if (!GITHUB_REPO_URL_PATTERN.test(repoUrl)) {
-    return new Response(
-      JSON.stringify({ error: "Please enter a valid public GitHub repository URL" }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ error: "Please enter a valid public GitHub repository URL" }, 400);
   }
 
   if (!deployerPrivateKey) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "DEPLOYER_PRIVATE_KEY is required and must be a valid 0x-prefixed private key.",
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      error:
+        "DEPLOYER_PRIVATE_KEY is required and must be a valid 0x-prefixed private key.",
+    }, 500);
   }
 
   if (!deployerPrivateKey.startsWith("0x") || deployerPrivateKey.length < 60) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "Invalid DEPLOYER_PRIVATE_KEY format. Expected a 0x-prefixed key with at least 60 characters.",
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      error:
+        "Invalid DEPLOYER_PRIVATE_KEY format. Expected a 0x-prefixed key with at least 60 characters.",
+    }, 500);
   }
 
   const creditsContract = getCreditsContractAddress();
   if (!creditsContract) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "Credits contract is not configured. Set CREDITS_CONTRACT_ADDRESS or NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS.",
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      error:
+        "Credits contract is not configured. Set CREDITS_CONTRACT_ADDRESS or NEXT_PUBLIC_CREDITS_CONTRACT_ADDRESS.",
+    }, 500);
   }
 
   if (!ethers.isAddress(walletAddress)) {
-    return new Response(JSON.stringify({ error: "Invalid walletAddress." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Invalid walletAddress." }, 400);
   }
 
   let normalizedWallet: string;
   try {
     normalizedWallet = ethers.getAddress(walletAddress);
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid walletAddress." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Invalid walletAddress." }, 400);
   }
 
   try {
     const creditBalance = await getCreditsBalance(normalizedWallet);
     if (creditBalance < SCAN_CREDIT_COST_WEI) {
-      return new Response(
-        JSON.stringify({
-          error: "Insufficient scan credits — add credits to continue",
-        }),
-        { status: 402, headers: { "Content-Type": "application/json" } },
-      );
+      return jsonResponse({
+        error: "Insufficient scan credits — add credits to continue",
+      }, 402);
     }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to read scan credit balance.";
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: message }, 500);
   }
 
   const parsedRepo = parseRepoUrl(repoUrl);
   if (!parsedRepo) {
-    return new Response(JSON.stringify({ error: "Invalid GitHub repository URL." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Invalid GitHub repository URL." }, 400);
   }
 
   const { owner, repo } = parsedRepo;
@@ -397,31 +376,22 @@ export async function POST(request: Request) {
   );
 
   if (treeRes.status === 404) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded - try again in a few minutes.",
-      }),
-      { status: 404, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      error:
+        "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded - try again in a few minutes.",
+    }, 404);
   }
 
   if (treeRes.status === 403) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded - try again in a few minutes.",
-      }),
-      { status: 403, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      error:
+        "Unable to access repository. If it's private, it's not supported. If public, GitHub API rate limit may be exceeded - try again in a few minutes.",
+    }, 403);
   }
 
   if (!treeRes.ok) {
     const detail = await treeRes.text();
-    return new Response(
-      JSON.stringify({ error: `Failed to fetch repository tree: ${detail}` }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ error: `Failed to fetch repository tree: ${detail}` }, 500);
   }
 
   const treeJson = (await treeRes.json()) as {
@@ -448,10 +418,6 @@ export async function POST(request: Request) {
   }) as GithubBlobFile[];
 
   const {
-    tier1Critical,
-    tier2HighPool,
-    tier2Capped,
-    tier3Skipped,
     scanQueue: fullScanQueue,
   } = partitionRepoFilesForScan(files);
   const scanFiles = fullScanQueue.slice(0, MAX_SCAN_FILES);
@@ -469,8 +435,15 @@ export async function POST(request: Request) {
       try {
         const provider = new ethers.JsonRpcProvider(resolveOgRpcUrl());
         const signer = new ethers.Wallet(deployerPrivateKey, provider);
-        const broker = await createBroker(signer);
-        let computeProviders = await listComputeProviders(broker);
+        let broker: Awaited<ReturnType<typeof createBroker>>;
+        let computeProviders: string[] = [];
+        try {
+          broker = await createBroker(signer);
+          computeProviders = await listComputeProviders(broker);
+        } catch (error) {
+          console.error("[scan] compute broker setup failed", error);
+          throw error;
+        }
         const envPreferred =
           (process.env.ZERO_G_COMPUTE_PROVIDER ??
             process.env.OG_COMPUTE_PROVIDER ??
@@ -512,45 +485,10 @@ export async function POST(request: Request) {
           }
         }
 
-        const uniqueTier1Labels = new Set<string>();
-        for (const f of tier1Critical) {
-          for (const kw of tier1KeywordsMatchedInBasename(f.path)) {
-            uniqueTier1Labels.add(formatTier1KeywordLabel(kw));
-          }
-        }
-        const tier1LabelStr = [...uniqueTier1Labels].sort().join(", ");
-
-        if (tier1Critical.length > 0) {
-          const labelPart = tier1LabelStr ? ` (${tier1LabelStr})` : "";
-          streamChunk(controller, {
-            type: "notice",
-            message: `Found ${tier1Critical.length} critical-risk file${tier1Critical.length === 1 ? "" : "s"}${labelPart} — scanning all`,
-          });
-        }
-
-        if (tier2HighPool.length > 0) {
-          const where = describeHighTierLocation(tier2HighPool.map((f) => f.path));
-          const scanVerb =
-            tier2Capped
-              ? `scanning ${MAX_HIGH_TIER_SCAN_FILES} highest-priority paths`
-              : "scanning all";
-          streamChunk(controller, {
-            type: "notice",
-            message: `Found ${tier2HighPool.length} high-risk file${tier2HighPool.length === 1 ? "" : "s"} ${where} — ${scanVerb}`,
-          });
-        }
-
-        if (tier3Skipped.length > 0) {
-          streamChunk(controller, {
-            type: "notice",
-            message: `Skipped ${tier3Skipped.length} low-risk utility file${tier3Skipped.length === 1 ? "" : "s"}`,
-          });
-        }
-
         if (scanFiles.length > 0) {
           streamChunk(controller, {
             type: "notice",
-            message: `Scanning ${MAX_SCAN_FILES} most security-critical files from ${files.length} total`,
+            message: `Scanning ${scanFiles.length} files from ${files.length} found in repo`,
           });
         }
 
@@ -788,6 +726,7 @@ export async function POST(request: Request) {
 
   return new Response(stream, {
     headers: {
+      ...CORS_HEADERS,
       "Content-Type": "application/x-ndjson; charset=utf-8",
       "Cache-Control": "no-cache",
       "X-Total-Files": String(scanFiles.length),
