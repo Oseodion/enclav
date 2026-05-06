@@ -241,9 +241,9 @@ const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
 /** One TeeML call may include multiple files — allow extra wall time. */
-const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 60_000;
-const INFERENCE_CHUNK_SIZE = 3;
-const CHUNK_INFERENCE_DELAY_MS = 8_000;
+const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 30_000;
+const INFERENCE_CHUNK_SIZE = 1;
+const CHUNK_INFERENCE_DELAY_MS = 5_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -572,6 +572,9 @@ export async function POST(request: Request) {
               processedFiles += 1;
               const uniqueForFile = deduplicateFindingsByFileLineIssue(result.findings);
               for (const finding of uniqueForFile) {
+                console.log(
+                  `[scan] streaming finding to UI: ${finding.severity} ${finding.file}`,
+                );
                 streamChunk(controller, {
                   type: "finding",
                   finding: {
