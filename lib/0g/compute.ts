@@ -252,9 +252,6 @@ export async function createBroker(signer: ethers.Signer) {
   }
 }
 
-/** Seed each listed inference provider sub-account from the main ledger (see SDK `transferFund`). */
-const INFERENCE_SUB_ACCOUNT_SEED_OG = "0.1";
-
 type InferenceLedgerApi = {
   getLedger: () => Promise<unknown>;
   addLedger: (amount: number, gasPrice?: number) => Promise<void>;
