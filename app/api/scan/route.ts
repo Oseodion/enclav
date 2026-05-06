@@ -241,7 +241,7 @@ const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
 /** One TeeML call may include multiple files — allow extra wall time. */
-const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 45_000;
+const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 60_000;
 const INFERENCE_CHUNK_SIZE = 3;
 const CHUNK_INFERENCE_DELAY_MS = 8_000;
 const sleep = (ms: number) =>
@@ -567,19 +567,11 @@ export async function POST(request: Request) {
               `Compute scan for chunk (${inputs.map((i) => i.path).join(", ")})`,
             );
 
+            // Stream findings immediately after each successful chunk inference call.
             for (const result of scanResults) {
               processedFiles += 1;
               const uniqueForFile = deduplicateFindingsByFileLineIssue(result.findings);
               for (const finding of uniqueForFile) {
-                totalFindings += 1;
-                aggregatedFindings.push({
-                  severity: finding.severity,
-                  file: finding.file,
-                  line: finding.line,
-                  issue: finding.issue,
-                  fix: finding.fix,
-                  attestationHash: result.attestationHash,
-                });
                 streamChunk(controller, {
                   type: "finding",
                   finding: {
@@ -589,6 +581,16 @@ export async function POST(request: Request) {
                     issue: finding.issue,
                     fix: finding.fix,
                   },
+                  attestationHash: result.attestationHash,
+                });
+
+                totalFindings += 1;
+                aggregatedFindings.push({
+                  severity: finding.severity,
+                  file: finding.file,
+                  line: finding.line,
+                  issue: finding.issue,
+                  fix: finding.fix,
                   attestationHash: result.attestationHash,
                 });
               }
