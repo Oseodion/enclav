@@ -25,8 +25,6 @@ import {
 import { downloadTextByRootHash, uploadFile } from "@/lib/0g/storage";
 import { resolveOgRpcUrl } from "@/lib/og-env";
 
-/** Vercel Hobby / free plan serverless function limit. */
-export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 type ScanRequestBody = {
@@ -129,8 +127,8 @@ const TIER1_FILENAME_KEYWORDS = [
 /** Tier 2 (high): paths under these folders; scan up to this many (tier 1 excluded). */
 const MAX_HIGH_TIER_SCAN_FILES = 5;
 
-/** Final cap: only the top N files from the prioritized queue (Vercel 60s window). */
-const MAX_SCAN_FILES = 5;
+/** Final cap: only the top N files from the prioritized queue. */
+const MAX_SCAN_FILES = 10;
 
 const HIGH_RISK_PATH_MARKERS = [
   "src/",
@@ -254,7 +252,7 @@ const encoder = new TextEncoder();
 /** One TeeML call may include multiple files — allow extra wall time. */
 const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 45_000;
 const INFERENCE_CHUNK_SIZE = 5;
-const CHUNK_INFERENCE_DELAY_MS = 3_000;
+const CHUNK_INFERENCE_DELAY_MS = 8_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
