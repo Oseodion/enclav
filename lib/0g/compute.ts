@@ -209,6 +209,8 @@ export function orderProvidersForRotation(
 }
 
 const RATE_LIMIT_FULL_ROTATION_BACKOFF_MS = 15_000;
+const AUTO_TOPUP_THRESHOLD_OG = "0.3";
+const AUTO_TOPUP_AMOUNT_OG = "0.5";
 
 export class ComputeHttpError extends Error {
   constructor(
@@ -267,6 +269,69 @@ type InferenceLedgerApi = {
     gasPrice?: number,
   ) => Promise<void>;
 };
+
+function readBalanceFromAccountPayload(accountPayload: unknown): bigint | null {
+  if (typeof accountPayload === "bigint") return accountPayload;
+  if (typeof accountPayload === "number" && Number.isFinite(accountPayload)) {
+    return BigInt(Math.trunc(accountPayload));
+  }
+  if (typeof accountPayload === "string") {
+    const t = accountPayload.trim();
+    if (/^\d+$/.test(t)) return BigInt(t);
+    return null;
+  }
+  if (typeof accountPayload !== "object" || accountPayload === null) {
+    return null;
+  }
+  const obj = accountPayload as Record<string, unknown>;
+  const candidateKeys = [
+    "balance",
+    "availableBalance",
+    "totalBalance",
+    "freeBalance",
+    "amount",
+    "credit",
+  ];
+  for (const key of candidateKeys) {
+    if (!(key in obj)) continue;
+    const v = obj[key];
+    const parsed = readBalanceFromAccountPayload(v);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+}
+
+async function autoTopUpInferenceSubAccount(
+  broker: unknown,
+  providerAddress: string,
+): Promise<void> {
+  const ledgerApi = (broker as { ledger?: InferenceLedgerApi }).ledger;
+  if (!ledgerApi?.getAccount || !ledgerApi.transferFund) return;
+
+  const privateKey = getEnv().privateKey?.trim();
+  if (!privateKey) return;
+  const walletAddress = new ethers.Wallet(privateKey).address;
+  const provider = ethers.getAddress(providerAddress);
+
+  try {
+    const account = await ledgerApi.getAccount(walletAddress, provider);
+    const balance = readBalanceFromAccountPayload(account);
+    if (balance === null) return;
+    if (balance >= ethers.parseEther(AUTO_TOPUP_THRESHOLD_OG)) return;
+
+    await ledgerApi.transferFund(
+      provider,
+      "inference",
+      ethers.parseEther(AUTO_TOPUP_AMOUNT_OG),
+    );
+    console.log("[compute] auto-topped up Qwen sub-account");
+  } catch (error) {
+    console.warn(
+      "[compute] auto-topup check failed",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
 
 /**
  * Ensures the on-chain 0G Compute **main ledger** exists, then checks a single configured
@@ -435,6 +500,7 @@ async function executeSecurityScanCompletion(
     attestationHash,
     responseJson.usage ? JSON.stringify(responseJson.usage) : undefined,
   );
+  await autoTopUpInferenceSubAccount(broker, resolvedProviderAddress);
 
   return { rawContent, attestationHash };
 }

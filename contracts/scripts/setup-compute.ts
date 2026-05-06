@@ -28,7 +28,7 @@ type BrokerWithLedger = {
 const MAINNET_RPC_URL = "https://evmrpc.0g.ai";
 const QWEN_PROVIDER = "0x992e6396157Dc4f22E74F2231235D7DE62696db5";
 const MAIN_LEDGER_BOOTSTRAP_OG = 3;
-const SUB_ACCOUNT_FUND_OG = "1.0";
+const SUB_ACCOUNT_FUND_OG = "4.0";
 
 async function main() {
   const require = createRequire(import.meta.url);

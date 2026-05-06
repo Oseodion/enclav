@@ -183,6 +183,29 @@ export async function deductCreditsFromServer(
   return { txHash: receipt.hash };
 }
 
+/** Server-only: owner wallet withdraws its own credits to native OG balance. */
+export async function withdrawOwnerCreditsFromServer(
+  deployerPrivateKey: string,
+): Promise<{ txHash: string; withdrawnWei: bigint }> {
+  const addr = requireCreditsAddress();
+  const pk = deployerPrivateKey.trim();
+  if (!pk.startsWith("0x") || pk.length < 60) {
+    throw new Error("Invalid deployer private key for withdraw.");
+  }
+  const provider = new ethers.JsonRpcProvider(OG_RPC_URL);
+  const signer = new ethers.Wallet(pk, provider);
+  const cOwner = new ethers.Contract(addr, ABI, signer);
+  const ownerAddress = await signer.getAddress();
+  const balanceBefore: bigint = await cOwner.credits(ownerAddress);
+  if (balanceBefore <= BigInt(0)) {
+    return { txHash: "", withdrawnWei: BigInt(0) };
+  }
+  const tx = await cOwner.withdrawAmount(balanceBefore);
+  const receipt = await tx.wait();
+  if (!receipt) throw new Error("withdraw receipt missing.");
+  return { txHash: receipt.hash, withdrawnWei: balanceBefore };
+}
+
 export function formatOgFromWei(wei: bigint, fractionDigits = 4): string {
   const s = ethers.formatEther(wei);
   const n = Number(s);
