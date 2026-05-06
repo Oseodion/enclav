@@ -1835,7 +1835,7 @@ function RightPanelSummary({
 }) {
   return (
     <aside className={`${panelClass} flex min-w-0 flex-col overflow-visible md:h-full md:min-h-0 md:overflow-hidden`}>
-      <div className="flex flex-1 flex-col overflow-hidden pb-12 md:min-h-0 md:pb-8">
+      <div className="flex flex-1 flex-col overflow-hidden pb-12 md:min-h-0 md:overflow-y-auto md:pb-8 [scrollbar-width:thin] [scrollbar-color:rgba(139,92,246,0.35)_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(139,92,246,0.35)] [&::-webkit-scrollbar-track]:bg-transparent">
         <div className="shrink-0 border-b border-white/10 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="font-semibold text-[#F0EEF8]">Agent Identity</h3>
