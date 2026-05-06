@@ -131,7 +131,7 @@ const TIER1_FILENAME_KEYWORDS = [
 ] as const;
 
 /** Tier 2 (high): paths under these folders; scan up to this many (tier 1 excluded). */
-const MAX_HIGH_TIER_SCAN_FILES = 5;
+const MAX_HIGH_TIER_SCAN_FILES = 15;
 
 /** Final cap: only the top N files from the prioritized queue. */
 const MAX_SCAN_FILES = 15;
@@ -242,7 +242,7 @@ const GITHUB_REPO_URL_PATTERN =
 const encoder = new TextEncoder();
 /** One TeeML call may include multiple files — allow extra wall time. */
 const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 45_000;
-const INFERENCE_CHUNK_SIZE = 5;
+const INFERENCE_CHUNK_SIZE = 15;
 const CHUNK_INFERENCE_DELAY_MS = 8_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));

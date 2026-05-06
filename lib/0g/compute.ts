@@ -345,48 +345,47 @@ async function autoTopUpInferenceSubAccount(
 export async function initializeComputeAccount(
   broker: unknown,
 ): Promise<void> {
-  const ledgerApi = (broker as { ledger?: InferenceLedgerApi }).ledger;
-  if (!ledgerApi?.getLedger || !ledgerApi?.addLedger) {
-    return;
-  }
-
   try {
-    await ledgerApi.getLedger();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (
-      message.includes("Account does not exist") ||
-      message.includes("add-account") ||
-      message.includes("does not exist")
-    ) {
-      await ledgerApi.addLedger(3);
-    } else {
-      throw error;
+    const ledgerApi = (broker as { ledger?: InferenceLedgerApi }).ledger;
+    if (!ledgerApi?.getLedger || !ledgerApi?.addLedger) {
+      return;
     }
-  }
 
-  const transferFund = ledgerApi.transferFund;
-  if (!transferFund) {
-    return;
-  }
+    try {
+      await ledgerApi.getLedger();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        message.includes("Account does not exist") ||
+        message.includes("add-account") ||
+        message.includes("does not exist")
+      ) {
+        await ledgerApi.addLedger(3);
+      } else {
+        throw error;
+      }
+    }
 
-  const configuredRaw = (process.env.ZERO_G_COMPUTE_PROVIDER ?? "").trim();
-  if (!configuredRaw || !ethers.isAddress(configuredRaw)) {
-    console.warn("[compute] ZERO_G_COMPUTE_PROVIDER missing/invalid; skipping funding bootstrap");
-    return;
-  }
-  const configuredProvider = ethers.getAddress(configuredRaw);
+    const configuredRaw = (process.env.ZERO_G_COMPUTE_PROVIDER ?? "").trim();
+    if (!configuredRaw || !ethers.isAddress(configuredRaw)) {
+      console.warn("[compute] ZERO_G_COMPUTE_PROVIDER missing/invalid; skipping funding bootstrap");
+      return;
+    }
+    const configuredProvider = ethers.getAddress(configuredRaw);
 
-  const privateKey = getEnv().privateKey?.trim();
-  if (!privateKey) {
-    console.warn("[compute] DEPLOYER_PRIVATE_KEY missing; skipping funding bootstrap");
-    return;
-  }
-  const walletAddress = new ethers.Wallet(privateKey).address;
+    const privateKey = getEnv().privateKey?.trim();
+    if (!privateKey) {
+      console.warn("[compute] DEPLOYER_PRIVATE_KEY missing; skipping funding bootstrap");
+      return;
+    }
+    const walletAddress = new ethers.Wallet(privateKey).address;
 
-  const amountNeuron = ethers.parseEther(INFERENCE_SUB_ACCOUNT_SEED_OG);
-  const getAccount = ledgerApi.getAccount;
-  if (getAccount) {
+    const getAccount = ledgerApi.getAccount;
+    if (!getAccount) {
+      console.warn("[compute] broker.ledger.getAccount unavailable; skipping funding bootstrap");
+      return;
+    }
+
     try {
       const account = await getAccount(walletAddress, configuredProvider);
       console.log("[compute] getAccount existing sub-account response", {
@@ -396,34 +395,19 @@ export async function initializeComputeAccount(
       });
       return;
     } catch (error) {
-      console.log("[compute] getAccount threw while checking sub-account", {
+      // Never fund if account check cannot be trusted; skip bootstrap instead.
+      console.error("[compute] getAccount check failed; skipping funding", {
         walletAddress,
         provider: configuredProvider,
         error,
       });
-      const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-      const missingAccount =
-        message.includes("does not exist") ||
-        message.includes("account not found") ||
-        message.includes("not found");
-      if (!missingAccount) {
-        console.error("[compute] broker.ledger.getAccount failed", {
-          walletAddress,
-          provider: configuredProvider,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
+      return;
     }
-  }
-
-  try {
-    await transferFund(configuredProvider, "inference", amountNeuron);
   } catch (error) {
-    console.error("[compute] broker.ledger.transferFund failed", {
-      provider: configuredProvider,
+    console.error("[compute] initializeComputeAccount failed; skipping initialization", {
       error: error instanceof Error ? error.message : String(error),
     });
+    return;
   }
 }
 
