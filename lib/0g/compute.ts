@@ -344,7 +344,6 @@ async function autoTopUpInferenceSubAccount(
  */
 export async function initializeComputeAccount(
   broker: unknown,
-  _inferenceProviderAddresses: string[],
 ): Promise<void> {
   const ledgerApi = (broker as { ledger?: InferenceLedgerApi }).ledger;
   if (!ledgerApi?.getLedger || !ledgerApi?.addLedger) {

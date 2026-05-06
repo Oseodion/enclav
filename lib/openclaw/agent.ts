@@ -74,7 +74,7 @@ async function getBrokerFromEnv() {
     computeProviders = [ethers.getAddress(envPreferred)];
   }
   if (computeProviders.length > 0) {
-    await initializeComputeAccount(broker, computeProviders);
+    await initializeComputeAccount(broker);
   }
   return broker;
 }

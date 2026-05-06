@@ -464,7 +464,7 @@ export async function POST(request: Request) {
           });
           skipBilling = true;
         } else {
-          await initializeComputeAccount(broker, computeProviders);
+          await initializeComputeAccount(broker);
         }
 
         let memoryContext: string | undefined;
