@@ -256,6 +256,7 @@ const INFERENCE_SUB_ACCOUNT_SEED_OG = "0.1";
 type InferenceLedgerApi = {
   getLedger: () => Promise<unknown>;
   addLedger: (amount: number, gasPrice?: number) => Promise<void>;
+  getAccount?: (wallet: string, provider: string) => Promise<unknown>;
   getProvidersWithBalance: (
     serviceTypeStr: "inference" | "fine-tuning",
   ) => Promise<[string, bigint, bigint][]>;
@@ -268,9 +269,9 @@ type InferenceLedgerApi = {
 };
 
 /**
- * Ensures the on-chain 0G Compute **main ledger** exists, then funds each inference **provider sub-account**
- * that is not yet listed under **`getProvidersWithBalance("inference")`** by moving OG from the **main ledger**
- * available balance via **`transferFund`** (wallet native OG is not spent here unless you previously **`depositFund`**’d into the ledger).
+ * Ensures the on-chain 0G Compute **main ledger** exists, then checks a single configured
+ * inference provider sub-account via `ledger.getAccount(wallet, provider)`.
+ * Funds only when that sub-account does not yet exist.
  *
  * SDK (see `lib.commonjs/ledger/broker.d.ts`): **`transferFund(provider, "inference", amount, gasPrice?)`**
  * — `amount` is **bigint neuron** (use `ethers.parseEther("0.1")` for 0.1 OG).
@@ -278,7 +279,7 @@ type InferenceLedgerApi = {
  */
 export async function initializeComputeAccount(
   broker: unknown,
-  inferenceProviderAddresses: string[],
+  _inferenceProviderAddresses: string[],
 ): Promise<void> {
   const ledgerApi = (broker as { ledger?: InferenceLedgerApi }).ledger;
   if (!ledgerApi?.getLedger || !ledgerApi?.addLedger) {
@@ -301,51 +302,54 @@ export async function initializeComputeAccount(
   }
 
   const transferFund = ledgerApi.transferFund;
-  const getProvidersWithBalance = ledgerApi.getProvidersWithBalance;
-  if (!transferFund || !getProvidersWithBalance || inferenceProviderAddresses.length === 0) {
+  if (!transferFund) {
     return;
   }
 
-  let fundedRows: [string, bigint, bigint][];
-  try {
-    fundedRows = await getProvidersWithBalance("inference");
-  } catch (error) {
-    console.warn(
-      "[compute] getProvidersWithBalance failed; skipping sub-account seeding",
-      error instanceof Error ? error.message : error,
-    );
+  const configuredRaw = (process.env.ZERO_G_COMPUTE_PROVIDER ?? "").trim();
+  if (!configuredRaw || !ethers.isAddress(configuredRaw)) {
+    console.warn("[compute] ZERO_G_COMPUTE_PROVIDER missing/invalid; skipping funding bootstrap");
     return;
   }
+  const configuredProvider = ethers.getAddress(configuredRaw);
 
-  const alreadyFunded = new Set<string>();
-  for (const row of fundedRows) {
-    try {
-      alreadyFunded.add(ethers.getAddress(row[0]));
-    } catch {
-      /* skip malformed row */
-    }
+  const privateKey = getEnv().privateKey?.trim();
+  if (!privateKey) {
+    console.warn("[compute] DEPLOYER_PRIVATE_KEY missing; skipping funding bootstrap");
+    return;
   }
+  const walletAddress = new ethers.Wallet(privateKey).address;
 
   const amountNeuron = ethers.parseEther(INFERENCE_SUB_ACCOUNT_SEED_OG);
-  const uniqueProviders = [
-    ...new Set(
-      inferenceProviderAddresses.map((p) => p.trim()).filter((p) => p.length > 0),
-    ),
-  ];
-
-  for (const raw of uniqueProviders) {
-    if (!ethers.isAddress(raw)) continue;
-    const addr = ethers.getAddress(raw);
-    if (alreadyFunded.has(addr)) continue;
-
+  const getAccount = ledgerApi.getAccount;
+  if (getAccount) {
     try {
-      await transferFund(addr, "inference", amountNeuron);
+      await getAccount(walletAddress, configuredProvider);
+      return;
     } catch (error) {
-      console.error("[compute] broker.ledger.transferFund failed", {
-        provider: addr,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+      const missingAccount =
+        message.includes("does not exist") ||
+        message.includes("account not found") ||
+        message.includes("not found");
+      if (!missingAccount) {
+        console.error("[compute] broker.ledger.getAccount failed", {
+          walletAddress,
+          provider: configuredProvider,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
     }
+  }
+
+  try {
+    await transferFund(configuredProvider, "inference", amountNeuron);
+  } catch (error) {
+    console.error("[compute] broker.ledger.transferFund failed", {
+      provider: configuredProvider,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
