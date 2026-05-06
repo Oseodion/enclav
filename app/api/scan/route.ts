@@ -428,6 +428,7 @@ export async function POST(request: Request) {
       let totalFindings = 0;
       let processedFiles = 0;
       let failedFiles = 0;
+      let findingTraceCounter = 0;
       let skipBilling = false;
       const aggregatedFindings: Array<
         StreamFinding & { attestationHash: string }
@@ -572,11 +573,17 @@ export async function POST(request: Request) {
               processedFiles += 1;
               const uniqueForFile = deduplicateFindingsByFileLineIssue(result.findings);
               for (const finding of uniqueForFile) {
+                findingTraceCounter += 1;
+                const traceId = findingTraceCounter;
+                console.log(
+                  `[scan] EMITTING finding #${traceId} ${finding.severity} ${finding.file}`,
+                );
                 console.log(
                   `[scan] streaming finding to UI: ${finding.severity} ${finding.file}`,
                 );
                 streamChunk(controller, {
                   type: "finding",
+                  traceId,
                   finding: {
                     severity: finding.severity,
                     file: finding.file,
