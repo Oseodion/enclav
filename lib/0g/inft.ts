@@ -117,6 +117,35 @@ function extractMintFailureMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function extractMintFailureDetails(error: unknown): Record<string, unknown> {
+  if (typeof error !== "object" || error === null) {
+    return { message: String(error) };
+  }
+  const o = error as {
+    code?: unknown;
+    reason?: unknown;
+    shortMessage?: unknown;
+    message?: unknown;
+    data?: unknown;
+    error?: unknown;
+    info?: unknown;
+  };
+  return {
+    code: o.code,
+    reason: o.reason,
+    shortMessage: o.shortMessage,
+    message: o.message,
+    data: o.data,
+    nestedError: o.error,
+    info: o.info,
+  };
+}
+
+function isLikelyCoalesceError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes("could not coalesce error") || lower.includes("coalesce");
+}
+
 function getWalletRpcErrorCode(error: unknown): number | undefined {
   if (error && typeof error === "object" && "code" in error) {
     const c = (error as { code?: number }).code;
@@ -370,7 +399,13 @@ export async function mintFromWallet(
     console.log("[mintFromWallet] staticCall ok, would mint tokenId:", previewTokenId.toString());
   } catch (staticErr) {
     const msg = extractMintFailureMessage(staticErr);
-    console.error("[mintFromWallet] staticCall revert", msg, staticErr);
+    const details = extractMintFailureDetails(staticErr);
+    console.error("[mintFromWallet] staticCall revert", { msg, details });
+    if (isLikelyCoalesceError(msg)) {
+      throw new Error(
+        `Mint preflight failed (${msg}). Wallet may be on the wrong chain or RPC returned an upstream error. Check wallet chain, RPC health, and contract address.`,
+      );
+    }
     throw new Error(msg);
   }
 
@@ -393,7 +428,20 @@ export async function mintFromWallet(
     tx = await contract.mintCertificate(...mintArgs, { gasLimit });
   } catch (sendErr) {
     const msg = extractMintFailureMessage(sendErr);
-    console.error("[mintFromWallet] send transaction failed", msg, sendErr);
+    const details = extractMintFailureDetails(sendErr);
+    console.error("[mintFromWallet] send transaction failed", {
+      msg,
+      details,
+      walletChainIdHex: chainIdHex,
+      walletChainIdDecimal: chainIdDec,
+      contractAddress: INFT_CONTRACT_ADDRESS,
+      rpcUrl: OG_RPC_URL,
+    });
+    if (isLikelyCoalesceError(msg)) {
+      throw new Error(
+        `Mint transaction failed (${msg}). This usually means wrong wallet chain or RPC failure. Verify wallet network, contract deployment on that chain, and RPC endpoint.`,
+      );
+    }
     throw new Error(msg);
   }
   console.log("[mintFromWallet] tx submitted", tx.hash);

@@ -656,6 +656,12 @@ export async function scanChunkForVulnerabilities(
       systemContent,
       userContent,
     );
+    if ((options?.chunkIndex ?? 0) === 1) {
+      console.log("[compute] first chunk raw inference response", {
+        attestationHash,
+        rawContent,
+      });
+    }
 
     let parsed: unknown = [];
     try {

@@ -134,7 +134,7 @@ const TIER1_FILENAME_KEYWORDS = [
 const MAX_HIGH_TIER_SCAN_FILES = 5;
 
 /** Final cap: only the top N files from the prioritized queue. */
-const MAX_SCAN_FILES = 10;
+const MAX_SCAN_FILES = 15;
 
 const HIGH_RISK_PATH_MARKERS = [
   "src/",
