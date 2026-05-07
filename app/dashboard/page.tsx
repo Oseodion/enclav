@@ -748,9 +748,7 @@ export default function DashboardPage() {
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        console.log("[ui] raw chunk received:", chunk);
-        buffer += chunk;
+        buffer += decoder.decode(value, { stream: true });
 
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
@@ -761,7 +759,6 @@ export default function DashboardPage() {
             | { type: "file"; filename: string }
             | {
                 type: "finding";
-                traceId?: number;
                 finding: {
                   severity: FindingSeverity;
                   file: string;
@@ -817,11 +814,6 @@ export default function DashboardPage() {
           }
 
           if (event.type === "finding") {
-            const traceLabel =
-              typeof event.traceId === "number" ? String(event.traceId) : "?";
-            console.log(
-              `[ui] RECEIVED finding #${traceLabel} ${event.finding.severity} ${event.finding.file}`,
-            );
             const normalizedFinding: Finding = {
               severity: event.finding.severity,
               file: event.finding.file,

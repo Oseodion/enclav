@@ -155,7 +155,7 @@ const TIER1_FOLDER_KEYWORDS = [
 const MAX_HIGH_TIER_SCAN_FILES = 15;
 
 /** Final cap: only the top N files from the prioritized queue. */
-const MAX_SCAN_FILES = 15;
+const MAX_SCAN_FILES = 5;
 
 const HIGH_RISK_PATH_MARKERS = [
   "src/",
@@ -485,7 +485,6 @@ export async function POST(request: Request) {
       let totalFindings = 0;
       let processedFiles = 0;
       let failedFiles = 0;
-      let findingTraceCounter = 0;
       let skipBilling = false;
       const aggregatedFindings: Array<
         StreamFinding & { attestationHash: string }
@@ -630,17 +629,11 @@ export async function POST(request: Request) {
               processedFiles += 1;
               const uniqueForFile = deduplicateFindingsByFileLineIssue(result.findings);
               for (const finding of uniqueForFile) {
-                findingTraceCounter += 1;
-                const traceId = findingTraceCounter;
-                console.log(
-                  `[scan] EMITTING finding #${traceId} ${finding.severity} ${finding.file}`,
-                );
                 console.log(
                   `[scan] streaming finding to UI: ${finding.severity} ${finding.file}`,
                 );
                 streamChunk(controller, {
                   type: "finding",
-                  traceId,
                   finding: {
                     severity: finding.severity,
                     file: finding.file,
