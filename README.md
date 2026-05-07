@@ -201,6 +201,13 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 - **Live demo URL:** https://enclav-delta.vercel.app
 - **Demo video link:** Coming soon
 
+## Demo Repository
+
+- Demo repo for judges: https://github.com/Oseodion/enclav-demo
+- Expected findings: 33 security issues including 20 Critical
+- Scan time: approximately 8-10 minutes
+- Note: this repo contains intentional vulnerabilities for demonstration purposes
+
 ---
 
 ## License & disclaimer
