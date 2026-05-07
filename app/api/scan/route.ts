@@ -161,7 +161,7 @@ const SCORE_6_KEYWORDS = [
 ] as const;
 
 /** Final cap: only the top N files from the prioritized queue. */
-const MAX_SCAN_FILES = 15;
+const MAX_SCAN_FILES = 5;
 
 function extractBasenameWithoutExt(relativePath: string): string {
   const fileName = relativePath.split("/").pop() ?? relativePath;
