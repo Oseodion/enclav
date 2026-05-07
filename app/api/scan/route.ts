@@ -236,7 +236,7 @@ type RepoTierPartition = {
 
 function partitionRepoFilesForScan(files: GithubBlobFile[]): RepoTierPartition {
   // For small repositories, scan everything and skip priority filtering.
-  if (files.length <= 15) {
+  if (files.length <= 20) {
     return {
       tier1Critical: [],
       tier2HighPool: [],
