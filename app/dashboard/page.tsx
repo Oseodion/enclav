@@ -779,6 +779,7 @@ export default function DashboardPage() {
                 previousFindingCount: number;
                 message: string;
               }
+            | { type: "ping" }
             | { type: "error"; message: string }
             | { type: "notice"; message: string };
 
@@ -802,6 +803,10 @@ export default function DashboardPage() {
               },
               ...prev.slice(0, 8),
             ]);
+          }
+
+          if (event.type === "ping") {
+            continue;
           }
 
           if (event.type === "file") {

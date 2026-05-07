@@ -155,7 +155,7 @@ const TIER1_FOLDER_KEYWORDS = [
 const MAX_HIGH_TIER_SCAN_FILES = 15;
 
 /** Final cap: only the top N files from the prioritized queue. */
-const MAX_SCAN_FILES = 5;
+const MAX_SCAN_FILES = 15;
 
 const HIGH_RISK_PATH_MARKERS = [
   "src/",
@@ -486,11 +486,16 @@ export async function POST(request: Request) {
       let processedFiles = 0;
       let failedFiles = 0;
       let skipBilling = false;
+      let pingInterval: ReturnType<typeof setInterval> | null = null;
       const aggregatedFindings: Array<
         StreamFinding & { attestationHash: string }
       > = [];
 
       try {
+        pingInterval = setInterval(() => {
+          streamChunk(controller, { type: "ping" });
+        }, 30_000);
+
         const provider = new ethers.JsonRpcProvider(resolveOgRpcUrl());
         const signer = new ethers.Wallet(deployerPrivateKey, provider);
         let broker: Awaited<ReturnType<typeof createBroker>>;
@@ -686,6 +691,10 @@ export async function POST(request: Request) {
           error instanceof Error ? error.message : "Unexpected scan pipeline error.";
         streamChunk(controller, { type: "error", message });
       } finally {
+        if (pingInterval) {
+          clearInterval(pingInterval);
+          pingInterval = null;
+        }
         const completedAt = new Date().toISOString();
         const severityCounts = aggregatedFindings.reduce(
           (acc, item) => {
