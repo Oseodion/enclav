@@ -115,184 +115,83 @@ function isExcludedInfrastructurePath(filePathLower: string): boolean {
   );
 }
 
-/** Tier 1 (critical): filename stem matches these keywords (word-aware). Scanned in full. */
-const TIER1_FILENAME_KEYWORDS = [
+const SCORE_10_KEYWORDS = [
   "auth",
   "login",
   "password",
-  "token",
   "secret",
   "key",
-  "config",
-  "env",
+  "token",
   "credential",
-  "db",
-  "supabase",
-  "firebase",
-  "stripe",
-  "client",
-  "sdk",
-  "service",
-  "server",
-  "index",
+  "private",
   "wallet",
   "payment",
-  "contract",
+  "stripe",
+  "crypto",
+  "sign",
+  "jwt",
   "admin",
+] as const;
+
+const SCORE_8_KEYWORDS = [
+  "config",
+  "env",
+  "database",
+  "db",
   "api",
+  "server",
+  "user",
+  "account",
+  "payout",
+  "transfer",
+  "withdraw",
 ] as const;
 
-const TIER1_FOLDER_KEYWORDS = [
+const SCORE_6_KEYWORDS = [
+  "service",
+  "client",
+  "sdk",
   "lib",
-  "libs",
-  "utils",
-  "helpers",
-  "services",
+  "util",
+  "helper",
   "middleware",
+  "hook",
+  "store",
+  "context",
 ] as const;
-
-/** Tier 2 (high): paths under these folders; scan up to this many (tier 1 excluded). */
-const MAX_HIGH_TIER_SCAN_FILES = 15;
 
 /** Final cap: only the top N files from the prioritized queue. */
 const MAX_SCAN_FILES = 15;
 
-const HIGH_RISK_PATH_MARKERS = [
-  "src/",
-  "app/",
-  "pages/",
-  "routes/",
-  "controllers/",
-  "api/",
-] as const;
-
-function escapeRegexChar(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Returns tier-1 keyword stems matched in the file basename (no extension). */
-function tier1KeywordsMatchedInBasename(relativePath: string): string[] {
+function extractBasenameWithoutExt(relativePath: string): string {
   const fileName = relativePath.split("/").pop() ?? relativePath;
-  const stem = fileName.replace(/\.[^.]+$/, "");
-  const matched: string[] = [];
-  for (const kw of TIER1_FILENAME_KEYWORDS) {
-    const re = new RegExp(`(^|[^a-z0-9])${escapeRegexChar(kw)}([^a-z0-9]|$)`, "i");
-    if (re.test(stem)) matched.push(kw);
-  }
-  return matched;
+  return fileName.replace(/\.[^.]+$/, "").toLowerCase();
 }
 
-function isTier1CriticalPath(relativePath: string): boolean {
-  if (tier1KeywordsMatchedInBasename(relativePath).length > 0) return true;
-  const segments = relativePath.toLowerCase().split("/");
-  return segments.some((segment) =>
-    (TIER1_FOLDER_KEYWORDS as readonly string[]).includes(segment),
-  );
+function containsAnyKeyword(name: string, keywords: readonly string[]): boolean {
+  return keywords.some((kw) => name.includes(kw));
 }
 
-function isLibFolderPath(relativePath: string): boolean {
-  const segments = relativePath.toLowerCase().split("/");
-  return segments.includes("lib") || segments.includes("libs");
+function filenamePriorityScore(relativePath: string): number {
+  const basename = extractBasenameWithoutExt(relativePath);
+  if (containsAnyKeyword(basename, SCORE_10_KEYWORDS)) return 10;
+  if (containsAnyKeyword(basename, SCORE_8_KEYWORDS)) return 8;
+  if (containsAnyKeyword(basename, SCORE_6_KEYWORDS)) return 6;
+  return 2;
 }
 
-function tier1PathPriorityScore(relativePath: string): number {
-  const lower = relativePath.toLowerCase();
-  let score = 0;
-  // Highest priority: core library paths
-  if (isLibFolderPath(relativePath)) score += 20;
-  if (lower.includes("/services/") || lower.startsWith("services/")) score += 8;
-  if (lower.includes("/middleware/") || lower.startsWith("middleware/")) score += 8;
-  if (lower.includes("/utils/") || lower.startsWith("utils/")) score += 6;
-  if (lower.includes("/helpers/") || lower.startsWith("helpers/")) score += 6;
-  return score;
-}
-
-function isHighRiskFolderPath(relativePath: string): boolean {
-  const lower = relativePath.toLowerCase();
-  for (const m of HIGH_RISK_PATH_MARKERS) {
-    if (lower.startsWith(m) || lower.includes(`/${m}`)) return true;
-  }
-  return false;
-}
-
-/** Prefer api/routes/controllers paths when tier 2 must be capped. */
-function highTierPathPriorityScore(relativePath: string): number {
-  const lower = relativePath.toLowerCase();
-  let s = 0;
-  if (lower.includes("/api/") || lower.startsWith("api/")) s += 5;
-  if (lower.includes("/routes/") || lower.startsWith("routes/")) s += 4;
-  if (lower.includes("/controllers/") || lower.startsWith("controllers/")) s += 4;
-  if (lower.includes("/app/") || lower.startsWith("app/")) s += 3;
-  if (lower.includes("/pages/") || lower.startsWith("pages/")) s += 3;
-  if (lower.startsWith("src/")) s += 2;
-  return s;
-}
-
-function selectHighTierFilesToScan(pool: GithubBlobFile[]): GithubBlobFile[] {
-  if (pool.length <= MAX_HIGH_TIER_SCAN_FILES) {
-    return [...pool].sort((a, b) => a.path.localeCompare(b.path));
-  }
-  return [...pool]
-    .map((f) => ({ f, score: highTierPathPriorityScore(f.path) }))
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.f.path.localeCompare(b.f.path);
-    })
-    .slice(0, MAX_HIGH_TIER_SCAN_FILES)
-    .map((row) => row.f)
-    .sort((a, b) => a.path.localeCompare(b.path));
-}
-
-type RepoTierPartition = {
-  tier1Critical: GithubBlobFile[];
-  tier2HighPool: GithubBlobFile[];
-  tier2Capped: boolean;
-  tier3Skipped: GithubBlobFile[];
-  scanQueue: GithubBlobFile[];
-};
-
-function partitionRepoFilesForScan(files: GithubBlobFile[]): RepoTierPartition {
-  // For small repositories, scan everything and skip priority filtering.
-  if (files.length <= 20) {
-    return {
-      tier1Critical: [],
-      tier2HighPool: [],
-      tier2Capped: false,
-      tier3Skipped: [],
-      scanQueue: [...files].sort((a, b) => a.path.localeCompare(b.path)),
-    };
+function partitionRepoFilesForScan(files: GithubBlobFile[]): { scanQueue: GithubBlobFile[] } {
+  // For very small repositories, scan everything and skip priority filtering.
+  if (files.length <= 5) {
+    return { scanQueue: [...files].sort((a, b) => a.path.localeCompare(b.path)) };
   }
 
-  const tier1Critical: GithubBlobFile[] = [];
-  const tier2HighPool: GithubBlobFile[] = [];
-  const tier3Skipped: GithubBlobFile[] = [];
-
-  for (const f of files) {
-    if (isTier1CriticalPath(f.path)) {
-      tier1Critical.push(f);
-    } else if (isHighRiskFolderPath(f.path)) {
-      tier2HighPool.push(f);
-    } else {
-      tier3Skipped.push(f);
-    }
-  }
-
-  tier1Critical.sort((a, b) => {
-    const scoreDiff = tier1PathPriorityScore(b.path) - tier1PathPriorityScore(a.path);
+  const ranked = [...files].sort((a, b) => {
+    const scoreDiff = filenamePriorityScore(b.path) - filenamePriorityScore(a.path);
     if (scoreDiff !== 0) return scoreDiff;
     return a.path.localeCompare(b.path);
   });
-  const tier2Capped = tier2HighPool.length > MAX_HIGH_TIER_SCAN_FILES;
-  const tier2Selected = selectHighTierFilesToScan(tier2HighPool);
-  const scanQueue = [...tier1Critical, ...tier2Selected];
-
-  return {
-    tier1Critical,
-    tier2HighPool,
-    tier2Capped,
-    tier3Skipped,
-    scanQueue,
-  };
+  return { scanQueue: ranked };
 }
 const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
