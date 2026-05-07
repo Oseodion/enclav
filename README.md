@@ -1,11 +1,12 @@
 # Enclav
 
 ## Quick Links For Judges
-- Live Demo: [https://enclav-delta.vercel.app](https://enclav-delta.vercel.app)
+- Live Demo: [https://enclav.up.railway.app](https://enclav.up.railway.app)
 - Demo Video: [Coming soon]
 - INFT Contract (Mainnet): https://chainscan.0g.ai/address/0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5
 - Credits Contract (Mainnet): https://chainscan.0g.ai/address/0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073
 - GitHub: https://github.com/Oseodion/enclav
+- Demo Repository: https://github.com/Oseodion/enclav-demo
 - Track: Track 1 — Agentic Infrastructure & OpenClaw Lab
 
 **Enclav** connects a public GitHub repository to an autonomous security scan on **0G Chain**: files are uploaded to **0G Storage**, analyzed with **0G Compute (TeeML)**, then certified on-chain.
@@ -169,6 +170,8 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 5. **Scan** — Use a **small public** GitHub repo first (e.g. this repo: `https://github.com/Oseodion/enclav`) to avoid long runs. Paste the URL, **Start Scan**, watch the **Live Scan Feed** and Tee attestation fields.
 6. **Mint** — After **Complete**, use **Mint security certificate**; approve the transaction on the active network. View the **Certificate** / **Agent ID** page and explorer links.
 
+**Note on scan time:** Enclav scans inside a hardware TEE on 0G Compute mainnet. Each file takes approximately 60-90 seconds for inference inside the Intel TDX enclave. A 5-file repo takes ~8 minutes. This is the cost of true privacy-preserving analysis — your code runs inside hardware-isolated silicon where even we cannot see it. Every finding comes with a cryptographic TEE attestation hash proving it was generated inside the enclave.
+
 ---
 
 ## Tech stack
@@ -198,15 +201,15 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 
 ## Demo
 
-- **Live demo URL:** https://enclav-delta.vercel.app
+- **Live demo URL:** https://enclav.up.railway.app
 - **Demo video link:** Coming soon
 
-## Demo Repository
+## Demo Repository for Judges
 
-- Demo repo for judges: https://github.com/Oseodion/enclav-demo
-- Expected findings: 33 security issues including 20 Critical
-- Scan time: approximately 8-10 minutes
-- Note: this repo contains intentional vulnerabilities for demonstration purposes
+- Repo: https://github.com/Oseodion/enclav-demo
+- Contains 5 intentionally vulnerable files
+- Expected findings: ~33 security issues including 20 Critical
+- Use this repo to quickly test Enclav during judging
 
 ---
 
