@@ -123,11 +123,32 @@ const TIER1_FILENAME_KEYWORDS = [
   "token",
   "secret",
   "key",
+  "config",
+  "env",
+  "credential",
+  "db",
+  "supabase",
+  "firebase",
+  "stripe",
+  "client",
+  "sdk",
+  "service",
+  "server",
+  "index",
   "wallet",
   "payment",
   "contract",
   "admin",
   "api",
+] as const;
+
+const TIER1_FOLDER_KEYWORDS = [
+  "lib",
+  "libs",
+  "utils",
+  "helpers",
+  "services",
+  "middleware",
 ] as const;
 
 /** Tier 2 (high): paths under these folders; scan up to this many (tier 1 excluded). */
@@ -162,7 +183,11 @@ function tier1KeywordsMatchedInBasename(relativePath: string): string[] {
 }
 
 function isTier1CriticalPath(relativePath: string): boolean {
-  return tier1KeywordsMatchedInBasename(relativePath).length > 0;
+  if (tier1KeywordsMatchedInBasename(relativePath).length > 0) return true;
+  const segments = relativePath.toLowerCase().split("/");
+  return segments.some((segment) =>
+    (TIER1_FOLDER_KEYWORDS as readonly string[]).includes(segment),
+  );
 }
 
 function isHighRiskFolderPath(relativePath: string): boolean {
@@ -210,6 +235,17 @@ type RepoTierPartition = {
 };
 
 function partitionRepoFilesForScan(files: GithubBlobFile[]): RepoTierPartition {
+  // For small repositories, scan everything and skip priority filtering.
+  if (files.length <= 15) {
+    return {
+      tier1Critical: [],
+      tier2HighPool: [],
+      tier2Capped: false,
+      tier3Skipped: [],
+      scanQueue: [...files].sort((a, b) => a.path.localeCompare(b.path)),
+    };
+  }
+
   const tier1Critical: GithubBlobFile[] = [];
   const tier2HighPool: GithubBlobFile[] = [];
   const tier3Skipped: GithubBlobFile[] = [];
