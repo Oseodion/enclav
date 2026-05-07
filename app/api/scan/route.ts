@@ -155,7 +155,7 @@ const TIER1_FOLDER_KEYWORDS = [
 const MAX_HIGH_TIER_SCAN_FILES = 15;
 
 /** Final cap: only the top N files from the prioritized queue. */
-const MAX_SCAN_FILES = 5;
+const MAX_SCAN_FILES = 15;
 
 const HIGH_RISK_PATH_MARKERS = [
   "src/",
@@ -188,6 +188,23 @@ function isTier1CriticalPath(relativePath: string): boolean {
   return segments.some((segment) =>
     (TIER1_FOLDER_KEYWORDS as readonly string[]).includes(segment),
   );
+}
+
+function isLibFolderPath(relativePath: string): boolean {
+  const segments = relativePath.toLowerCase().split("/");
+  return segments.includes("lib") || segments.includes("libs");
+}
+
+function tier1PathPriorityScore(relativePath: string): number {
+  const lower = relativePath.toLowerCase();
+  let score = 0;
+  // Highest priority: core library paths
+  if (isLibFolderPath(relativePath)) score += 20;
+  if (lower.includes("/services/") || lower.startsWith("services/")) score += 8;
+  if (lower.includes("/middleware/") || lower.startsWith("middleware/")) score += 8;
+  if (lower.includes("/utils/") || lower.startsWith("utils/")) score += 6;
+  if (lower.includes("/helpers/") || lower.startsWith("helpers/")) score += 6;
+  return score;
 }
 
 function isHighRiskFolderPath(relativePath: string): boolean {
@@ -260,7 +277,11 @@ function partitionRepoFilesForScan(files: GithubBlobFile[]): RepoTierPartition {
     }
   }
 
-  tier1Critical.sort((a, b) => a.path.localeCompare(b.path));
+  tier1Critical.sort((a, b) => {
+    const scoreDiff = tier1PathPriorityScore(b.path) - tier1PathPriorityScore(a.path);
+    if (scoreDiff !== 0) return scoreDiff;
+    return a.path.localeCompare(b.path);
+  });
   const tier2Capped = tier2HighPool.length > MAX_HIGH_TIER_SCAN_FILES;
   const tier2Selected = selectHighTierFilesToScan(tier2HighPool);
   const scanQueue = [...tier1Critical, ...tier2Selected];
