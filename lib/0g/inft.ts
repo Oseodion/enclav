@@ -146,6 +146,15 @@ function isLikelyCoalesceError(message: string): boolean {
   return lower.includes("could not coalesce error") || lower.includes("coalesce");
 }
 
+function isNonceAlreadyUsedError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("nonce has already been used") ||
+    lower.includes("nonce too low") ||
+    lower.includes("already known")
+  );
+}
+
 function getWalletRpcErrorCode(error: unknown): number | undefined {
   if (error && typeof error === "object" && "code" in error) {
     const c = (error as { code?: number }).code;
@@ -428,6 +437,29 @@ export async function mintFromWallet(
     tx = await contract.mintCertificate(...mintArgs, { gasLimit });
   } catch (sendErr) {
     const msg = extractMintFailureMessage(sendErr);
+    if (isNonceAlreadyUsedError(msg)) {
+      const freshNonce = await provider.getTransactionCount(walletAddress, "latest");
+      console.warn("[mintFromWallet] nonce error detected, retrying mint with fresh nonce", {
+        walletAddress,
+        freshNonce,
+        message: msg,
+      });
+      try {
+        tx = await contract.mintCertificate(...mintArgs, { gasLimit, nonce: freshNonce });
+      } catch (retryErr) {
+        const retryMsg = extractMintFailureMessage(retryErr);
+        const retryDetails = extractMintFailureDetails(retryErr);
+        console.error("[mintFromWallet] retry after nonce refresh failed", {
+          retryMsg,
+          retryDetails,
+          walletAddress,
+          attemptedNonce: freshNonce,
+          contractAddress: INFT_CONTRACT_ADDRESS,
+          rpcUrl: OG_RPC_URL,
+        });
+        throw new Error(retryMsg);
+      }
+    } else {
     const details = extractMintFailureDetails(sendErr);
     console.error("[mintFromWallet] send transaction failed", {
       msg,
@@ -443,6 +475,7 @@ export async function mintFromWallet(
       );
     }
     throw new Error(msg);
+    }
   }
   console.log("[mintFromWallet] tx submitted", tx.hash);
   onTransactionSubmitted?.(tx.hash);
