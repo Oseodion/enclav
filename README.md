@@ -167,7 +167,7 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 2. **Test account / faucet** — Get testnet OG from [https://faucet.0g.ai](https://faucet.0g.ai) and fund the same wallet you will use in the app.
 3. **Credits** — Open **Dashboard → Settings**. Deposit native **OG** into **EnclavCredits** so your balance covers **0.05 OG per scan** (plus gas for deposit/mint).
 4. **Operator wallet** — The maintainer’s `.env.local` must include a funded **`DEPLOYER_PRIVATE_KEY`** on the same chain as **`OG_RPC_URL`**. Set **`OG_COMPUTE_PROVIDER`** if you need a known model: e.g. **`qwen/qwen-2.5-7b-instruct`** on **Galileo** is **`0xa48f01287233509FD694a22Bf840225062E67836`**. On **Aristotle**, the default **`OG_COMPUTE_MODEL`** (`deepseek-chat-v3-0324`) is served at **`0x1B3AAef3ae5050EEE04ea38cD4B087472BD85EB0`** (on-chain list; catalog changes over time).
-5. **Scan** — Use a **small public** GitHub repo first (e.g. this repo: `https://github.com/Oseodion/enclav`) to avoid long runs. Paste the URL, **Start Scan**, watch the **Live Scan Feed** and Tee attestation fields.
+5. **Scan** — For quick judging, use `https://github.com/Oseodion/enclav-demo`. Paste the URL, **Start Scan**, watch the **Live Scan Feed** and Tee attestation fields.
 6. **Mint** — After **Complete**, use **Mint security certificate**; approve the transaction on the active network. View the **Certificate** / **Agent ID** page and explorer links.
 
 **Note on scan time:** Enclav scans inside a hardware TEE on 0G Compute mainnet. Each file takes approximately 60-90 seconds for inference inside the Intel TDX enclave. A 5-file repo takes ~8 minutes. This is the cost of true privacy-preserving analysis — your code runs inside hardware-isolated silicon where even we cannot see it. Every finding comes with a cryptographic TEE attestation hash proving it was generated inside the enclave.
@@ -206,10 +206,11 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 
 ## Demo Repository for Judges
 
-- Repo: https://github.com/Oseodion/enclav-demo
-- Contains 5 intentionally vulnerable files
-- Expected findings: ~33 security issues including 20 Critical
-- Use this repo to quickly test Enclav during judging
+- Demo repo for judges: https://github.com/Oseodion/enclav-demo — contains intentional vulnerabilities for demonstration
+
+## Scan Performance
+
+Scan time: 6-8 minutes · Scans top 5 most security-relevant files · Supports JS, TS, Python, Solidity, Go, Rust and more
 
 ---
 

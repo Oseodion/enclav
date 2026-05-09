@@ -163,6 +163,42 @@ const SCORE_6_KEYWORDS = [
 /** Final cap: only the top N files from the prioritized queue. */
 const MAX_SCAN_FILES = 5;
 
+const PATH_SCORE_8_SEGMENTS = [
+  "api",
+  "apis",
+  "controllers",
+  "routes",
+  "server",
+  "backend",
+  "services",
+] as const;
+
+const PATH_SCORE_6_SEGMENTS = [
+  "lib",
+  "libs",
+  "utils",
+  "helpers",
+  "hooks",
+  "middleware",
+  "store",
+  "context",
+  "core",
+] as const;
+
+const PATH_SCORE_2_SEGMENTS = [
+  "components",
+  "pages",
+  "views",
+  "styles",
+  "assets",
+  "public",
+  "static",
+  "test",
+  "tests",
+  "__tests__",
+  "spec",
+] as const;
+
 function extractBasenameWithoutExt(relativePath: string): string {
   const fileName = relativePath.split("/").pop() ?? relativePath;
   return fileName.replace(/\.[^.]+$/, "").toLowerCase();
@@ -180,6 +216,18 @@ function filenamePriorityScore(relativePath: string): number {
   return 2;
 }
 
+function pathPriorityScore(relativePath: string): number {
+  const segments = relativePath.toLowerCase().split("/");
+  if (segments.some((s) => (PATH_SCORE_8_SEGMENTS as readonly string[]).includes(s))) return 8;
+  if (segments.some((s) => (PATH_SCORE_6_SEGMENTS as readonly string[]).includes(s))) return 6;
+  if (segments.some((s) => (PATH_SCORE_2_SEGMENTS as readonly string[]).includes(s))) return 2;
+  return 0;
+}
+
+function combinedPriorityScore(relativePath: string): number {
+  return Math.max(filenamePriorityScore(relativePath), pathPriorityScore(relativePath));
+}
+
 function partitionRepoFilesForScan(files: GithubBlobFile[]): { scanQueue: GithubBlobFile[] } {
   // For very small repositories, scan everything and skip priority filtering.
   if (files.length <= 5) {
@@ -187,7 +235,7 @@ function partitionRepoFilesForScan(files: GithubBlobFile[]): { scanQueue: Github
   }
 
   const ranked = [...files].sort((a, b) => {
-    const scoreDiff = filenamePriorityScore(b.path) - filenamePriorityScore(a.path);
+    const scoreDiff = combinedPriorityScore(b.path) - combinedPriorityScore(a.path);
     if (scoreDiff !== 0) return scoreDiff;
     return a.path.localeCompare(b.path);
   });
@@ -197,7 +245,7 @@ const GITHUB_REPO_URL_PATTERN =
   /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+(\.git)?\/?$/;
 const encoder = new TextEncoder();
 /** One TeeML call may include multiple files — allow extra wall time. */
-const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 120_000;
+const COMPUTE_CHUNK_SCAN_TIMEOUT_MS = 55_000;
 const INFERENCE_CHUNK_SIZE = 1;
 const CHUNK_INFERENCE_DELAY_MS = 10_000;
 const sleep = (ms: number) =>
