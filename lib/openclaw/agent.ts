@@ -20,13 +20,15 @@ export type OpenClawScanResult = {
 };
 
 export type RunSecurityScanOptions = {
-  /** From `listComputeProviders(broker)` at scan start; enables provider rotation on 429. */
+  /** Provider addresses used for rotation order during chunk scans. */
   computeProviders: string[];
   broker?: unknown;
   /** TeeML long-context memory (previous scan findings from 0G Storage). */
   memoryContext?: string;
   /** Files per single inference request (default 3). */
   chunkSize?: number;
+  /** Timeout applied to each provider attempt in rotation. */
+  perProviderTimeoutMs?: number;
 };
 
 /** Same file + line + issue text → keep first only (model sometimes repeats). */
@@ -108,6 +110,7 @@ export async function runSecurityScan(
       memoryContext,
       providers: computeProviders,
       chunkIndex: chunkNumber,
+      perProviderTimeoutMs: options.perProviderTimeoutMs,
     });
 
     const byFile = new Map<string, Finding[]>();

@@ -2,7 +2,6 @@ import { ethers } from "ethers";
 import {
   createBroker,
   initializeComputeAccount,
-  listComputeProviders,
 } from "@/lib/0g/compute";
 import {
   deductCreditsFromServer,
@@ -251,22 +250,18 @@ const CHUNK_INFERENCE_DELAY_MS = 10_000;
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
-  return new Promise<T>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${Math.floor(timeoutMs / 1000)}s`));
-    }, timeoutMs);
-
-    promise
-      .then((value) => {
-        clearTimeout(timeoutId);
-        resolve(value);
-      })
-      .catch((error: unknown) => {
-        clearTimeout(timeoutId);
-        reject(error);
-      });
-  });
+function parseFallbackProvidersFromEnv(): string[] {
+  const raw = (
+    process.env.OG_COMPUTE_PROVIDERS_FALLBACK ??
+    process.env.ZERO_G_COMPUTE_PROVIDERS_FALLBACK ??
+    ""
+  ).trim();
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => ethers.getAddress(value));
 }
 
 function parseRepoUrl(repoUrl: string) {
@@ -449,28 +444,16 @@ export async function POST(request: Request) {
         let computeProviders: string[] = [];
         try {
           broker = await createBroker(signer);
-          computeProviders = await listComputeProviders(broker);
+          computeProviders = parseFallbackProvidersFromEnv();
         } catch (error) {
           console.error("[scan] compute broker setup failed", error);
           throw error;
-        }
-        const envPreferred =
-          (process.env.ZERO_G_COMPUTE_PROVIDER ??
-            process.env.OG_COMPUTE_PROVIDER ??
-            process.env.ZEROG_COMPUTE_PROVIDER ??
-            "").trim();
-        if (
-          computeProviders.length === 0 &&
-          envPreferred &&
-          ethers.isAddress(envPreferred)
-        ) {
-          computeProviders = [ethers.getAddress(envPreferred)];
         }
         if (computeProviders.length === 0) {
           streamChunk(controller, {
             type: "error",
             message:
-              "No 0G Compute providers available from listService. Set ZERO_G_COMPUTE_PROVIDER or OG_COMPUTE_PROVIDER or try again later.",
+              "No fallback compute providers configured. Set OG_COMPUTE_PROVIDERS_FALLBACK with qwen, deepseek, glm-5 addresses.",
           });
           skipBilling = true;
         } else {
@@ -565,16 +548,13 @@ export async function POST(request: Request) {
           if (inputs.length === 0) continue;
 
           try {
-            const scanResults = await withTimeout(
-              runSecurityScan(repoUrl, inputs, {
-                computeProviders,
-                broker,
-                memoryContext,
-                chunkSize: INFERENCE_CHUNK_SIZE,
-              }),
-              COMPUTE_CHUNK_SCAN_TIMEOUT_MS,
-              `Compute scan for chunk (${inputs.map((i) => i.path).join(", ")})`,
-            );
+            const scanResults = await runSecurityScan(repoUrl, inputs, {
+              computeProviders,
+              broker,
+              memoryContext,
+              chunkSize: INFERENCE_CHUNK_SIZE,
+              perProviderTimeoutMs: COMPUTE_CHUNK_SCAN_TIMEOUT_MS,
+            });
 
             // Stream findings immediately after each successful chunk inference call.
             for (const result of scanResults) {
@@ -610,18 +590,6 @@ export async function POST(request: Request) {
           } catch (error) {
             const message =
               error instanceof Error ? error.message : "Chunk scan failed.";
-            const lowerMessage = message.toLowerCase();
-            const isChunkTimeout =
-              lowerMessage.includes("compute scan for chunk") &&
-              lowerMessage.includes("timed out");
-            if (isChunkTimeout) {
-              failedFiles += inputs.length;
-              processedFiles += inputs.length;
-              console.warn("[scan] chunk timed out; skipping chunk", {
-                chunkPaths: inputs.map((input) => input.path),
-              });
-              continue;
-            }
             for (const input of inputs) {
               failedFiles += 1;
               processedFiles += 1;

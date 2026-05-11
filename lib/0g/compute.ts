@@ -41,6 +41,37 @@ const PROVIDER_MODEL_OVERRIDES: Record<string, string> = {
   [ethers.getAddress(GLM5_PROVIDER_ADDRESS)]: "zai-org/GLM-5-FP8",
 };
 
+const PROVIDER_LABELS: Record<string, string> = {
+  [ethers.getAddress(QWEN_PROVIDER_ADDRESS)]: "qwen",
+  [ethers.getAddress(DEEPSEEK_PROVIDER_ADDRESS)]: "deepseek",
+  [ethers.getAddress(GLM5_PROVIDER_ADDRESS)]: "glm-5",
+};
+
+function providerLabel(providerAddress: string): string {
+  return PROVIDER_LABELS[ethers.getAddress(providerAddress)] ?? providerAddress;
+}
+
+function withAttemptTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutLabel: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`${timeoutLabel} timed out after ${Math.floor(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error: unknown) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
 function getZeroGChainPrivateKey(): string {
   return (
     process.env.ZERO_G_CHAIN_PRIVATE_KEY?.trim() ||
@@ -233,7 +264,10 @@ export function buildProviderRotationOrder(
   preferredRaw?: string,
   fallbackList: string[] = [],
 ): string[] {
-  const candidateAddresses = [preferredRaw ?? "", ...fallbackList, ...discoveredAddresses];
+  const candidateAddresses =
+    fallbackList.length > 0
+      ? [...fallbackList]
+      : [preferredRaw ?? "", ...discoveredAddresses];
   const ordered: string[] = [];
   const seen = new Set<string>();
   for (const raw of candidateAddresses) {
@@ -467,6 +501,7 @@ export type ScanChunkOptions = ScanFileOptions & {
   /** Catalog from `listComputeProviders` (scan start); rotation starts with `ZERO_G_COMPUTE_PROVIDER` / `OG_COMPUTE_PROVIDER` when set. */
   providers: string[];
   chunkIndex: number;
+  perProviderTimeoutMs?: number;
 };
 
 async function executeSecurityScanCompletion(
@@ -542,28 +577,48 @@ async function executeSecurityScanWithProviderRotation(
   orderedProviders: string[],
   systemContent: string,
   userContent: string,
+  perProviderTimeoutMs: number,
 ): Promise<{ rawContent: string; attestationHash: string }> {
   if (orderedProviders.length === 0) {
     throw new Error("No compute providers available for rotation.");
   }
 
   const failures: string[] = [];
-  for (const provider of orderedProviders) {
+  for (const [index, provider] of orderedProviders.entries()) {
+    const label = providerLabel(provider);
+    console.log(
+      `[compute] trying provider ${index + 1}/${orderedProviders.length}: ${label}`,
+    );
     try {
-      const result = await executeSecurityScanCompletion(
-        broker,
-        provider,
-        systemContent,
-        userContent,
+      const result = await withAttemptTimeout(
+        executeSecurityScanCompletion(
+          broker,
+          provider,
+          systemContent,
+          userContent,
+        ),
+        perProviderTimeoutMs,
+        `Provider ${label} inference`,
       );
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failures.push(`${provider}: ${message}`);
-      console.warn("[compute] provider failed; rotating to next", {
-        provider,
-        message,
-      });
+      if (message.toLowerCase().includes("timed out")) {
+        const nextIndex = index + 2;
+        if (nextIndex <= orderedProviders.length) {
+          console.warn(
+            `[compute] ${label} timed out, trying provider ${nextIndex}/${orderedProviders.length}: ${providerLabel(orderedProviders[index + 1] ?? provider)}`,
+          );
+        } else {
+          console.warn(`[compute] ${label} timed out and no providers remain`);
+        }
+      } else {
+        console.warn("[compute] provider failed; rotating to next", {
+          provider: label,
+          message,
+        });
+      }
     }
   }
   throw new Error(`All providers failed for chunk. ${failures.join(" | ")}`);
@@ -663,10 +718,7 @@ export async function scanChunkForVulnerabilities(
   if (files.length === 0) {
     return { findings: [], attestationHash: "" };
   }
-  const providers = options?.providers;
-  if (!providers || providers.length === 0) {
-    throw new Error("scanChunkForVulnerabilities requires options.providers from listComputeProviders.");
-  }
+  const providers = options?.providers ?? [];
 
   const chunkPaths = files.map((f) => f.path);
   const memory = options?.memoryContext?.trim();
@@ -679,12 +731,17 @@ export async function scanChunkForVulnerabilities(
     console.log("[compute] about to call inference for chunk with files:", chunkPaths);
     const { providerAddress, fallbackProviders } = getEnv();
     const ordered = buildProviderRotationOrder(providers, providerAddress, fallbackProviders);
+    if (ordered.length === 0) {
+      throw new Error("No compute providers configured. Set OG_COMPUTE_PROVIDERS_FALLBACK.");
+    }
     console.log("[compute] provider rotation order for chunk", ordered);
+    const perProviderTimeoutMs = options?.perProviderTimeoutMs ?? 55_000;
     const { rawContent, attestationHash } = await executeSecurityScanWithProviderRotation(
       broker,
       ordered,
       systemContent,
       userContent,
+      perProviderTimeoutMs,
     );
     console.log("[compute] raw inference response string", rawContent);
     if ((options?.chunkIndex ?? 0) === 1) {
