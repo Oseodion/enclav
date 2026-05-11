@@ -31,6 +31,15 @@ export type ComputeChatResult = {
 
 /** Default when `OG_COMPUTE_MODEL` is unset — 0G Aristotle mainnet TeeML catalog. */
 const DEFAULT_OG_MODEL = "deepseek-chat-v3-0324";
+const QWEN_PROVIDER_ADDRESS = "0x992e6396157Dc4f22E74F2231235D7DE62696db5";
+const DEEPSEEK_PROVIDER_ADDRESS = "0x1B3AAef3ae5050EEE04ea38cD4B087472BD85EB0";
+const GLM5_PROVIDER_ADDRESS = "0xd9966e13a6026Fcca4b13E7ff95c94DE268C471C";
+
+const PROVIDER_MODEL_OVERRIDES: Record<string, string> = {
+  [ethers.getAddress(QWEN_PROVIDER_ADDRESS)]: "qwen3.6-plus",
+  [ethers.getAddress(DEEPSEEK_PROVIDER_ADDRESS)]: "deepseek/deepseek-chat-v3-0324",
+  [ethers.getAddress(GLM5_PROVIDER_ADDRESS)]: "zai-org/GLM-5-FP8",
+};
 
 function getZeroGChainPrivateKey(): string {
   return (
@@ -79,11 +88,22 @@ function getEnv() {
     }
     providerAddress = ethers.getAddress(rawProvider);
   }
+  const fallbackProvidersRaw = (
+    process.env.OG_COMPUTE_PROVIDERS_FALLBACK ??
+    process.env.ZERO_G_COMPUTE_PROVIDERS_FALLBACK ??
+    ""
+  ).trim();
+  const fallbackProviders = fallbackProvidersRaw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => ethers.getAddress(value));
   return {
     rpcUrl: resolveOgRpcUrl(),
     computeApiBaseUrl:
       process.env.OG_COMPUTE_API_BASE_URL ?? resolveOgStorageIndexerUrl(),
     providerAddress,
+    fallbackProviders,
     model: process.env.OG_COMPUTE_MODEL ?? DEFAULT_OG_MODEL,
     privateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",
   };
@@ -208,7 +228,24 @@ export function orderProvidersForRotation(
   return [p, ...unique];
 }
 
-const RATE_LIMIT_FULL_ROTATION_BACKOFF_MS = 15_000;
+export function buildProviderRotationOrder(
+  discoveredAddresses: string[],
+  preferredRaw?: string,
+  fallbackList: string[] = [],
+): string[] {
+  const candidateAddresses = [preferredRaw ?? "", ...fallbackList, ...discoveredAddresses];
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of candidateAddresses) {
+    if (!raw || !ethers.isAddress(raw)) continue;
+    const normalized = ethers.getAddress(raw);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    ordered.push(normalized);
+  }
+  return ordered;
+}
+
 const AUTO_TOPUP_THRESHOLD_OG = "0.3";
 const AUTO_TOPUP_AMOUNT_OG = "0.5";
 
@@ -442,8 +479,13 @@ async function executeSecurityScanCompletion(
   const sdkBroker = broker as InferenceBroker;
 
   const service = await sdkBroker.inference.getServiceMetadata(resolvedProviderAddress);
+  const selectedModel =
+    PROVIDER_MODEL_OVERRIDES[ethers.getAddress(resolvedProviderAddress)] ||
+    model ||
+    service.model ||
+    DEFAULT_OG_MODEL;
   const payload = {
-    model: model || service.model || DEFAULT_OG_MODEL,
+    model: selectedModel,
     messages: [
       { role: "system", content: systemContent },
       { role: "user", content: userContent },
@@ -495,12 +537,6 @@ async function executeSecurityScanCompletion(
   return { rawContent, attestationHash };
 }
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-/**
- * Tries each provider in order; on 429 moves to the next. After a full pass of only 429s,
- * waits 15s and retries from the first provider.
- */
 async function executeSecurityScanWithProviderRotation(
   broker: unknown,
   orderedProviders: string[],
@@ -511,25 +547,26 @@ async function executeSecurityScanWithProviderRotation(
     throw new Error("No compute providers available for rotation.");
   }
 
-  for (;;) {
-    for (const provider of orderedProviders) {
-      try {
-        const result = await executeSecurityScanCompletion(
-          broker,
-          provider,
-          systemContent,
-          userContent,
-        );
-        return result;
-      } catch (e) {
-        if (e instanceof ComputeHttpError && e.status === 429) {
-          continue;
-        }
-        throw e;
-      }
+  const failures: string[] = [];
+  for (const provider of orderedProviders) {
+    try {
+      const result = await executeSecurityScanCompletion(
+        broker,
+        provider,
+        systemContent,
+        userContent,
+      );
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${provider}: ${message}`);
+      console.warn("[compute] provider failed; rotating to next", {
+        provider,
+        message,
+      });
     }
-    await sleep(RATE_LIMIT_FULL_ROTATION_BACKOFF_MS);
   }
+  throw new Error(`All providers failed for chunk. ${failures.join(" | ")}`);
 }
 
 function mapParsedRowToFinding(item: Partial<Finding>, fileFallback: string): Finding {
@@ -640,8 +677,9 @@ export async function scanChunkForVulnerabilities(
 
   try {
     console.log("[compute] about to call inference for chunk with files:", chunkPaths);
-    const { providerAddress } = getEnv();
-    const ordered = orderProvidersForRotation(providers, providerAddress);
+    const { providerAddress, fallbackProviders } = getEnv();
+    const ordered = buildProviderRotationOrder(providers, providerAddress, fallbackProviders);
+    console.log("[compute] provider rotation order for chunk", ordered);
     const { rawContent, attestationHash } = await executeSecurityScanWithProviderRotation(
       broker,
       ordered,
