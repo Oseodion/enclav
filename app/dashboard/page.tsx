@@ -1655,6 +1655,11 @@ function LiveScanFeed({
 
 function FindingCard({ finding }: { finding: Finding }) {
   const [expanded, setExpanded] = useState(false);
+  const attestationPreview = (() => {
+    const h = finding.attestationHash?.trim() ?? "";
+    if (!h) return null;
+    return h.length > 16 ? `${h.slice(0, 16)}...` : h;
+  })();
   const badgeStyles: Record<FindingSeverity, string> = {
     Critical: "bg-[#FCEBEB] text-[#A32D2D]",
     High: "bg-[#FAEEDA] text-[#854F0B]",
@@ -1731,6 +1736,11 @@ function FindingCard({ finding }: { finding: Finding }) {
           </a>
         </div>
       </div>
+      {attestationPreview ? (
+        <p className="mt-3 border-t border-white/[0.06] pt-2 font-mono text-[10px] leading-tight text-[#6B6977]">
+          TEE Attestation: {attestationPreview}
+        </p>
+      ) : null}
     </article>
   );
 }
