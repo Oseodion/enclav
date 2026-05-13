@@ -2,7 +2,7 @@
 
 ## Quick Links For Judges
 - Live Demo: [https://enclav.up.railway.app](https://enclav.up.railway.app)
-- Demo Video: [Coming soon]
+- Demo Video: [https://youtu.be/QNY9IA9KVsA](https://youtu.be/QNY9IA9KVsA)
 - INFT Contract (Mainnet): https://chainscan.0g.ai/address/0x0dd0aE98b0e4Dd46cE8B2aa3A2e9a2feAC503EB5
 - Credits Contract (Mainnet): https://chainscan.0g.ai/address/0xD0ad553838F8b8ac5CFdccA33588c7723d6Bc073
 - GitHub: https://github.com/Oseodion/enclav
@@ -202,7 +202,7 @@ See **`.env.example`** in the repo for a copy-paste template aligned with these 
 ## Demo
 
 - **Live demo URL:** https://enclav.up.railway.app
-- **Demo video link:** Coming soon
+- **Demo video link:** [https://youtu.be/QNY9IA9KVsA](https://youtu.be/QNY9IA9KVsA)
 
 ## Demo Repository for Judges
 
