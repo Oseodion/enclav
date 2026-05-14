@@ -215,6 +215,15 @@ Scan time: 6-8 minutes · Scans top 5 most security-relevant files · Supports J
 
 ---
 
+## Documentation
+
+Optional bonus materials for judges and integrators:
+
+- **API.md** — Backend API documentation
+- **TESTING.md** — User testing notes
+
+---
+
 ## License & disclaimer
 
 Scan output is **model-assisted** and **not** a substitute for a professional security audit. Always verify findings with your own review.
